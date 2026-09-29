@@ -1,0 +1,42 @@
+# --- Secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*
+secrets*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- AWS / IaC ---
+cdk.out/
+.aws-sam/
+.bedrock_agentcore/
+.bedrock_agentcore.yaml
+
+# --- Local data & logs ---
+docker/dynamodb/
+*.log
+eval/runs/
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Node (web assets, if any) ---
+node_modules/
