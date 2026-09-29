@@ -1,0 +1,95 @@
+Welcome to the Amazon Developer Hackathon
+For the first time, Fire TV, Alexa+, Ring, and Bee are all part of one global hackathon. Build for one product or use several to connect the living room, the front door, and the cloud. Get started now with our SDKs, simulators, and sample code. 
+
+New to building for Amazon devices and services? We'll help you get from idea to submission with documentation and live office hours. Use our AI tools to prototype and troubleshoot along the way. 
+
+Choose a track and show off what you build! 🚀
+
+ 
+Why join?
+Be part of the first hackathon where Fire TV, Alexa+, Ring, and Bee are all open to outside developers at once
+
+Your product feedback goes directly to the teams building Fire TV, Alexa+, Ring, and Bee
+
+Compete for a share of $190K value of cash and AWS credits, plus a 1:1 meeting with the Amazon Developer team for track winners
+
+Get Started
+Pick your track: Fire TV, Alexa+, Bee, or Ring
+
+Set up the developer environment for your track (see Resources)
+
+Review the track details and requirements to start building
+
+Submit your working demo, code repo, and product feedback by the deadline
+
+Requirements
+What to Build
+Pick a primary track and ship a working demo. You can layer a mini challenge onto the same project for extra ways to win, but each project can only win one track prize and one mini challenge prize.
+
+Build or significantly update working applications using Amazon Developer tools into the following primary tracks: 
+
+Fire TV
+Launch a demo-ready app on Fire OS or Vega OS. Use React Native, web technologies, or Android (Kotlin/Java), any framework is fine, as long as it runs on Fire OS or Vega OS.
+Priority categories: AI-enhanced viewing, sports, fitness, family entertainment, multi-modal UX, and computer vision.
+Alexa+
+Experience how brands in Preview are building and shipping experiences on Alexa+ that our customers love:
+Build a self-hosted MCP server (spec 2025-11-25 or later, Streamable HTTP) or an Agent Skill. MCP is the open standard that powers Alexa+ integrations.
+New to MCP? Build a simulated Alexa+ experience in a web app using your preferred agentic tool.
+Bee (Wearable AI)
+Build a project that connects to real data recorded and processed through a Bee device or an Apple Watch running Bee software, using Bee's CLI, MCP, or Agent Skills. Your demo needs to show your project actually using that data to do something useful for a person.
+Priority use cases: education, developer experience, and personal productivity.
+Ring
+Build a new app or extend an existing one using Ring APIs, SDKs, simulators, or devices. A physical Ring device is not required.
+Priority categories: access control, business systems, IoT home automation, accessibility, and caretaking.
+Mini Challenges (additional opportunities alongside your primary track)
+AWS Builder
+Use AWS services (Bedrock, AgentCore, Strands SDK, Kiro Crew, SageMaker, etc.) in your project with documented integrations, and you're in. 
+Building with Kiro Crew qualifies on its own, you don't also need to call a separate AWS runtime service.
+Open Source
+Ship a new, additional open-source project (include an open-source license) or a contribution (a branch, a fork, or a pull request) to a public repository during the hackathon window, alongside your primary-track submission. PRs don't need to be merged; a forked, unmerged version is fine.
+Include the contribution URL, your repo URL, your GitHub username, and a short description of what you did, how it works, and why it matters.
+What to Submit
+A text description of your project: explain what it does and how it works.
+
+A GitHub code repository: must contain all source code, assets, and instructions needed to run your project. The repository must be either public and open source by including an open source license file OR private and shared with testing@devpost.com and the Amazon team (info below).
+
+To share your project with the Amazon team, open your repo’s Settings > Collaborators > Add people and add the usernames below. GitHub walk through here.
+
+Amazon Developer Relations GitHub profiles:
+Chris Traganos: https://github.com/chris-trag
+Kourtney Meiss: https://github.com/knmeiss
+Giovanni Laquidara: https://github.com/giolaq
+Anisha Malde: https://github.com/anishamalde
+Moses Roth: https://github.com/mosesroth
+Emerson Sklar: https://github.com/emersonsklar
+
+Make sure this repo is private, then add these GitHub users as collaborators so they can review my submission: chris-trag, knmeiss, giolaq, anishamalde, mosesroth, emersonsklar.
+
+One thing to watch: each person has to accept the invitation, and GitHub invitations expire after 7 days. Add the reviewers when you submit rather than weeks in advance, and if you added anyone earlier and the invitation has lapsed, re-send it from the same Collaborators page.
+
+For Alexa+, Bee, and Ring: your repo needs to actually call your track's required technology in code, an import, an entry point, a loaded agent/flow/MCP config, not just a mention in the README.
+
+Fire TV is the exception: any framework works, as long as your demo video shows the project running on an actual Fire TV device or the Fire TV/Vega simulator.
+
+Alexa+: show your Agent Skill or MCP server (spec 2025-11-25+, Streamable HTTP) in action. Took the simulated-experience path instead? No specific framework or SDK required, but your repo still needs to include the simulation's source code, and your demo needs to clearly show it working.
+
+Bee: your video and code need to show your project actually using live Bee data to do something for a user, mentioning Bee isn't enough. You don't need to let other users connect to Bee through your project.
+
+Ring: show your project working through a simulator or an actual Ring device.
+
+
+A demo video under 3 minutes: YouTube or Vimeo, public and in English. 
+
+Judges aren't required to watch past the 3-minute mark, so lead with your best material. Don't include third-party trademarks or copyrighted music/footage unless you have permission.
+
+Product feedback on every tool, API, or SDK you used: what you used it for, what worked well, what needs work, how onboarding felt, and whether you'd build with it again. Building with AWS services? Describe which ones and how, right here in your feedback answer.
+
+Which track(s) and mini challenge(s) you're entering. 
+
+Open Source and AWS Builder each have their own extra required fields, see Mini Challenges above.
+
+If your project existed before the hackathon, a clear explanation of what you built or changed during the submission window.
+
+Optional: Feature requests: what you'd want built, why it matters, and how urgent it is (critical / important / nice-to-have).
+
+Optional: Friction log entries for each one: the task you attempted, the steps you took, what you expected vs. what actually happened, a severity rating, any workaround you used, and an actionable suggestion. Submissions with friction logs can earn up to a 10% judging bonus.

@@ -19,6 +19,7 @@
 - MCP server on spec **2025-11-25** with **Streamable HTTP**; the repo must actually import and run it (not just mention it).
 - Public repo, Apache-2.0 license, README with run instructions (working from a fresh clone) and the list of AWS services used. README lists the dev test logins.
 - **The local profile is what judges run:** `docker compose up` starts everything with no AWS account (server, DynamoDB Local, consent page + owner console, dev JWT issuer in `devauth/`, simulator with `MODEL_PROVIDER=mock`). A real provider is opt-in via env.
+- Rules digest: `docs/hackathon-rules.md` (dates, submission form fields, testing clause, judging). The raw rule text is not kept in the repo; do not re-fetch it, and update the digest if the rules change.
 - Demo video (< 3 min) shows the server working **and the AWS-deployed path at least once** (AWS Builder). Targeting AWS Builder only; the Open Source mini challenge is out of scope.
 - `docs/aws-integration.md` describes each AWS service used and how.
 
@@ -57,6 +58,7 @@
   - a mock LLM for the simulator (`MODEL_PROVIDER=mock`).
 - **Do not plan on keeping AWS resources running.** Spin them up for tests and the demo, then tear them down (scripted). Judging runs Nov 9–20 and may include automated AI review.
 - **Nothing account-specific in code:** no hard-coded account IDs, ARNs, or regions. Read from env/config (`AWS_PROFILE`, `AWS_REGION`, `TABLE_NAME`, …). Target region later: `us-east-1`.
+- **After the deadline (10-23) nothing functional changes** until judging ends (11-20): tag the submitted commit `submission` (D-015). Pin dependency versions and Docker image tags before the freeze.
 - **Never commit secrets** (`.env`, keys, tokens). The repo is public.
 
 ## Working style
@@ -65,6 +67,23 @@
 - Work in small steps; every step comes with pytest tests. Keep MCP tool handlers thin; business logic lives in pure, testable functions.
 - Scope priority: **Must > Should > Could** (design doc §11). Ask before starting any Could item.
 - Keep a friction log (`docs/friction-log.md`) of problems hit with AWS / MCP tooling – it counts for judging.
+
+## Workflow (every session)
+Work is organised in **phases** (`docs/PLAN.md`) and, inside a phase, **batches** of a few tasks. The live plan and status of each phase is `docs/devlog/phase-N.md` (Plan, Progress table, Entries; see `docs/devlog/README.md`).
+
+1. **Start of a session:** read `CLAUDE.md`, `docs/DECISIONS.md`, `docs/PLAN.md`, then the current `docs/devlog/phase-N.md`. Confirm which batch is next; if the user has not named one, propose it.
+2. **Start of a batch:** mark its tasks `in progress` in the phase file's Progress table. If the plan for the batch changes (order, scope, a new task), update the Plan section and say so in the report.
+3. **For each task:** verify APIs first (see Working style) → implement small pure functions and thin handlers → write pytest tests → run the **whole** suite and `ruff` → only then mark the task `done`.
+4. **After each task:** add an Entry at the top of the phase file's Entries (template in the devlog README, with a feature tag) and update the Progress row. Also, where it applies:
+   - a decision was made → `docs/DECISIONS.md` (new D-xxx);
+   - an API or behaviour was verified → `docs/PLAN.md` §3a "Verified APIs" (exact names and versions);
+   - a problem with AWS / MCP tooling → `docs/friction-log.md`;
+   - a later change to a finished feature → a new `Change:` entry, never an edit of the old one.
+5. **Do not guess.** If something is unclear, sources disagree, or a decision changes the architecture (see "do not change without asking"), stop that task, record it under Follow-ups, and ask.
+6. **End of a batch:** stop and report: what passed, what needed a workaround, changed/new files, the gate verdict if there is one, and the questions still open. Wait for review before the next batch. Do not start the next phase without the user's go-ahead.
+7. **Git:** the user runs `git add` / `git commit`. Suggest a commit message (English) at the end of a batch; never commit.
+8. **Docker / external processes:** start Docker Desktop only for tests that need it (`-m ddb`, `-m docker`) and shut it down afterwards.
+9. Everything written (code, comments, docs, devlog) is English. Replies to the user may be in the language the user writes in.
 
 ## Target repo layout
 ```
@@ -78,6 +97,6 @@ eval/        task YAML, harness, pass^k reports
 infra/       CDK / agentcore config (AWS profile only)
 scripts/     seed data, local setup
 tests/       unit/ integration/ redteam/ aws/
-docs/        DECISIONS, PLAN, aws-integration, friction log, rules, (design, diagrams, research until replaced)
+docs/        DECISIONS, PLAN, aws-integration, friction log, devlog/ (per-phase plan + progress + entries), rules, (design, diagrams, research until replaced)
 Dockerfile, docker-compose.yml   primary run path (created in plan task P1-23)
 ```

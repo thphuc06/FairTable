@@ -122,13 +122,13 @@ Conventions
 | P1-20 | 10-11 | **Eval harness v0.** Task YAML schema, per-run namespace, runner, state and safety graders (I1–I5), pass@1, pass^k, C_out. (½d) | 10 tasks run end to end; metrics match hand-computed fixtures. | `tests/unit/eval/test_metrics.py`; `tests/integration/test_eval_run.py`. |
 | P1-21 | 10-12 | **A0 / A1 / A2 configs** via config, not forks. (¼d) | A0 shows violations on ADV tasks; A1 shows none. | `tests/integration/test_ablation.py`. |
 | P1-22 | 10-12 | **Local red-team suite** RT1–RT12 (all local now, D-008). (½d) | Each RT is a deterministic pytest with the expected code from design §9.5. | `tests/redteam/test_rt*.py` + summary printer. |
-| P1-23 | 10-13 | **Docker profile (primary run path).** `Dockerfile`, root `docker-compose.yml`: server, DynamoDB Local, `web`, `devauth`, simulator, one-shot seed. Health checks. No AWS credentials. (½d) | `docker compose up` on a fresh clone brings everything up, seeded, with MCP Inspector able to connect. | `tests/integration/test_compose_smoke.py` (`-m docker`). |
+| P1-23 | 10-13 | **Docker profile (primary run path).** `Dockerfile`, root `docker-compose.yml`: server, DynamoDB Local, `web`, `devauth`, simulator, one-shot seed. Health checks. No AWS credentials. **Pin the DynamoDB Local image to a fixed tag (no `latest`)** so the fresh-clone path keeps working through 11-20 (D-015). (½d) | `docker compose up` on a fresh clone brings everything up, seeded, with MCP Inspector able to connect. | `tests/integration/test_compose_smoke.py` (`-m docker`). |
 | P1-24 | 10-13 | **README + wrap-up.** Docker path first, plain-Python second, **test logins table**, demo script, friction log. Bedrock check (Q2 decision point). Optional Tasks view only if time is left (D-010). (½d) | A fresh clone follows the README end to end. | Commands copy-pasted on a clean clone; `pytest -q` green from a clean venv. |
 
 **Gate 1 (end of 10-13):** all Phase 1 tests green; `docker compose up` works from a clean clone; hold to step-up to confirm, waitlist match and Fair Drop demo locally; RT1–RT12 blocked under A1.
 
 ### Phase 2 – AWS Builder path (10-14 → 10-17)
-Resources are created for tests and the demo and torn down afterwards (D-004). Nothing account-specific in code. Full plan of what each service does: `docs/aws-integration.md`.
+Resources are created for tests and the demo and torn down afterwards (D-004). **Credits: the $150 request is submitted, no reply yet; if nothing has arrived by 10-14, stay on the free tier with Budgets alerts and the minimum path (D-015).** Nothing account-specific in code. Full plan of what each service does: `docs/aws-integration.md`.
 
 | ID | Date | Task | Acceptance criteria | Tests that prove it |
 |---|---|---|---|---|
@@ -153,7 +153,7 @@ Resources are created for tests and the demo and torn down afterwards (D-004). N
 | P3-4 | 10-19 | **Real-provider runs** only if Q2 decided yes. Budget guard. (¼d) | Cost tracked; stops at the $100 mark. | `tests/unit/eval/test_budget_guard.py`. |
 | P3-6 | 10-19 | **Relabel both `.drawio` diagrams in English.** (½d) | No Vietnamese text left in any diagram. | Grep for Vietnamese diacritics finds nothing. |
 | P3-7 | 10-20 | **Move Vietnamese docs out of the repo**, update README and `CLAUDE.md` links, final secret scan (allowing the documented dev credentials). (¼d) | `git grep` finds no Vietnamese text, keys, ARNs or account IDs. | `tests/unit/test_language_and_secrets.py`. |
-| P3-8 | 10-20 | **Feature freeze.** Final frozen eval run. (¼d) | Numbers frozen in `eval/reports/`. | Full suite green. |
+| P3-8 | 10-20 | **Feature freeze.** Final frozen eval run. **Pin exact dependency versions (lock file) and image tags** (D-015). (¼d) | Numbers frozen in `eval/reports/`. | Full suite green. |
 
 ### Phase 4 – Submission (10-20 → 10-22, spare 10-23)
 
@@ -161,9 +161,9 @@ Resources are created for tests and the demo and torn down afterwards (D-004). N
 |---|---|---|---|
 | P4-1 | 10-20 (pm) | **Record footage:** local Docker demo **and the AWS-deployed path at least once** (D-011), per the video script in the design §12. (½d) | Both paths captured before AWS teardown. |
 | P4-2 | 10-21 | **Video edit** (< 3 min, English, best material first). (½d) | Shows the server working; no third-party logos or music. |
-| P4-3 | 10-21 | **Devpost text, product feedback for every tool/SDK, friction log final.** (½d) | Complete, in English, AWS services described. |
+| P4-3 | 10-21 | **Devpost text, product feedback for every tool/SDK (five answers each, see `docs/hackathon-rules.md`), friction log final and pasted into the submission form** (it is a form field worth up to 10%). (½d) | Complete, in English, AWS services described. |
 | P4-4 | 10-22 | **Fresh-clone verification, judging-ready** (D-004): Docker path with no AWS credentials, then plain-Python path. README readable by an automated AI reviewer. Apache-2.0 visible in About. (¼d) | Every README command works as written. |
-| P4-5 | 10-22 | **Submit, then tear down AWS.** Track Alexa+, mini challenge **AWS Builder only**. (¼d) | Devpost confirmation; nothing left running. |
+| P4-5 | 10-22 | **Submit, tag the submitted commit (`submission`), then tear down AWS.** No functional pushes until judging ends 11-20 (D-015). Track Alexa+, mini challenge **AWS Builder only**. (¼d) | Devpost confirmation; nothing left running. |
 | — | 10-23 | Spare day; deadline 12:00 PDT. | Only if something broke. |
 
 ---
@@ -186,6 +186,8 @@ Environment: Python 3.12.14 (conda env `fairtable`), `fastmcp==3.4.7` (+ `fastmc
 - (d) Tasks: `@mcp.tool(task=True)` requires `pydocket` (optional extra `tasks`); default backend `memory://` (`FASTMCP_DOCKET_URL`) works, no Redis. Client: `await client.call_tool(name, args, task=True)` returns a `ToolTask` (`.returned_immediately`, `.status()`, `.result()`). Flag stays off by default (D-010).
 - (e) Sessions: `Context.session_id` (tool parameter `ctx: Context`) is stable within one client session and differs across sessions over Streamable HTTP. Identity is read from the header on every request, never cached on the session.
 - Serving: `FastMCP.http_app()` (Starlette app, default path `/mcp`, setting `streamable_http_path`) or `FastMCP.run(transport="http", host=..., port=...)`. Client: `Client(StreamableHttpTransport(url, headers={...}))`. `FastMCP(mask_error_details=True)` hides unexpected exception text but not structured errors or -32042.
+- Transport security (spec 2025-11-25, Streamable HTTP; `tests/integration/test_fastmcp_spike.py`): the spec says servers MUST validate `Origin` (403 if present and invalid), SHOULD bind to localhost when local, and MUST answer an unsupported `MCP-Protocol-Version` with 400. **FastMCP 3.4.7 defaults to `host_origin_protection=False`** (no Origin check). Enable it with `http_app(host_origin_protection=True, allowed_hosts=[...], allowed_origins=[...])` (also `FASTMCP_HTTP_HOST_ORIGIN_PROTECTION`); tested: hostile Origin gives 403, a request with no Origin still works, a bad `Host` is refused, a bad protocol-version header gives 400. Hosted profiles must list their real hostname in `allowed_hosts`. Docker: publish ports on `127.0.0.1` for local runs.
+- Sessions in the spec are optional (`MCP-Session-Id`, 404 when expired); the spec also says elicitation state MUST NOT be tied to a session id alone, which matches our per-request identity. A -32042 error is a normal response to `tools/call`, so step-up does not need a server-initiated stream; form-mode elicitation (server request to the client) would.
 - MCP Inspector: `npx @modelcontextprotocol/inspector`, transport **Streamable HTTP**, URL `http://localhost:<port>/mcp`, add a custom header `x-ft-user-token: <jwt>`. CLI check that worked: `npx @modelcontextprotocol/inspector --cli http://127.0.0.1:<port>/mcp --transport http --method tools/call --tool-name <tool> --header "x-ft-user-token: <jwt>"`. The CLI does not return for a -32042 tool (see friction log); the UI was not verified headless.
 
 **DynamoDB Local** [`tests/integration/test_ddb_spike.py`, `-m ddb`]

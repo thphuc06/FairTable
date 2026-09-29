@@ -19,6 +19,7 @@ The middleware below is spike code; the production copy is built in plan task P1
 import asyncio
 import socket
 
+import httpx
 import pytest
 import uvicorn
 from fastmcp import Client, Context, FastMCP
@@ -267,3 +268,75 @@ async def test_d_tasks_over_streamable_http(http_url):
         assert status.taskId == task.task_id
         result = await task.result()
     assert result.structured_content["n"] == 2
+
+
+# ------------------------------------------------------------------ spec 2025-11-25 transport security
+# Streamable HTTP spec: servers MUST validate the Origin header (403 if present and invalid) and
+# SHOULD bind to localhost when running locally; an invalid MCP-Protocol-Version MUST give 400.
+# FastMCP 3.4.7 ships with host_origin_protection=False, so the server must switch it on itself.
+INIT = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {"name": "t", "version": "0"},
+    },
+}
+MCP_HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+
+
+async def _serve(app):
+    port = _free_port()
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    task = asyncio.create_task(server.serve())
+    for _ in range(100):
+        if server.started:
+            break
+        await asyncio.sleep(0.05)
+    assert server.started
+    return server, task, f"http://127.0.0.1:{port}/mcp"
+
+
+async def test_transport_default_fastmcp_does_not_check_origin():
+    """Documents the default: a hostile Origin is NOT rejected unless protection is enabled."""
+    server, task, url = await _serve(build_server().http_app())
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.post(url, json=INIT, headers={**MCP_HEADERS, "Origin": "http://evil.example"})
+        assert r.status_code == 200
+    finally:
+        server.should_exit = True
+        await task
+
+
+async def test_transport_origin_protection_rejects_hostile_origin_with_403():
+    server, task, url = await _serve(build_server().http_app(host_origin_protection=True))
+    try:
+        async with httpx.AsyncClient() as c:
+            bad = await c.post(url, json=INIT, headers={**MCP_HEADERS, "Origin": "http://evil.example"})
+            no_origin = await c.post(url, json=INIT, headers=MCP_HEADERS)  # server-to-server clients
+            bad_host = await c.post(url, json=INIT, headers={**MCP_HEADERS, "Host": "evil.example"})
+        assert bad.status_code == 403
+        assert no_origin.status_code == 200  # no Origin header = not a browser, must still work
+        assert bad_host.status_code in (403, 421)  # DNS-rebinding guard on Host
+    finally:
+        server.should_exit = True
+        await task
+
+
+async def test_transport_unsupported_protocol_version_header_gets_400():
+    server, task, url = await _serve(build_server().http_app(host_origin_protection=True))
+    try:
+        async with httpx.AsyncClient() as c:
+            init = await c.post(url, json=INIT, headers=MCP_HEADERS)
+            sid = init.headers.get("mcp-session-id")
+            hdrs = {**MCP_HEADERS, "MCP-Protocol-Version": "1999-01-01"}
+            if sid:
+                hdrs["mcp-session-id"] = sid
+            r = await c.post(url, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, headers=hdrs)
+        assert r.status_code == 400
+    finally:
+        server.should_exit = True
+        await task
