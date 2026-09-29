@@ -4,7 +4,7 @@ Cedar policies, one rule per file, flat directory. The loader groups files by pr
 
 | Prefix | Enforcement point | Rules | State |
 |---|---|---|---|
-| `p*`, `s*` | PEP-2 (stateful: counters and mandate from DynamoDB) | `P0_base`, `S1_max_active_holds`, `S2_agent_share_of_covers`, `S3_confirm_needs_mandate`, `S4_drop_slots_via_waitlist` | Present. Text is verbatim from the design (§6.2), pending open questions D1 (S2 action list) and D2 (S3b). |
+| `p*`, `s*` | PEP-2 (stateful: counters and mandate from DynamoDB) | `P0_base`, `S1_max_active_holds`, `S2_agent_share_of_covers`, `S3_confirm_needs_mandate`, `S3b_cancel_fee_needs_ack`, `S4_drop_slots_via_waitlist` | Present. Design §6.2 text plus decisions D1 (S2 applies to `reservation_hold` only) and D2 (new S3b) from `docs/DECISIONS.md` D-014. |
 | `g*` | PEP-1 (stateless: claims and request shape) | `G1` reads: any valid JWT · `G2` writes: principal has `username` and scope `fairtable/book` · `G3` forbid `party_size > 10` · `G4` forbid unless `principal has agent_tier && principal.agent_tier == "verified"` | To be written in plan task P1-3, together with its tests. |
 
 **G4 must use the `has`-guard.** A naive `forbid … when { principal.agent_tier != "verified" }` errors on a token that lacks the claim, is skipped, and the permit wins. See design §6.1.

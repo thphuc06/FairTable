@@ -89,3 +89,10 @@ Short record of decisions that shape the build. Newest last. If a decision here 
 ## D-013 – Working agreement (2026-09-29)
 - The developer runs `git add .` and commits. The assistant does not commit.
 - Current phase: documentation and codebase organisation first. Implementation is done later on the developer's PC.
+
+## D-014 – Policy changes D1, D2, D5 applied; step-up via middleware validated (2026-09-29)
+- **D1 (applied):** S2 (`policies/s2_agent_share_of_covers.cedar`) applies to `reservation_hold` only. `waitlist_watch` is removed because a watch consumes no covers, and S2's own `next_step` is `waitlist_watch`.
+- **D2 (applied):** new rule **S3b** (`policies/s3b_cancel_fee_needs_ack.cedar`, `@on_deny("step_up")`, `reservation_manage`). It fires when `context.cancel_fee_cents > 0 && !context.cancel_fee_acknowledged`. `cancel_fee_cents` is a whole number in minor currency units and is `0` for view, modify and fee-free cancels. The PEP-2 set is now P0 + S1–S4 + S3b.
+- **D5 (confirmed):** two policy sets (server and Gateway) share one behavioural test suite.
+- **Step-up transport:** FastMCP 3.4.7 wraps exceptions raised in a tool into `ToolError`, so `UrlElicitationRequiredError` never reaches the client. The server adds an `on_call_tool` middleware that re-raises the original error, giving a JSON-RPC **-32042** error. Checked against the MCP spec 2025-11-25 (elicitation, "URL Elicitation Required Error") and FastMCP's own `ErrorHandlingMiddleware`, which uses the same pattern (inspects `__cause__`, raises `McpError` from middleware). Rules taken from the spec for the consent URL: no sensitive data in the URL, not pre-authenticated, HTTPS outside dev, and the consent page must verify that the user opening it is the user who started the request (same `sub`). Open point for P1-10: the spec says a server must not send elicitation modes the client did not declare, so check the client's `elicitation.url` capability and fall back to an `isError` result with the consent link and `next_step` if it is missing.
+

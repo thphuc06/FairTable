@@ -1,0 +1,8 @@
+# Phase 0 spike: DynamoDB Local only. Folded into the root docker-compose.yml in plan task P1-23.
+#   docker compose -f infra/local/docker-compose.yml up -d
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "127.0.0.1:8000:8000"

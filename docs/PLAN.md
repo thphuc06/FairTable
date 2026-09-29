@@ -39,8 +39,8 @@ Explicitly **not** in the MVP: background workers, Redis, MCP Apps, Automated Re
 
 | # | Issue | Recommended default |
 |---|---|---|
-| D1 | **S2 vs `waitlist_watch` loop.** S2 (agent-share cap) applies to `reservation_hold` and `waitlist_watch`, yet an S2 denial returns `next_step: waitlist_watch`, which would be denied too. | Remove `waitlist_watch` from S2's action list. A watch consumes no covers; S2 applies when a hold is created for the watcher. |
-| D2 | **S3 covers `reservation_confirm` only**, but `reservation_manage` cancel-with-fee is specified as step-up under "S3". | Add rule **S3b** (`@on_deny("step_up")`, scoped to `reservation_manage`, fires when the cancel fee is above zero and not acknowledged). Adds a policy beyond "P0 + S1–S4". |
+| D1 | ✅ *Applied (D-014).* **S2 vs `waitlist_watch` loop.** S2 (agent-share cap) applies to `reservation_hold` and `waitlist_watch`, yet an S2 denial returns `next_step: waitlist_watch`, which would be denied too. | Remove `waitlist_watch` from S2's action list. A watch consumes no covers; S2 applies when a hold is created for the watcher. |
+| D2 | ✅ *Applied as S3b (D-014).* **S3 covers `reservation_confirm` only**, but `reservation_manage` cancel-with-fee is specified as step-up under "S3". | Add rule **S3b** (`@on_deny("step_up")`, scoped to `reservation_manage`, fires when the cancel fee is above zero and not acknowledged). Adds a policy beyond "P0 + S1–S4". |
 | D3 | ~~CLAUDE.md says lazy/no workers; design lists a hold sweeper as Must.~~ | **Resolved:** lazy in the MVP. Seed comes from a `SeedProvider` interface (`secrets.token_bytes` locally, KMS later). |
 | D4 | **Counters vs lazy expiry.** Without a sweeper an expired hold keeps counting toward S1/S2. | Before every hold, run `release_expired(user, venue, slot)` as its own transaction. One pure function, reused by workers later. |
 | D5 | **Local G1–G4 vs Gateway-generated schema.** The local Cedar schema is built from JWT claims; AgentCore's generated schema may differ (❓). | Keep two policy sets (`policies/` for the server, `infra/agentcore/` for Gateway) sharing one behavioural test suite (same scenarios, same outcomes). |
@@ -165,6 +165,33 @@ Resources are created for tests and the demo and torn down afterwards (D-004). N
 | P4-4 | 10-22 | **Fresh-clone verification, judging-ready** (D-004): Docker path with no AWS credentials, then plain-Python path. README readable by an automated AI reviewer. Apache-2.0 visible in About. (¼d) | Every README command works as written. |
 | P4-5 | 10-22 | **Submit, then tear down AWS.** Track Alexa+, mini challenge **AWS Builder only**. (¼d) | Devpost confirmation; nothing left running. |
 | — | 10-23 | Spare day; deadline 12:00 PDT. | Only if something broke. |
+
+---
+
+## 3a. Verified APIs (Phase 0 spikes, 2026-09-29)
+
+Environment: Python 3.12.14 (conda env `fairtable`), `fastmcp==3.4.7` (+ `fastmcp-slim` 3.4.7), `mcp==1.30.0`, `cedarpy==4.12.1`, `strands-agents==1.57.1`, `joserfc==1.7.5`, optional `pydocket==0.25.2`, DynamoDB Local 3.3.1 (`amazon/dynamodb-local:latest`), boto3 1.43.104. Source of every item: the installed package plus the spike test named in brackets.
+
+**cedarpy** [`tests/unit/test_cedar_spike.py`]
+- `cedarpy.is_authorized(request, policies, entities, schema=None, verbose=False) -> AuthzResult`. `request` is a dict with `principal`, `action`, `resource` (Cedar strings like `'Diner::"alice"'` or `{"type","id"}` dicts) and `context` (dict).
+- `entities`: list of `{"uid": {"type","id"}, "attrs": {...}, "parents": []}`, a JSON string, or `cedarpy.Entities.from_json_str(...)`. `policies`: a string or `cedarpy.PolicySet.from_str(...)` (pre-parsed handle).
+- `AuthzResult`: `.decision` (`cedarpy.Decision.Allow|Deny|NoDecision`), `.allowed`, `.diagnostics.reasons` (`["policy0", ...]`), `.diagnostics.errors`, `.diagnostics.id_annotations_by_reason` (`{"policy0": "<@id>"}`).
+- `cedarpy.policies_to_json_str(text)` returns JSON with `staticPolicies["policyN"]["annotations"]` (`id`, `on_deny`). `policyN` is the index of the policy in the concatenated text, so build the table from the exact text you evaluate.
+- Reproduced: all 7 scenarios of design §6.2 (plus D1/D2 from D-014: S2 no longer covers `waitlist_watch`; new S3b for cancel with a fee), priority deny > step_up > allow, no-permit -> deny, and G4 naive (Allow + error) vs `has`-guard (Deny). Incomplete contexts make a forbid error out and be skipped, so contexts must always be complete.
+
+**FastMCP / mcp** [`tests/integration/test_fastmcp_spike.py`]
+- (a) Structured error: `from fastmcp.tools import ToolResult`; `ToolResult(content="...", structured_content={...}, is_error=True)` gives `isError: true` plus `structuredContent`. Client side: `Client.call_tool_mcp(name, args)` returns the raw `CallToolResult`; `Client.call_tool(...)` raises `ToolError` on `isError`.
+- (b) Step-up: `from mcp.shared.exceptions import UrlElicitationRequiredError`; `from mcp.types import ElicitRequestURLParams` (`mode="url"`, `message`, `url`, `elicitationId`). **FastMCP 3.4.7 swallows it into `isError` unless a middleware re-raises it** (`Middleware.on_call_tool`: catch `fastmcp.exceptions.ToolError`, `raise e.__cause__` if it is a `UrlElicitationRequiredError`). With the middleware the client gets `McpError` with `error.code == -32042 == mcp.types.URL_ELICITATION_REQUIRED` and `error.data["elicitations"][0]["url"]`; works in-process and over Streamable HTTP. Validated against the MCP spec 2025-11-25 and FastMCP's `ErrorHandlingMiddleware` pattern (D-014). Production copy: task P1-10.
+- (c) Header: `from fastmcp.server.dependencies import get_http_headers`; `get_http_headers().get("x-ft-user-token")`. Names are lower-cased; `authorization` is stripped by default (pass `include={"authorization"}` to keep it); returns `{}` with no HTTP request (in-process client). Verified over real HTTP, per request, with a missing header giving `None`.
+- (d) Tasks: `@mcp.tool(task=True)` requires `pydocket` (optional extra `tasks`); default backend `memory://` (`FASTMCP_DOCKET_URL`) works, no Redis. Client: `await client.call_tool(name, args, task=True)` returns a `ToolTask` (`.returned_immediately`, `.status()`, `.result()`). Flag stays off by default (D-010).
+- (e) Sessions: `Context.session_id` (tool parameter `ctx: Context`) is stable within one client session and differs across sessions over Streamable HTTP. Identity is read from the header on every request, never cached on the session.
+- Serving: `FastMCP.http_app()` (Starlette app, default path `/mcp`, setting `streamable_http_path`) or `FastMCP.run(transport="http", host=..., port=...)`. Client: `Client(StreamableHttpTransport(url, headers={...}))`. `FastMCP(mask_error_details=True)` hides unexpected exception text but not structured errors or -32042.
+- MCP Inspector: `npx @modelcontextprotocol/inspector`, transport **Streamable HTTP**, URL `http://localhost:<port>/mcp`, add a custom header `x-ft-user-token: <jwt>`. CLI check that worked: `npx @modelcontextprotocol/inspector --cli http://127.0.0.1:<port>/mcp --transport http --method tools/call --tool-name <tool> --header "x-ft-user-token: <jwt>"`. The CLI does not return for a -32042 tool (see friction log); the UI was not verified headless.
+
+**DynamoDB Local** [`tests/integration/test_ddb_spike.py`, `-m ddb`]
+- `infra/local/docker-compose.yml` starts `amazon/dynamodb-local` on `127.0.0.1:8000` (`-inMemory -sharedDb`). Endpoint via `DDB_ENDPOINT` (default `http://localhost:8000`); tests skip if unreachable.
+- `transact_write_items` with 5 items and one failing condition raises `ClientError` code `TransactionCanceledException`; `err.response["CancellationReasons"]` has one entry per item (positional; `Code` is `None` or `ConditionalCheckFailed`); `ReturnValuesOnConditionCheckFailure="ALL_OLD"` returns the blocking item under `Item`. Nothing else is written.
+- 20 threads racing for one slot: exactly 1 success, 19 `ConditionalCheckFailed` at the slot item, no orphan holds. Counter with capacity 3: exactly 3 successes. Real DynamoDB may also return `TransactionConflict`; treat it as retryable.
 
 ---
 
