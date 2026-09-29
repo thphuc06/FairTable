@@ -1,6 +1,6 @@
 # Phase 1 – local core (10-02 → 10-13), no AWS
 
-Status: **in progress – batch A done 2026-09-29, waiting for review** (decisions in D-016 and D-017).
+Status: **in progress – batches A and B done 2026-09-29, B reviewed, waiting for the go-ahead for batch C** (decisions D-016 … D-019).
 
 ## Plan
 Goal: everything a judge runs with `docker compose up`: the trust checks, the 8 tools, identity, storage, waitlist and Fair Drop, the supporting web pages, the simulator and the eval harness. Task list, acceptance criteria and tests: `docs/PLAN.md` §3, Phase 1.
@@ -28,10 +28,10 @@ Open design points to settle inside the batch that owns them:
 | P1-2 Trust Kernel PEP-2 | A | done | 2026-09-29 | engine, 6 rules, priority, fail-closed |
 | P1-3 Trust Kernel PEP-1 (G1–G4) | A | done | 2026-09-29 | G1–G4 + shared scenarios |
 | P1-4 identity verifier | A | done | 2026-09-29 | joserfc verifier + JWKS provider |
-| P1-5 `devauth/` dev issuer | B | todo | | |
-| P1-6 store layer and seed | B | todo | | |
-| P1-7 read tools and token bucket | B | todo | | |
-| P1-8 write pipeline and idempotency | B | todo | | |
+| P1-5 `devauth/` dev issuer | B | done | 2026-09-29 | FastAPI issuer, JWKS, password + client_credentials |
+| P1-6 store layer and seed | B | done | 2026-09-29 | single table, 2 GSIs, seed script, transact wrapper |
+| P1-7 read tools and token bucket | B | done | 2026-09-29 | 3 read tools, RT2, secure server defaults |
+| P1-8 write pipeline and idempotency | B | done | 2026-09-29 | run_write, replay/conflict, audit |
 | P1-9 `reservation_hold` | C | todo | | |
 | P1-10 `reservation_confirm` and step-up | C | todo | | |
 | P1-11 consent page | C | todo | | |
@@ -50,6 +50,42 @@ Open design points to settle inside the batch that owns them:
 | P1-24 README and wrap-up | F | todo | | |
 
 ## Entries (newest first)
+
+### 2026-09-29 · P1-8 · [store] [booking-tools] · Write pipeline and idempotency
+- **Goal:** one ordered path for every state-changing tool, so the rules and the guarantees cannot be skipped.
+- **Done:** `run_write()`: PEP-1 → idempotency lookup → facts → PEP-2 → one transaction (tool writes + idempotency record + audit). Same key + same parameters returns the stored result (`idempotent_replay: true`); different parameters or another tool gives `IDEMPOTENCY_CONFLICT`; denials, step-ups and failures store no key and are audited. A duplicate that lands between lookup and write is caught by the transaction's own condition. `StepUpRequired` carries the decision to the tool layer (P1-10).
+- **Files:** `server/pipeline.py`, `server/domain/{idempotency,audit}.py`, store additions (`get_idempotency`, `idempotency_op`, `audit_op`, `put_audit`, `list_audit`), `tests/unit/domain/test_idempotency_logic.py`, `tests/integration/test_write_pipeline.py`.
+- **Tests:** 18 integration + 4 unit. Includes 20 duplicate deliveries of one request (exactly one hold, 19 replays), 20 users racing for one slot (one winner, losers' counters rolled back, no orphan holds), and two deterministic interleavings.
+- **Decisions:** D-019 (key format, replay flag, audit on denial).
+- **Surprises / friction:** DynamoDB Local reports every failing condition, so both the slot and the idempotency item show up when a duplicate loses.
+- **Follow-ups:** the real operations (`reservation_hold` …) implement `WriteOperation` in batch C; the test double `FakeHold` shows the shape.
+
+### 2026-09-29 · P1-7 · [booking-tools] [docs] · Read tools, rate limit, server assembly
+- **Goal:** the server runs for the first time and answers read questions safely.
+- **Done:** `restaurant_search`, `availability_check` (signed, user-bound `slot_token`s; hot and Fair-Drop slots flagged; expired holds treated as open), `mandate_status`; token bucket per (user, restaurant) for `availability_check` (RT2: the 21st call in an hour is `RATE_LIMITED` with `retry_after_s` and a waitlist next step); `python -m server` with Origin/Host protection, masked errors and structured refusals; `mandate_covers_booking` logic ready for confirm.
+- **Files:** `server/{app,config,middleware,ratelimit,pipeline}.py`, `server/tools/{common,present,restaurant_search,availability_check,mandate_status}.py`, `server/domain/{mandate,ratelimit,availability}.py`, tests in `tests/unit/domain/` and `tests/integration/{test_read_tools,test_server_http,world}.py`.
+- **Tests:** about 90 new, including forged/expired/missing tokens over real HTTP (RT4 server side), a bearer header alone is not an identity, a key-server outage is refused without leaking why, and a bug stays masked and loud in the logs.
+- **Decisions:** D-019 (`mandate_status` without mandate is a normal answer; error boundary; defaults).
+- **Surprises / friction:** FastMCP logs a full traceback for every raised business error (friction log); fixed by a `FastMCPError` subclass at INFO level. Spoken times repeated when two table sizes shared a time; deduplicated.
+- **Follow-ups:** both open questions were closed by the developer (D-019: `mandate_status` answer stands; the server's time zone is used, no per-venue zone). The consent link for creating a mandate is not offered until that page exists.
+
+### 2026-09-29 · P1-6 · [store] · Storage layer and seed data
+- **Goal:** a tested way to read and write DynamoDB, and demo data that makes every rule easy to trigger.
+- **Done:** key builders that reject ids which could collide, mappers, `Store` (get/put/query/batch/transact with retry on transient conflicts, `TransactionCancelled` naming the failing items, `StoreBusy`), table creation with two overloaded indexes, deterministic seed (3 restaurants, 14 days, a hot Saturday table at Ember Grill, a Friday Fair-Drop seat at Sakura Counter, mandates for Alice and Carol), `scripts/seed.py` (idempotent, `--reset`).
+- **Files:** `server/store/*`, `scripts/seed.py`, `tests/unit/store/`, `tests/integration/{conftest,ddb_env,test_store_ddb}.py`.
+- **Tests:** 29 (pure key/mapper/seed checks, retry rules with a scripted client, DynamoDB Local reads, atomic cancel, 20-way race, the seed script run twice).
+- **Decisions:** D-019 (overloaded indexes, lazy `held_until`, UTC wall-clock times).
+- **Surprises / friction:** boto3's serializer rejects floats (friction log).
+- **Follow-ups:** AWS path uses the same code with the default credential chain; scaffold only until "wire AWS" (D-016).
+
+### 2026-09-29 · P1-5 · [identity] · Dev token issuer (`devauth/`)
+- **Goal:** local stand-in for Cognito so the whole identity chain can run offline.
+- **Done:** FastAPI service with OIDC-style metadata, JWKS, and `/token` for the password grant (diners, owner) and client credentials (machines); agent claims follow the client (verified / unverified / none), reproducing RT1 and RT3; owner group claim; optional persisted signing key; `python -m devauth`.
+- **Files:** `devauth/{accounts,issuer,app,__main__}.py`, `devauth/README.md`, `tests/integration/test_devauth.py`.
+- **Tests:** 23; tokens verify with the server's own verifier and drive the PEP-1 decisions end to end.
+- **Decisions:** D-019 (clients, claims).
+- **Surprises / friction:** none.
+- **Follow-ups:** P1-11 (consent page login) and P1-19 (chat page) call `/token` with the password grant.
 
 ### 2026-09-29 · P1-4 · [identity] · Token verifier and JWKS provider
 - **Goal:** no write tool can run without a verified caller.

@@ -5,7 +5,7 @@
 **Status:** 🚧 in progress – Amazon Developer Hackathon "Build, Ship, Shape"
 **Track:** Alexa+ · **Mini challenge:** AWS Builder
 
-> The sections below marked _(planned)_ describe what the repository will do at submission. Nothing is implemented yet; see [`docs/PLAN.md`](docs/PLAN.md) for the schedule.
+> The sections below marked _(planned)_ describe what the repository will do at submission. Built so far (Phase 1, batches A and B): the rule engine, identity checks, the dev token issuer, the storage layer with demo data, and the three read tools (`restaurant_search`, `availability_check`, `mandate_status`). Booking tools come next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/devlog/`](docs/devlog/).
 
 ## What it does
 FairTable is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) that independent restaurants publish so AI agents such as Alexa+ can book tables safely:
@@ -31,17 +31,43 @@ This starts: the MCP server, DynamoDB Local, the consent page and owner console,
 
 Exact URLs and ports will be listed here once the compose file exists.
 
-### Test accounts _(planned; final values are set by `scripts/seed.py`)_
-These are development-only credentials for the local dev issuer. They are not secrets.
+### Try what exists today (development)
+No compose file for the apps yet (task P1-23). Docker is only needed for DynamoDB Local.
+
+```bash
+docker compose -f infra/local/docker-compose.yml up -d        # DynamoDB Local on 127.0.0.1:8000
+python -m venv .venv && . .venv/bin/activate                  # Windows: .venv\Scripts\activate
+pip install -e ".[dev,web,sim]"
+
+export DDB_ENDPOINT_URL=http://localhost:8000 TABLE_NAME=fairtable-dev   # PowerShell: $env:NAME="value"
+python scripts/seed.py --reset       # 3 restaurants, 2 weeks of slots, 2 standing mandates
+python -m devauth                    # dev token issuer on http://127.0.0.1:9000   (terminal 2)
+python -m server                     # MCP server on http://127.0.0.1:8000/mcp      (terminal 3)
+```
+
+Get a token as Alice and call a tool with the MCP Inspector (transport **Streamable HTTP**, URL `http://127.0.0.1:8000/mcp`, custom header `x-ft-user-token: <token>`):
+
+```bash
+curl -s -X POST http://127.0.0.1:9000/token -d grant_type=password -d client_id=alexa-plus-sim \
+     -d username=diner-alice -d password=alice-dev-pass
+npx @modelcontextprotocol/inspector
+```
+
+### Test accounts
+Development-only credentials for the local dev issuer (`devauth/`), seeded on purpose and public. They are not secrets and must never be used anywhere else.
 
 | Account | Role | Password | Notes |
 |---|---|---|---|
-| `diner-alice` | Diner | `fairtable-dev` | Has a standing mandate for the demo restaurant (party up to 4). |
-| `diner-bob` | Diner | `fairtable-dev` | No mandate; every confirm needs step-up. |
-| `diner-carol` | Diner | `fairtable-dev` | Used for the Fair Drop and waitlist scenarios. |
-| `owner-luna` | Restaurant owner | `fairtable-dev` | Owner console login. |
-| `alexa-plus-sim` | Agent client | dev client secret | Verified agent used by the simulator. |
-| `bot-m2m` | Machine client | dev client secret | Unverified bot: no `username`, no `agent_tier`; used by red-team tests. |
+| `diner-alice` | Diner | `alice-dev-pass` | Standing mandate at Luna Trattoria: party up to 4, 17:00-22:00, 30 days ahead. |
+| `diner-bob` | Diner | `bob-dev-pass` | No mandate: every confirm will need step-up. |
+| `diner-carol` | Diner | `carol-dev-pass` | Mandate at Ember Grill that never auto-confirms; used for waitlist and Fair Drop scenarios. |
+| `owner-luna` | Restaurant owner | `luna-dev-pass` | Owner console login (later task). |
+
+| OAuth client | Grant | Secret | Token carries |
+|---|---|---|---|
+| `alexa-plus-sim` | password (diners), client_credentials | `alexa-sim-dev-secret` (machine use only) | `agent_tier=verified`, `agent_id` |
+| `shady-agent` | password | none | `agent_tier=unverified`: refused by the write rules |
+| `bot-m2m` | client_credentials | `bot-m2m-dev-secret` | no `username`, no `agent_tier`: red-team tests RT1 and RT3 |
 
 ## Run tests _(planned)_
 ```bash
