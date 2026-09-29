@@ -57,6 +57,7 @@
   - MCP Inspector for manual testing;
   - a mock LLM for the simulator (`MODEL_PROVIDER=mock`).
 - **Do not plan on keeping AWS resources running.** Spin them up for tests and the demo, then tear them down (scripted). Judging runs Nov 9–20 and may include automated AI review.
+- **AWS wiring is scaffold-only until the user says "wire AWS"** (D-016): interfaces, env-driven config and skeletons yes; real AWS calls, credentials, deployed resources or AWS-dependent tests no.
 - **Nothing account-specific in code:** no hard-coded account IDs, ARNs, or regions. Read from env/config (`AWS_PROFILE`, `AWS_REGION`, `TABLE_NAME`, …). Target region later: `us-east-1`.
 - **After the deadline (10-23) nothing functional changes** until judging ends (11-20): tag the submitted commit `submission` (D-015). Pin dependency versions and Docker image tags before the freeze.
 - **Never commit secrets** (`.env`, keys, tokens). The repo is public.

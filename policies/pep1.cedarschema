@@ -1,0 +1,16 @@
+// Schema for the PEP-1 policies (G1-G4), built from the verified JWT claims. Used only to validate
+// the policy files at load time. The AgentCore Gateway generates its own schema (docs/DECISIONS.md
+// D-008, plan D5), so the Gateway copy of G1-G4 lives under infra/ and shares the behavioural tests.
+entity Client = {
+  scopes: Set<String>,
+  username?: String,
+  agent_tier?: String,
+  agent_id?: String,
+};
+entity Service;
+
+type Ctx = { party_size: Long };
+
+action restaurant_search, availability_check, mandate_status, waitlist_status,
+       reservation_hold, reservation_confirm, reservation_manage, waitlist_watch
+  appliesTo { principal: Client, resource: Service, context: Ctx };

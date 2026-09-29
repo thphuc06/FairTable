@@ -16,6 +16,7 @@ dependencies = [
     "joserfc",
     "pydantic",
     "boto3",
+    "httpx",
 ]
 
 [project.optional-dependencies]
