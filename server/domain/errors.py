@@ -20,6 +20,7 @@ class ErrorCode(StrEnum):
     IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
     HOLD_EXPIRED = "HOLD_EXPIRED"
     FEE_APPLIES = "FEE_APPLIES"
+    CONSENT_REQUIRED = "CONSENT_REQUIRED"
     CONSENT_DECLINED = "CONSENT_DECLINED"
     ALREADY_ENTERED = "ALREADY_ENTERED"
     DROP_CLOSED = "DROP_CLOSED"
@@ -71,6 +72,10 @@ DEFAULT_NEXT_STEP: dict[ErrorCode, NextStep] = {
         "Ask the user to approve the fee, then repeat with the same idempotency_key.",
         ToolName.RESERVATION_MANAGE,
     ),
+    ErrorCode.CONSENT_REQUIRED: NextStep(
+        "Tell the user to approve on their phone (consent_url), then repeat this call with the same "
+        "idempotency_key."
+    ),
     ErrorCode.CONSENT_DECLINED: NextStep("The user declined. Do not retry; offer alternatives."),
     ErrorCode.ALREADY_ENTERED: NextStep("Check the status.", ToolName.WAITLIST_STATUS),
     ErrorCode.DROP_CLOSED: NextStep("Look for other slots.", ToolName.AVAILABILITY_CHECK),
@@ -90,6 +95,7 @@ class FairTableError(Exception):
         retry_after_s: int | None = None,
         next_step: NextStep | None = None,
         consent_url: str | None = None,
+        details: dict[str, Any] | None = None,
         reason: str | None = None,
     ) -> None:
         super().__init__(f"{code.value}: {message}")
@@ -100,6 +106,7 @@ class FairTableError(Exception):
         self.retry_after_s = retry_after_s
         self.next_step = next_step or DEFAULT_NEXT_STEP[code]
         self.consent_url = consent_url
+        self.details = details
         # Server-side only (logs, audit). Never sent to the agent: it could help an attacker.
         self.reason = reason
 
@@ -117,4 +124,6 @@ class FairTableError(Exception):
             payload["retry_after_s"] = self.retry_after_s
         if self.consent_url:
             payload["consent_url"] = self.consent_url
+        if self.details:
+            payload["details"] = self.details
         return payload

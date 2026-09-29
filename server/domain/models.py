@@ -66,6 +66,8 @@ class Slot:
     hot: bool = False
     drop_id: str | None = None  # set when the slot is released through a Fair Drop
     held_until: str | None = None  # ISO timestamp while status == held; checked on read (no TTL)
+    hold_id: str | None = None  # the hold (or confirmed hold) that owns the slot
+    reservation_id: str | None = None
 
     @property
     def slot_key(self) -> str:

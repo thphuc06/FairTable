@@ -2,7 +2,8 @@
 few standing mandates. Pure function of (today, now, user subs): no I/O, so tests can use it too.
 
 Fictional restaurants; the numbers are chosen so each rule is easy to trigger in a demo:
-- Luna Trattoria: roomy agent share (cap 24 covers/day), the demo mandate for Alice.
+- Luna Trattoria: roomy agent share (cap 24 covers/day), free cancellation, so Alice's mandate
+  (max fee 0) covers ordinary bookings there.
 - Ember Grill: small agent share (cap 10) and a hot Saturday 19:00 table: shows rule S2.
 - Sakura Counter: a Friday 20:00 seat released through a Fair Drop: shows rule S4.
 """
@@ -11,6 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from server.domain.clock import iso_z as _iso
 from server.domain.models import MANDATE_ACTIVE, Mandate, Slot, Venue
 
 DAYS = 14
@@ -21,7 +23,7 @@ VENUES: tuple[Venue, ...] = (
     Venue(
         "luna-trattoria", "Luna Trattoria", "Italian", "Riverside",
         "Neighbourhood trattoria with handmade pasta and a wood-fired oven.",
-        seats_per_day=60, agent_share_pct=40, cancel_fee_cents=1000, free_cancel_hours=24,
+        seats_per_day=60, agent_share_pct=40, cancel_fee_cents=0, free_cancel_hours=0,
     ),
     Venue(
         "ember-grill", "Ember Grill", "Steakhouse", "Old Town",
@@ -70,10 +72,6 @@ def _slots(today: date) -> list[Slot]:
                         )
                     )
     return slots
-
-
-def _iso(moment: datetime) -> str:
-    return moment.isoformat().replace("+00:00", "Z")
 
 
 def _mandates(subs: Mapping[str, str], now: datetime) -> list[Mandate]:

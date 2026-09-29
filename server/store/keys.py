@@ -51,6 +51,26 @@ def hold(hold_id: str) -> Key:
     return Key(f"HOLD#{part(hold_id, 'hold_id')}", "META")
 
 
+def hold_day_partition(venue_id: str, date: str) -> str:
+    return f"HOLDS#{part(venue_id, 'venue_id')}#{part(date, 'date')}"
+
+
+def user_partition(sub: str) -> str:
+    return f"USER#{part(sub, 'sub')}"
+
+
+def approval(subject_id: str) -> Key:
+    return Key(f"APPROVAL#{part(subject_id, 'subject_id')}", "META")
+
+
+def inbox_partition(sub: str) -> str:
+    return f"INBOX#{part(sub, 'sub')}"
+
+
+def inbox(sub: str, timestamp: str, message_id: str) -> Key:
+    return Key(inbox_partition(sub), f"{part(timestamp, 'timestamp')}#{part(message_id, 'message_id')}")
+
+
 def reservation(reservation_id: str) -> Key:
     return Key(f"RES#{part(reservation_id, 'reservation_id')}", "META")
 

@@ -68,8 +68,13 @@ async def test_protocol_version_and_tool_surface(running):
     async with client(url, world.token("alice")) as c:
         assert c.initialize_result.protocolVersion == "2025-11-25"
         tools = {t.name: t for t in await c.list_tools()}
-    assert set(tools) == {"restaurant_search", "availability_check", "mandate_status"}
-    assert all(t.annotations.readOnlyHint for t in tools.values())
+    reads = {"restaurant_search", "availability_check", "mandate_status"}
+    writes = {"reservation_hold", "reservation_confirm", "reservation_manage"}
+    assert set(tools) == reads | writes  # waitlist tools arrive with the waitlist task
+    assert all(tools[n].annotations.readOnlyHint for n in reads)
+    assert not any(tools[n].annotations.readOnlyHint for n in writes)
+    assert all(tools[n].annotations.idempotentHint for n in writes)  # safe to retry with the same key
+    assert tools["reservation_manage"].annotations.destructiveHint  # cancel is destructive
     assert "slot_token" in tools["availability_check"].description  # written for the model
 
 

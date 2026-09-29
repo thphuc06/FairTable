@@ -1,0 +1,163 @@
+"""reservation_hold: take a slot for ten minutes (design section 5.4, "one hold = one transaction").
+
+Transaction (the pipeline adds the idempotency record and the audit entry):
+  0. slot -> held           (condition: open, or held with an already-expired hold, and unchanged)
+  1. S1 counter + 1         (condition: below the maximum)
+  2. S2 counter + party     (condition: still within the restaurant's agent cap)
+  3. hold record            (condition: new)
+"""
+
+from datetime import timedelta
+
+from server.domain.availability import MAX_SLOTS_RETURNED  # noqa: F401  (documented limit)
+from server.domain.booking import (
+    HOLD_HELD,
+    MAX_ACTIVE_HOLDS,
+    Hold,
+    starts_at,
+    terms_for,
+)
+from server.domain.clock import iso_z
+from server.domain.errors import ErrorCode, FairTableError
+from server.domain.mandate import check_mandate
+from server.domain.models import SLOT_HELD, SLOT_OPEN, Identity, Venue
+from server.domain.output import success
+from server.domain.slot_token import SlotClaims
+from server.domain.tool_names import ToolName
+from server.kernel import Decision, PolicyContext, VenueRef
+from server.lifecycle import release_expired_for
+from server.ops.common import (
+    alternatives,
+    capacity_condition,
+    counter_value,
+    parse_iso,
+    parse_slot_key,
+)
+from server.pipeline import WriteFacts, WritePlan
+from server.store import Store, TransactionCancelled, TxOp, keys
+from server.tools.common import AppDeps
+from server.tools.present import say_time
+
+
+class HoldOperation:
+    tool = ToolName.RESERVATION_HOLD
+
+    def __init__(self, deps: AppDeps, claims: SlotClaims) -> None:
+        self.deps = deps
+        self.claims = claims
+        self.venue_id = claims.restaurant_id
+        self.party_size = claims.party_size
+        self.time, self.group = parse_slot_key(claims.slot_key)
+
+    def params(self) -> dict:
+        c = self.claims
+        return {"restaurant_id": c.restaurant_id, "date": c.date, "slot": c.slot_key, "party": c.party_size}
+
+    # ------------------------------------------------------------------ facts (before PEP-2)
+    def load_facts(self, store: Store, identity: Identity, now_iso: str) -> WriteFacts:
+        c = self.claims
+        now = parse_iso(now_iso)
+        release_expired_for(store, venue_id=c.restaurant_id, date=c.date, sub=identity.sub, now_iso=now_iso)
+
+        venue = store.get_venue(c.restaurant_id)
+        slot = store.get_slot(c.restaurant_id, c.date, self.time, self.group)
+        if venue is None or slot is None:
+            raise FairTableError(ErrorCode.NOT_FOUND, "That slot no longer exists.")
+        if starts_at(c.date, self.time) <= now:
+            raise FairTableError(ErrorCode.INVALID_INPUT, "That time has already passed.")
+        if slot.effective_status(now_iso) != SLOT_OPEN:
+            raise self._taken(store, slot, now)
+
+        mandate = store.get_mandate(identity.sub, c.restaurant_id)
+        check = check_mandate(
+            mandate, now=now, agent_id=identity.agent_id, party_size=c.party_size,
+            day=parse_iso(c.date).date(), time=self.time, cancel_fee_cents=venue.cancel_fee_cents,
+        )
+        self.venue: Venue = venue
+        self.slot = slot
+        self.check = check
+        return WriteFacts(
+            VenueRef(venue.venue_id, venue.agent_cover_cap),
+            PolicyContext(
+                agent_tier=identity.agent_tier or "none",
+                active_holds_user_venue=counter_value(store, keys.active_holds_counter(identity.sub, c.restaurant_id)),
+                agent_covers_booked=counter_value(store, keys.agent_covers_counter(c.restaurant_id, c.date)),
+                party_size=c.party_size,
+                mandate_covers_booking=check.covered,
+                slot_is_drop_controlled=slot.drop_controlled,
+                cancel_fee_cents=0,
+                cancel_fee_acknowledged=False,
+            ),
+        )
+
+    # ------------------------------------------------------------------ the transaction
+    def plan(self, store: Store, identity: Identity, now_iso: str, decision: Decision) -> WritePlan:
+        c, venue, slot = self.claims, self.venue, self.slot
+        now = parse_iso(now_iso)
+        hold_id = self.deps.new_id()
+        held_until = iso_z(now + timedelta(seconds=self.deps.settings.hold_ttl_s))
+        self.hold = Hold(
+            hold_id=hold_id, sub=identity.sub, agent_id=identity.agent_id, venue_id=c.restaurant_id,
+            date=c.date, time=self.time, table_group=self.group, party_size=c.party_size,
+            status=HOLD_HELD, held_until=held_until, created_at=now_iso,
+            within_mandate=self.check.covered, terms=terms_for(venue, c.date, self.time, c.party_size),
+        )
+        slot_key = keys.slot(c.restaurant_id, c.date, self.time, self.group)
+        s1 = keys.active_holds_counter(identity.sub, c.restaurant_id)
+        s2 = keys.agent_covers_counter(c.restaurant_id, c.date)
+        ops = [
+            TxOp(
+                "Update", key={"PK": slot_key.pk, "SK": slot_key.sk},
+                update="SET #st = :held, ver = ver + :one, held_until = :until, hold_id = :hid",
+                condition="ver = :v AND (#st = :open OR (#st = :held AND held_until <= :now))",
+                names={"#st": "status"},
+                values={":held": SLOT_HELD, ":open": SLOT_OPEN, ":one": 1, ":v": slot.ver,
+                        ":until": held_until, ":hid": hold_id, ":now": now_iso},
+            ),
+            TxOp(
+                "Update", key={"PK": s1.pk, "SK": s1.sk}, update="ADD n :one",
+                condition="attribute_not_exists(n) OR n < :max",
+                values={":one": 1, ":max": MAX_ACTIVE_HOLDS},
+            ),
+            TxOp(
+                "Update", key={"PK": s2.pk, "SK": s2.sk}, update="ADD n :party",
+                condition=capacity_condition(venue.agent_cover_cap - c.party_size),
+                values={":party": c.party_size, ":limit": venue.agent_cover_cap - c.party_size},
+            ),
+            self.deps.store.hold_put_op(self.hold),
+        ]
+        minutes = self.deps.settings.hold_ttl_s // 60
+        if self.check.covered:
+            next_step = {"tool": "reservation_confirm",
+                         "why": "Confirm before the hold expires; the booking is inside the user's standing permission."}
+        else:
+            next_step = {"tool": "reservation_confirm",
+                         "why": "Confirm before the hold expires. It is outside the user's standing permission, "
+                                "so they will be asked to approve on their phone."}
+        result = success(
+            f"I've held {say_time(self.time)} for {c.party_size} at {venue.name} for {minutes} minutes.",
+            hold_id=hold_id, restaurant=venue.name, restaurant_id=venue.venue_id, date=c.date,
+            time=self.time, party_size=c.party_size, expires_at=held_until, terms=self.hold.terms,
+            within_mandate=self.check.covered, outside_mandate_because=list(self.check.reasons),
+            next_step=next_step,
+        )
+        return WritePlan(ops, result, {"hold_id": hold_id, "slot": c.slot_key, "party": c.party_size})
+
+    # ------------------------------------------------------------------ mapping a lost race
+    def _taken(self, store: Store, slot, now) -> FairTableError:
+        return FairTableError(
+            ErrorCode.SLOT_TAKEN, "That slot was just taken.",
+            details={"alternatives": alternatives(store, self.venue_id, self.claims.date,
+                                                  self.claims.party_size, now, exclude=slot)},
+        )
+
+    def explain_cancel(self, failed: list[int], exc: TransactionCancelled) -> FairTableError:
+        if 1 in failed:
+            return FairTableError(ErrorCode.POLICY_DENIED, "The request is not allowed by the restaurant's booking rules.",
+                                  rule_id="S1_max_active_holds",
+                                  hint="The user already holds the maximum number of active holds at this restaurant.")
+        if 2 in failed:
+            return FairTableError(ErrorCode.POLICY_DENIED, "The request is not allowed by the restaurant's booking rules.",
+                                  rule_id="S2_agent_share_of_covers",
+                                  hint="Agent bookings for that day are full.")
+        return self._taken(self.deps.store, self.slot, parse_iso(iso_z(self.deps.clock.now())))

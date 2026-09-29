@@ -16,15 +16,22 @@ from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
 from server.domain.audit import AuditEntry
+from server.domain.booking import Approval, Hold, Reservation
 from server.domain.idempotency import IdempotencyRecord
 from server.domain.models import Mandate, Slot, Venue
 from server.store import keys
 from server.store.mappers import (
+    approval_to_item,
+    hold_to_item,
+    item_to_approval,
+    item_to_hold,
     item_to_mandate,
+    item_to_reservation,
     item_to_slot,
     item_to_venue,
     mandate_to_item,
     plain,
+    reservation_to_item,
     slot_to_item,
     venue_to_item,
 )
@@ -135,6 +142,7 @@ class Store:
         pk: str,
         *,
         sk_prefix: str | None = None,
+        sk_lte: str | None = None,
         index: str | None = None,
         consistent: bool = False,
     ) -> list[dict[str, Any]]:
@@ -148,6 +156,10 @@ class Store:
             expr += " AND begins_with(#s, :s)"
             names["#s"] = sk_attr
             values[":s"] = sk_prefix
+        elif sk_lte:
+            expr += " AND #s <= :s"
+            names["#s"] = sk_attr
+            values[":s"] = sk_lte
         params: dict[str, Any] = {
             "TableName": self._table,
             "KeyConditionExpression": expr,
@@ -300,3 +312,68 @@ class Store:
 
     def list_audit(self, venue_id: str, date: str) -> list[dict[str, Any]]:
         return self.query(keys.audit_partition(venue_id, date), consistent=True)
+
+    def scan_all(self) -> list[dict[str, Any]]:
+        """Every item in the table. For tests, graders and diagnostics only (a full Scan)."""
+        params: dict[str, Any] = {"TableName": self._table, "ConsistentRead": True}
+        items: list[dict[str, Any]] = []
+        while True:
+            response = self._client.scan(**params)
+            items.extend(self._from_av(i) for i in response.get("Items", []))
+            if "LastEvaluatedKey" not in response:
+                return items
+            params["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+    # ------------------------------------------------------------------ holds, reservations, approvals
+    def get_hold(self, hold_id: str) -> Hold | None:
+        item = self.get_item(keys.hold(hold_id))
+        return item_to_hold(item) if item else None
+
+    @staticmethod
+    def hold_put_op(hold: Hold) -> TxOp:
+        return TxOp("Put", item=hold_to_item(hold), condition="attribute_not_exists(PK)")
+
+    def expired_holds_on_day(self, venue_id: str, date: str, now_iso: str) -> list[Hold]:
+        """Held holds whose ``held_until`` has passed (GSI1 is sorted by expiry)."""
+        items = self.query(
+            keys.hold_day_partition(venue_id, date), sk_lte=f"{now_iso}#~", index=keys.GSI1
+        )
+        return [item_to_hold(i) for i in items]
+
+    def holds_of_user(self, sub: str) -> list[Hold]:
+        items = self.query(keys.user_partition(sub), sk_prefix="HOLD#", index=keys.GSI2)
+        return [item_to_hold(i) for i in items]
+
+    def get_reservation(self, reservation_id: str) -> Reservation | None:
+        item = self.get_item(keys.reservation(reservation_id))
+        return item_to_reservation(item) if item else None
+
+    @staticmethod
+    def reservation_put_op(reservation: Reservation) -> TxOp:
+        return TxOp("Put", item=reservation_to_item(reservation), condition="attribute_not_exists(PK)")
+
+    def reservations_of_user(self, sub: str) -> list[Reservation]:
+        items = self.query(keys.user_partition(sub), sk_prefix="RES#", index=keys.GSI2)
+        return [item_to_reservation(i) for i in items]
+
+    def get_approval(self, subject_id: str) -> Approval | None:
+        item = self.get_item(keys.approval(subject_id))
+        return item_to_approval(item) if item else None
+
+    def put_approval_if_absent(self, approval: Approval) -> bool:
+        """True when created; False when an approval for this subject already exists."""
+        try:
+            self.put_item(approval_to_item(approval), condition="attribute_not_exists(PK)")
+            return True
+        except ConditionFailed:
+            return False
+
+    def replace_approval(self, approval: Approval) -> None:
+        self.put_item(approval_to_item(approval))
+
+    def put_inbox(self, sub: str, timestamp: str, message_id: str, message: dict[str, Any]) -> None:
+        k = keys.inbox(sub, timestamp, message_id)
+        self.put_item({"PK": k.pk, "SK": k.sk, "entity": "inbox", "sub": sub, **message})
+
+    def list_inbox(self, sub: str) -> list[dict[str, Any]]:
+        return self.query(keys.inbox_partition(sub), consistent=True)

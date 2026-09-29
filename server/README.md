@@ -24,7 +24,19 @@ No LLM is called from anywhere in this package.
 | `SLOT_TOKEN_SECRET`, `SLOT_TOKEN_TTL_S` | dev value, `900` | signing secret (at least 32 bytes) and lifetime of slot tokens |
 | `RATE_LIMIT_PER_HOUR` | `20` | `availability_check` calls per user per restaurant per hour |
 | `TABLE_NAME`, `DDB_ENDPOINT_URL`, `AWS_REGION` | `fairtable-dev`, none, none | DynamoDB; set the endpoint for DynamoDB Local |
-| `CONSENT_BASE_URL` | `http://localhost:8080` | where consent links point (used from batch C) |
+| `CONSENT_BASE_URL` | `http://localhost:8080` | where consent links point (`{base}/consent/{id}`) |
+| `HOLD_TTL_S` | `600` | how long a hold lasts |
+| `WEB_HOST`, `WEB_PORT`, `WEB_SESSION_SECRET` | `127.0.0.1`, `8080`, dev value | the consent page (`python -m web`); the `aws` profile needs a real secret |
 | `POLICY_DIR` | repo `policies/` | Cedar policy files |
 
 Other modules: `pipeline.py` (the write pipeline all state-changing tools use), `ratelimit.py`, `config.py`, `app.py` (assembly).
+
+## Tools and where their logic lives
+| Tool | Kind | Logic |
+|---|---|---|
+| `restaurant_search`, `availability_check`, `mandate_status` | read | `tools/*.py` + `domain/` |
+| `reservation_hold` | write | `ops/hold.py` (slot + S1 + S2 + hold in one transaction) |
+| `reservation_confirm` | write | `ops/confirm.py` (mandate or approval; step-up otherwise) |
+| `reservation_manage` | write | `ops/manage.py` (`view` in the tool; `modify` reduces the party; `cancel` decides the fee before writing) |
+
+Write tools go through `pipeline.run_write`. `lifecycle.py` releases expired holds lazily, `consent.py` and `tools/stepup.py` create approvals and answer with -32042 or `consent_url`, `notify.py` is the notification seam (dev inbox), `invariants.py` checks I1, I2, I3, I5 and the counters over the whole table (tests and eval graders).

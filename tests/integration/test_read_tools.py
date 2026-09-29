@@ -5,6 +5,8 @@ from datetime import timedelta
 import pytest
 from world import World
 
+from server.domain.clock import iso_z
+
 pytestmark = pytest.mark.ddb
 
 
@@ -136,7 +138,7 @@ async def test_held_slots_are_hidden_until_the_hold_runs_out(world, clock):
 
     day = next_weekday(clock, 2)
     slot = world.store.get_slot("luna-trattoria", day, "19:00", "T4")
-    held_until = (clock.now() + timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+    held_until = iso_z(clock.now() + timedelta(minutes=10))
     from server.store.mappers import slot_to_item
 
     world.store.put_item(slot_to_item(replace(slot, status="held", held_until=held_until)))

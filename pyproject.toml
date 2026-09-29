@@ -26,7 +26,7 @@ tasks = ["pydocket>=0.20.0"]   # optional MCP Tasks view (D-010), default off
 dev = ["pytest", "pytest-asyncio", "httpx", "ruff"]
 
 [tool.setuptools.packages.find]
-include = ["server*", "devauth*"]
+include = ["server*", "devauth*", "web*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

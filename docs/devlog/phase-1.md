@@ -1,6 +1,6 @@
 # Phase 1 – local core (10-02 → 10-13), no AWS
 
-Status: **in progress – batches A and B done 2026-09-29, B reviewed, waiting for the go-ahead for batch C** (decisions D-016 … D-019).
+Status: **in progress – batches A, B and C done 2026-09-29, waiting for review of C** (decisions D-016 … D-021) (decisions D-016 … D-019).
 
 ## Plan
 Goal: everything a judge runs with `docker compose up`: the trust checks, the 8 tools, identity, storage, waitlist and Fair Drop, the supporting web pages, the simulator and the eval harness. Task list, acceptance criteria and tests: `docs/PLAN.md` §3, Phase 1.
@@ -18,6 +18,14 @@ Work is done in **batches**. A batch ends with a report and a review before the 
 
 Server bootstrap defaults (from the Phase 0 review, `PLAN.md` §3a): `host_origin_protection=True` with configured `allowed_hosts`, `mask_error_details=True`, local bind on `127.0.0.1`, the -32042 middleware. Do this when the FastMCP app entry is created (P1-7 at the latest).
 
+Batch C plan (design in `DECISIONS.md` D-020):
+1. **P1-9** `reservation_hold`: domain records and mappers, lazy release of expired holds, the hold operation (slot, S1, S2, hold in one transaction), tool.
+2. **P1-10** `reservation_confirm` + step-up: approvals, mandate check, confirm operation, `tools/stepup.py` (-32042 or `consent_url`), dev inbox notifier.
+3. **P1-11** consent page in `web/`: login, terms, Approve/Decline, same-user check, single use.
+4. **P1-12** `reservation_manage`: view, reduce party size, cancel with fee and step-up.
+5. **P1-13** concurrency hardening: races on slot, S1, S2, confirm; invariant checker.
+Each task ends with the whole suite and `ruff` green and a devlog entry.
+
 Open design points to settle inside the batch that owns them:
 - P1-10: step-up ladder when the client cannot open a URL (see `DECISIONS.md` D-014).
 
@@ -32,11 +40,11 @@ Open design points to settle inside the batch that owns them:
 | P1-6 store layer and seed | B | done | 2026-09-29 | single table, 2 GSIs, seed script, transact wrapper |
 | P1-7 read tools and token bucket | B | done | 2026-09-29 | 3 read tools, RT2, secure server defaults |
 | P1-8 write pipeline and idempotency | B | done | 2026-09-29 | run_write, replay/conflict, audit |
-| P1-9 `reservation_hold` | C | todo | | |
-| P1-10 `reservation_confirm` and step-up | C | todo | | |
-| P1-11 consent page | C | todo | | |
-| P1-12 `reservation_manage` | C | todo | | |
-| P1-13 concurrency hardening | C | todo | | |
+| P1-9 `reservation_hold` | C | done | 2026-09-29 | hold op, lazy release, S1/S2/S4 in DB conditions |
+| P1-10 `reservation_confirm` and step-up | C | done | 2026-09-29 | confirm op, approvals, -32042 / consent_url, dev inbox |
+| P1-11 consent page | C | done | 2026-09-29 | web/: login, terms, Approve/Decline, CSRF, same-user |
+| P1-12 `reservation_manage` | C | done | 2026-09-29 | view, reduce party, cancel with fee step-up |
+| P1-13 concurrency hardening | C | done | 2026-09-29 | RT6/RT7/RT9 under load, invariant checker |
 | P1-14 waitlist on DynamoDB | D | todo | | |
 | P1-15 Fair Drop core | D | todo | | |
 | P1-16 Fair Drop integration | D | todo | | |
@@ -50,6 +58,60 @@ Open design points to settle inside the batch that owns them:
 | P1-24 README and wrap-up | F | todo | | |
 
 ## Entries (newest first)
+
+### 2026-09-29 · P1-10 · [booking-tools] · Change: the hold is lengthened once when approval is needed
+- **Goal:** a user who needs a few minutes on their phone must not lose the table (found in the batch C review: hold 10 minutes vs approval 15).
+- **Done:** `lifecycle.extend_hold` lengthens the hold and its slot together, once, to the approval's expiry when a confirm asks for step-up; the messages say how many minutes the user has. Nothing else changes: in-mandate bookings keep the 10-minute hold, expired or taken-over holds cannot be extended, and the lock is bounded (D-022).
+- **Files:** `server/lifecycle.py`, `server/tools/stepup.py`, `server/domain/booking.py` (`Hold.extended`), `server/store/mappers.py`, tests in `test_reservation_confirm.py` (6 new) and `test_consent_web.py` (the old "page dies at minute 11" test now expects the page to work, plus an end-to-end slow-user case).
+- **Tests:** 474 passed, `ruff` clean; the invariant checker still passes after an extension.
+- **Decisions:** D-022.
+- **Surprises / friction:** `extended` is a DynamoDB reserved word (friction log).
+- **Follow-ups:** P1-19 shares the sign-in between the chat page and the consent page; session length still open.
+
+### 2026-09-29 · P1-13 · [store] [booking-tools] · Concurrency hardening and the invariant checker
+- **Goal:** prove the database conditions, not the happy path, are what keep the rules true under load.
+- **Done:** `server/invariants.py` scans the table for I1 (unapproved booking outside the mandate), I2 (double-booked table), I3 (fee without approval), I5 (write without identity), counter consistency and slot/owner agreement. Real-thread tests: 20 simultaneous holds on one slot give exactly one winner (RT9); one user racing over 20 slots ends with exactly two holds (RT6); the Ember agent-share cap gives exactly five holds of two (RT7); 20 deliveries of one confirm make one booking; 10 different keys confirming one hold make one booking; 10 cancels free the table once and the counter never goes negative; confirm works one second before expiry and fails at the exact expiry moment; a seeded storm of 120 mixed operations ends with every invariant intact.
+- **Files:** `server/invariants.py`, `Store.scan_all`, `tests/redteam/test_rt09_concurrency.py`, `tests/integration/test_invariants.py`, `tests/conftest.py` (moved up so red-team tests share the DynamoDB fixtures).
+- **Tests:** 8 concurrency + 7 checker tests; the concurrency file was run three times in a row without a flake.
+- **Decisions:** D-020, D-021.
+- **Surprises / friction:** none in the code under test; the checker tests show it detects each kind of damage (otherwise the concurrency tests would prove nothing).
+- **Follow-ups:** I4 (one Fair Drop ticket per person) joins the checker in P1-16; the eval graders (P1-20) reuse `check_invariants`.
+
+### 2026-09-29 · P1-12 · [booking-tools] · `reservation_manage`
+- **Goal:** view, shrink or cancel a booking, never cancelling silently when a fee applies.
+- **Done:** `view` (what cancelling costs right now, no state change), `modify` (only reduces the party; adds no cost), `cancel` (fee computed before writing; S3b step-up when a fee applies; approval bound to that exact fee; slot and covers freed in one transaction). Fee step-up answers -32042 or `FEE_APPLIES` with `consent_url`; a declined fee gives `CONSENT_DECLINED`.
+- **Files:** `server/ops/manage.py`, `server/tools/reservation_manage.py`, `server/tools/common.py` (`check_pep1`), `tests/integration/{test_reservation_manage,flows}.py`, two cancel-fee cases in `test_consent_web.py`.
+- **Tests:** 19 + 2.
+- **Decisions:** D-020 (flat fee, modify limited to reducing), D-021.
+- **Surprises / friction:** none. Freed slots are where waitlist matching hooks in (marked in `CancelOperation.plan`, task P1-14).
+- **Follow-ups:** P1-14 hooks the waitlist after a cancel; the fee is flat (the design's diagram says per person).
+
+### 2026-09-29 · P1-11 · [web] · Consent page
+- **Goal:** the out-of-conversation approval: only the right user, only once, only for the exact terms.
+- **Done:** `python -m web`: login through the dev issuer, HMAC session cookie, terms page with Approve / Decline, CSRF bound to user and request, single-use decision audited in one transaction, 403 for another account, 410 when the request or the booking behind it is over, 404 for unknown ids, safe redirects only, no framing, strict CSP, all output escaped. End to end: the assistant asks, the user approves on the page, the same confirm call then succeeds and consumes the approval.
+- **Files:** `web/{app,pages,session,auth,__main__}.py`, `web/README.md`, `tests/integration/test_consent_web.py`, `tests/integration/world.py` (`World.web()`).
+- **Tests:** 22.
+- **Decisions:** D-020 (URL names the approval, login proves the person).
+- **Surprises / friction:** no `itsdangerous`/`jinja2` installed, so cookies and HTML use the standard library.
+- **Follow-ups:** P1-17 (owner console) reuses the session code; the AWS profile swaps `web/auth.py` for Cognito hosted login (scaffold only, D-016); the chat page (P1-19) shows the dev inbox.
+
+### 2026-09-29 · P1-10 · [booking-tools] · `reservation_confirm` and step-up
+- **Goal:** book at once inside the mandate; otherwise make the user approve, outside the chat.
+- **Done:** confirm operation (hold, slot, S1 and reservation in one transaction), mandate check, approval lookup (approved, same user, same terms hash, unexpired, unused, consumed in the same transaction), step-up ladder: -32042 for clients that declared `elicitation.url`, otherwise `CONSENT_REQUIRED` with `consent_url`; approvals are created once per request; the dev inbox notifier records the message.
+- **Files:** `server/ops/confirm.py`, `server/consent.py`, `server/notify.py`, `server/tools/{reservation_confirm,stepup}.py`, `server/domain/booking.py`, `tests/integration/test_reservation_confirm.py`.
+- **Tests:** 15 including both ladder rungs and every way an approval can be worthless (other user, other terms, expired, declined).
+- **Decisions:** D-020, D-021.
+- **Surprises / friction:** the SDK's capability helper cannot tell URL mode from form mode (friction log); `sub` is a DynamoDB reserved word.
+- **Follow-ups:** none blocking.
+
+### 2026-09-29 · P1-9 · [booking-tools] · `reservation_hold`
+- **Goal:** take a table for ten minutes without ever double-booking or exceeding a cap.
+- **Done:** hold operation with slot, S1 and S2 conditions in one transaction; lazy release of expired holds (restaurant/day and user), so stale holds never block S1/S2 and expired slots read as open; drop-controlled seats refused (S4); `SLOT_TAKEN` returns alternative times; `within_mandate` and the reasons it is false are reported so the agent can warn the user before confirm; slot tokens for the same slot and party count as the same request for idempotency.
+- **Files:** `server/ops/{hold,common}.py`, `server/lifecycle.py`, `server/tools/reservation_hold.py`, domain `booking.py`, store mappers/queries/keys, `tests/integration/test_reservation_hold.py`.
+- **Tests:** 21, including the keep-in-sync test between the Cedar S1 limit and the code constant.
+- **Decisions:** D-020, D-021 (Luna now has free cancellation).
+- **Surprises / friction:** none.
+- **Follow-ups:** none.
 
 ### 2026-09-29 · P1-8 · [store] [booking-tools] · Write pipeline and idempotency
 - **Goal:** one ordered path for every state-changing tool, so the rules and the guarantees cannot be skipped.

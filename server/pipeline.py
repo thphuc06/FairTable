@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from server.domain.audit import AuditEntry
+from server.domain.clock import iso_z
 from server.domain.errors import ErrorCode, FairTableError
 from server.domain.idempotency import (
     IdempotencyRecord,
@@ -60,6 +61,9 @@ class WriteOperation(Protocol):
     def plan(self, store: Store, identity: Identity, now_iso: str, decision: Decision) -> WritePlan:
         ...
 
+    def approval_request(self):
+        """What the user must approve when PEP-2 asks for step-up (a consent.ApprovalRequest)."""
+
     def explain_cancel(self, failed: list[int], exc: TransactionCancelled) -> FairTableError:
         """Turn 'operation i failed' (indexes into ``plan().ops``) into SLOT_TAKEN, POLICY_DENIED..."""
 
@@ -76,7 +80,7 @@ class StepUpRequired(Exception):
 
 
 def _iso(deps: AppDeps) -> str:
-    return deps.clock.now().isoformat().replace("+00:00", "Z")
+    return iso_z(deps.clock.now())
 
 
 def _audit(deps: AppDeps, identity: Identity, op: WriteOperation, decision: str,

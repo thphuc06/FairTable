@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 
+from server.domain.clock import iso_z
 from server.domain.errors import ErrorCode, FairTableError
 from server.domain.models import SLOT_OPEN, Slot
 
@@ -56,7 +57,7 @@ def offered_slots(
     slots: list[Slot], *, party_size: int, window: tuple[str, str], now: datetime
 ) -> list[Slot]:
     """Open slots that seat the party inside the window, tightest fitting table first, at most 12."""
-    now_iso = now.isoformat().replace("+00:00", "Z")
+    now_iso = iso_z(now)
     today, clock_time = now.date().isoformat(), now.strftime("%H:%M")
     fitting = [
         s

@@ -16,7 +16,14 @@ from server.kernel import TrustKernel
 from server.middleware import ErrorMappingMiddleware
 from server.ratelimit import RateLimiter
 from server.store import Store, make_client
-from server.tools import availability_check, mandate_status, restaurant_search
+from server.tools import (
+    availability_check,
+    mandate_status,
+    reservation_confirm,
+    reservation_hold,
+    reservation_manage,
+    restaurant_search,
+)
 from server.tools.common import AppDeps
 
 INSTRUCTIONS = (
@@ -66,7 +73,10 @@ def create_server(deps: AppDeps) -> FastMCP:
         middleware=[ErrorMappingMiddleware()],
         mask_error_details=True,
     )
-    for module in (restaurant_search, availability_check, mandate_status):
+    for module in (
+        restaurant_search, availability_check, mandate_status, reservation_hold,
+        reservation_confirm, reservation_manage,
+    ):
         module.register(mcp, deps)
     return mcp
 

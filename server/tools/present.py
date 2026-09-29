@@ -1,5 +1,7 @@
 """Small presentation helpers shared by the read tools (words for voice, rule summaries)."""
 
+from datetime import date as _date
+
 from server.domain.models import Venue
 
 
@@ -37,3 +39,16 @@ def cancel_policy_text(venue: Venue) -> str:
         f"Cancel at least {venue.free_cancel_hours} hours ahead for free; "
         f"after that the fee is {say_money(venue.cancel_fee_cents)}."
     )
+
+
+def say_date(iso: str) -> str:
+    """'2026-10-02' -> 'Friday, October 2'."""
+    d = _date.fromisoformat(iso)
+    return f"{d.strftime('%A')}, {d.strftime('%B')} {d.day}"
+
+
+def cancel_policy_text_from_terms(terms: dict) -> str:
+    fee, hours = terms["cancel_fee_cents"], terms["free_cancel_hours"]
+    if fee == 0:
+        return "Cancellation is free."
+    return f"Cancel at least {hours} hours ahead for free; after that the fee is {say_money(fee)}."

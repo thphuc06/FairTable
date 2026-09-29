@@ -5,7 +5,7 @@
 **Status:** 🚧 in progress – Amazon Developer Hackathon "Build, Ship, Shape"
 **Track:** Alexa+ · **Mini challenge:** AWS Builder
 
-> The sections below marked _(planned)_ describe what the repository will do at submission. Built so far (Phase 1, batches A and B): the rule engine, identity checks, the dev token issuer, the storage layer with demo data, and the three read tools (`restaurant_search`, `availability_check`, `mandate_status`). Booking tools come next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/devlog/`](docs/devlog/).
+> The sections below marked _(planned)_ describe what the repository will do at submission. Built so far (Phase 1, batches A to C): the rule engine, identity checks, the dev token issuer, the storage layer with demo data, the three read tools and the booking flow (`reservation_hold`, `reservation_confirm`, `reservation_manage`) with step-up approval on a consent page. Waitlist, Fair Drop, owner console, simulator and Docker packaging come next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/devlog/`](docs/devlog/).
 
 ## What it does
 FairTable is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) that independent restaurants publish so AI agents such as Alexa+ can book tables safely:
@@ -43,7 +43,10 @@ export DDB_ENDPOINT_URL=http://localhost:8000 TABLE_NAME=fairtable-dev   # Power
 python scripts/seed.py --reset       # 3 restaurants, 2 weeks of slots, 2 standing mandates
 python -m devauth                    # dev token issuer on http://127.0.0.1:9000   (terminal 2)
 python -m server                     # MCP server on http://127.0.0.1:8000/mcp      (terminal 3)
+python -m web                        # consent page on http://127.0.0.1:8080        (terminal 4)
 ```
+
+Book a table end to end: as Alice (has a mandate at Luna) `reservation_hold` then `reservation_confirm` books at once; as Bob (no mandate) `reservation_confirm` answers with a `consent_url`: open it, sign in as `diner-bob`, press Approve, then repeat the same `reservation_confirm` call with the same `idempotency_key`.
 
 Get a token as Alice and call a tool with the MCP Inspector (transport **Streamable HTTP**, URL `http://127.0.0.1:8000/mcp`, custom header `x-ft-user-token: <token>`):
 

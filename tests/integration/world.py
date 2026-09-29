@@ -13,6 +13,10 @@ from server.identity import StaticJwks
 from server.kernel import TrustKernel
 from server.store import Store, StoreConfig
 from server.store.seeding import seed_store
+from web.app import WebDeps
+from web.app import create_app as create_web
+from web.auth import DevLogin
+from web.session import SessionCodec
 
 SUBS = {
     "alice": USERS_BY_NAME["diner-alice"].sub,
@@ -70,3 +74,13 @@ class World:
 
     def client(self) -> Client:
         return Client(self.mcp)
+
+    def web(self) -> TestClient:
+        """A browser for the consent page. Redirects are not followed so tests can see them."""
+        deps = WebDeps(
+            settings=self.deps.settings, store=self.store, clock=self.clock,
+            login=DevLogin(self.auth, "/token", self.deps.verifier),
+            sessions=SessionCodec(self.deps.settings.web_session_secret, self.clock),
+            new_id=lambda: self.deps.new_id(),
+        )
+        return TestClient(create_web(deps), follow_redirects=False)

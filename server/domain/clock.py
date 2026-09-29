@@ -36,5 +36,11 @@ class FakeClock:
         self._now = moment.astimezone(UTC)
 
 
+def iso_z(moment: datetime) -> str:
+    """Fixed-width UTC timestamp ('2026-10-01T12:00:00Z'). Fixed width matters: the strings are
+    compared as text (expiry checks, sort keys), which only works when every one has the same shape."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def epoch_seconds(clock: Clock) -> int:
     return int(clock.now().timestamp())
