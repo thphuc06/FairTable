@@ -17,8 +17,8 @@ Summary of the requirements that matter for FairTable. **The official pages alwa
 - Alexa+ preview tooling is not available to hackathon participants, so the demo uses our own client/simulator.
 
 ## Mini challenges we target
-- **AWS Builder:** use AWS services (e.g. Bedrock, AgentCore, Strands SDK) with **documented integrations**, and describe which services we used and how in the product feedback.
-- **Open Source (optional):** a new, additional open-source project (with a license) or a contribution (branch/fork/PR) to a public repo during the hackathon window. Needs the contribution URL, repo URL, GitHub username, and a short description. *Ask the organizers whether the main repo counts as "additional".*
+- **AWS Builder (targeted):** use AWS services (e.g. Bedrock, AgentCore, Strands SDK) with **documented integrations**, and describe which services we used and how in the product feedback.
+- **Open Source (NOT targeted – see Clarifications below):** requires a separate, additional open-source project or a contribution to a public repo. Needs the contribution URL, project repo URL, GitHub username, and a short description.
 
 ## What to submit
 1. **Text description**: what the project does and how it works.
@@ -40,3 +40,15 @@ Summary of the requirements that matter for FairTable. **The official pages alwa
 
 ## AWS credits
 - Registered participants can request **$150 in AWS Promotional Credits** via the organizers' form, **before 2026-10-21 12:00 PT**, while supplies last.
+
+## Clarifications from the official FAQ
+Recorded 2026-09-29 (see `docs/DECISIONS.md`). The official pages still win if they differ.
+- **Hosting is not required.** For the Alexa+ track, a locally runnable public repo plus the demo video is enough; judges may build and run it themselves.
+- **"Self-hosted" meaning:** our own MCP server, as opposed to Amazon's gated Alexa+ tools (not available to participants), demoed through our own web front end.
+- **Open Source mini challenge:** needs a separate, additional project or contribution (the form asks for both a contribution URL and a project repo URL). A project can win only one mini-challenge prize. We target **AWS Builder only**.
+- **Models and credits:** model choice is up to us. A Bedrock access block is an AWS Support matter, not an organizer one. The FAQ recommends stubbing Bedrock early.
+- **Judging period:** Nov 9–20, possibly including automated AI-driven review. The README must give clear setup and run instructions that work from a fresh clone. Do not rely on AWS resources still running during judging.
+- **License:** must stay visible in the repo's About section (already done).
+- **Deadline:** 2026-10-23 12:00 PDT.
+- **Language:** all submission materials, including code documentation, must be in English.
+- **Demo video (our own decision, D-011):** show the local profile and the AWS-deployed path at least once, since we enter the AWS Builder mini challenge.

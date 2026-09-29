@@ -2,26 +2,33 @@
 
 ## What this project is
 - Entry for the Amazon Developer Hackathon "Build, Ship, Shape" – **Alexa+ track** (+ AWS Builder mini challenge).
-- Deadline: **2026-10-23 12:00 PT**. Solo developer. Language: **Python 3.12**.
+- Deadline: **2026-10-23 12:00 PDT**. Solo developer. Language: **Python 3.12**.
+- **Everything written (code, comments, docstrings, docs, commit messages) is in English** – submission rule. Existing Vietnamese docs are temporary (see `docs/DECISIONS.md` D-009).
+- The developer runs `git add` / `git commit`. Do not commit unless asked.
 - FairTable is a **self-hosted MCP server (spec 2025-11-25, Streamable HTTP)** that gives independent restaurants a trusted "front door" for AI booking agents (Alexa+ first): verified identity, owner-set rules, step-up consent, standing waitlists, and a fair lottery for hot tables.
 
 ## Source of truth (read in this order)
-1. `docs/fairtable-solution-design.md` (v2) – **authoritative design**. If code and design disagree, ask me.
-2. `docs/hackathon-rules.md` – submission requirements.
-3. `docs/*.drawio` – diagrams (XML). The design doc already contains Mermaid equivalents; open these only if needed.
-4. `docs/research-alexa-plus-round3-2026-09.md` – background/evidence only. Do not implement from it.
+1. `docs/DECISIONS.md` – decisions made after the design; **wins over the design doc** where they differ.
+2. `docs/PLAN.md` – phased plan, tasks, acceptance criteria, risks.
+3. `docs/fairtable-solution-design.md` (v2, Vietnamese, temporary) – **authoritative design** until `docs/ARCHITECTURE.md` (English) replaces it (plan task P0-5). If code and design disagree, ask me.
+4. `docs/hackathon-rules.md` – submission requirements and FAQ clarifications.
+5. `docs/*.drawio` – diagrams (XML). The design doc already contains Mermaid equivalents; open these only if needed.
+6. `docs/research-alexa-plus-round3-2026-09.md` – background/evidence only. Do not implement from it.
 
 ## Hard requirements (hackathon rules)
 - MCP server on spec **2025-11-25** with **Streamable HTTP**; the repo must actually import and run it (not just mention it).
-- Public repo, Apache-2.0 license, README with run instructions and the list of AWS services used.
-- Demo video (< 3 min) shows the server working.
+- Public repo, Apache-2.0 license, README with run instructions (working from a fresh clone) and the list of AWS services used. README lists the dev test logins.
+- **The local profile is what judges run:** `docker compose up` starts everything with no AWS account (server, DynamoDB Local, consent page + owner console, dev JWT issuer in `devauth/`, simulator with `MODEL_PROVIDER=mock`). A real provider is opt-in via env.
+- Demo video (< 3 min) shows the server working **and the AWS-deployed path at least once** (AWS Builder). Targeting AWS Builder only; the Open Source mini challenge is out of scope.
+- `docs/aws-integration.md` describes each AWS service used and how.
 
 ## Architecture decisions – do not change without asking
 - **No LLM inside MCP tools.** Tools are deterministic. LLMs appear only in the simulator, the eval harness, and (later) owner rule extraction.
 - **8 tools:** `restaurant_search`, `availability_check`, `mandate_status`, `reservation_hold`, `reservation_confirm`, `reservation_manage`, `waitlist_watch`, `waitlist_status`.
-- **Two policy enforcement points, same language (Cedar):**
-  - PEP-2 (build first): `cedarpy` inside the server, policies P0 + S1–S4 in `policies/*.cedar` (see design §6.2). Map cedarpy's `policyN` reasons to the `@id` / `@on_deny` annotations via `policies_to_json_str`. Priority: deny > step_up > allow; no matching permit → POLICY_DENIED.
-  - PEP-1 (later): AgentCore Gateway Policy G1–G4. G4 must use a `has`-guard.
+- **Two policy enforcement points, same language (Cedar), both run in the server with `cedarpy`:**
+  - PEP-1 (stateless): G1–G4, including the `has`-guard on G4. Evaluated first.
+  - PEP-2 (stateful): P0 + S1–S4 in `policies/*.cedar` (see design §6.2). Map cedarpy's `policyN` reasons to the `@id` / `@on_deny` annotations via `policies_to_json_str`. Priority: deny > step_up > allow; no matching permit → POLICY_DENIED.
+  - AWS profile: AgentCore Gateway Policy repeats G1–G4 as **defense in depth** (not the only place they live). Local and Gateway policy sets share one behavioural test suite.
 - **Writes:** one DynamoDB `TransactWriteItems` per state change (slot, counters, hold, idempotency record, audit). DB conditions are the final guarantee under concurrency.
 - **Idempotency:** key = (user sub, idempotency_key). Same params → return stored result; different params → `IDEMPOTENCY_CONFLICT`. Store only when state actually changed.
 - **Never rely on DynamoDB TTL for business logic.** Always check `expires_at` on read.
@@ -32,37 +39,45 @@
   - Keep this logic in pure functions so Lambdas (sweeper, allocator, watch matcher) can reuse it later.
 - **Step-up consent:** JSON-RPC error **-32042** (URLElicitationRequiredError) with a consent URL.
 - **Tool outputs:** structured errors (`isError: true`) with `next_step`; every successful output includes a short `spoken_summary`.
+- **Waitlists and MCP Tasks:** DynamoDB is the source of truth for watches and drop entries; `waitlist_status` is the primary path. MCP Tasks (FastMCP `task=True`, `pydocket`) are an **optional view** behind a flag, default off; `memory://` is only for testing/local demo. Every feature must work with Tasks disabled. **No Redis / ElastiCache.**
 - **Identity:**
-  - MVP/local: pass a test user identity (signed test JWT or header) so every write knows the user `sub`.
-  - Later: Cognito + Gateway REQUEST interceptor copies the user token to `x-ft-user-token` (the interceptor must strip any client-supplied value), and the server re-verifies it with `joserfc`.
-- **Minimal scope for supporting apps:** simulator = one Strands agent + a simple chat page; owner data seeded by a Python script first; consent page = one HTML page with Approve / Decline.
+  - Local profile: a **dev JWT issuer** (`devauth/`) stands in for Cognito, with seeded test users and an M2M bot client (no `username`, no `agent_tier`). Tokens go in `x-ft-user-token`.
+  - AWS profile: Cognito + Gateway REQUEST interceptor copies the user token to `x-ft-user-token` (the interceptor must strip any client-supplied value).
+  - Both profiles: the server re-verifies the token with `joserfc`, same code; only issuer, JWKS URL and audience change.
+- **Minimal scope for supporting apps:** simulator = one Strands agent + a simple chat page; owner data seeded by a Python script first; consent page = one HTML page with Approve / Decline; owner console = change the agent-share cap and view audit.
+- **`MODEL_PROVIDER` is configurable** (`mock` default; `bedrock` and others opt-in). No LLM provider is required to run the repo.
 
 ## Pinned versions
 `fastmcp==3.4.7`, `mcp==1.30.0` (do **not** upgrade to 2.x), `strands-agents==1.57.1`, `cedarpy==4.12.1`, plus `joserfc`, `mangum`, `boto3`, `pydantic`, `pytest`.
 
 ## Environment constraints
 - **Amazon Bedrock is currently blocked on my AWS account** (support case pending). Build and test everything **locally first**:
-  - DynamoDB Local (Docker) or `moto`;
+  - DynamoDB Local (Docker) – no `moto`;
   - MCP Inspector for manual testing;
-  - a mock LLM for the simulator.
+  - a mock LLM for the simulator (`MODEL_PROVIDER=mock`).
+- **Do not plan on keeping AWS resources running.** Spin them up for tests and the demo, then tear them down (scripted). Judging runs Nov 9–20 and may include automated AI review.
 - **Nothing account-specific in code:** no hard-coded account IDs, ARNs, or regions. Read from env/config (`AWS_PROFILE`, `AWS_REGION`, `TABLE_NAME`, …). Target region later: `us-east-1`.
 - **Never commit secrets** (`.env`, keys, tokens). The repo is public.
 
 ## Working style
 - Before using any FastMCP / AgentCore / Strands / cedarpy API, **verify it against the installed package source or official docs** – do not guess signatures. Items marked ❓ in the design doc must be verified before building on them.
+- **When unsure, look it up – never guess.** Order: installed package source first, then a web search / fetch of the official docs (modelcontextprotocol.io, gofastmcp.com, docs.aws.amazon.com/bedrock-agentcore, cedarpolicy.com, strandsagents.com, PyPI/GitHub for the pinned versions). Prefer the doc version matching the pinned package. If the sources disagree or nothing is found, say so and ask me instead of inventing an API, flag, or behaviour. Record the source you relied on in `docs/friction-log.md` or the PR notes.
 - Work in small steps; every step comes with pytest tests. Keep MCP tool handlers thin; business logic lives in pure, testable functions.
 - Scope priority: **Must > Should > Could** (design doc §11). Ask before starting any Could item.
 - Keep a friction log (`docs/friction-log.md`) of problems hit with AWS / MCP tooling – it counts for judging.
 
 ## Target repo layout
 ```
-server/      FastMCP server, 8 tools, Trust Kernel (cedarpy)
-policies/    *.cedar (P0, S1–S4)
+server/      FastMCP server, 8 tools, Trust Kernel (cedarpy: PEP-1 + PEP-2)
+policies/    *.cedar, flat: g1–g4 (PEP-1), p0 + s1–s4 (PEP-2)
+devauth/     dev JWT issuer standing in for Cognito (compose service)
 workers/     (later) Lambda sweeper, allocator, watch matcher
 web/         FastAPI: consent page + owner console
-simulator/   Alexa+ simulator (Strands)
+simulator/   Alexa+ simulator (Strands, mock model default)
 eval/        task YAML, harness, pass^k reports
-infra/       CDK / agentcore config
+infra/       CDK / agentcore config (AWS profile only)
 scripts/     seed data, local setup
-docs/        design, rules, diagrams, research, friction log
+tests/       unit/ integration/ redteam/ aws/
+docs/        DECISIONS, PLAN, aws-integration, friction log, rules, (design, diagrams, research until replaced)
+Dockerfile, docker-compose.yml   primary run path (created in plan task P1-23)
 ```

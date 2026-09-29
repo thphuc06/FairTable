@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fairtable"
+version = "0.1.0"
+description = "FairTable: a self-hosted MCP server that gives independent restaurants a trusted front door for AI booking agents."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "fastmcp==3.4.7",
+    "mcp==1.30.0",       # do NOT upgrade to 2.x
+    "cedarpy==4.12.1",
+    "joserfc",
+    "pydantic",
+    "boto3",
+]
+
+[project.optional-dependencies]
+web = ["fastapi", "uvicorn", "mangum"]
+sim = ["strands-agents==1.57.1"]
+dev = ["pytest", "pytest-asyncio", "httpx", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "ddb: needs DynamoDB Local (docker compose -f infra/local/docker-compose.yml up -d)",
+    "docker: needs the full docker compose stack",
+    "aws: needs real AWS resources (opt-in)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

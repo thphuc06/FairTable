@@ -1,0 +1,91 @@
+# Decisions log
+
+Short record of decisions that shape the build. Newest last. If a decision here conflicts with `fairtable-solution-design.md`, this file wins until the design is updated. Ask before overriding either.
+
+## D-001 – Local Docker is the primary run path (2026-09-29)
+- **Decision:** A locally runnable public repo plus the demo video is enough for the Alexa+ track. Hosting is not required, and judges may build and run the project themselves.
+- **Meaning of "self-hosted":** our own MCP server, as opposed to Amazon's gated Alexa+ tools that participants cannot access. It is demoed through our own web front end.
+- **Source:** official FAQ and rules (clarified by the developer, 2026-09-29).
+- **Consequences:**
+  - Local Docker (server + DynamoDB Local + web + simulator) is first-class and must work from a fresh clone.
+  - AgentCore Runtime/Gateway deployment stays in Phase 2, but **only for the AWS Builder mini challenge**. If it slips, the submission still qualifies.
+  - Keep all code deployment-agnostic: no account IDs, ARNs or regions in code; everything from env/config.
+
+## D-002 – Open Source mini challenge is out of scope (2026-09-29)
+- **Decision:** We target **AWS Builder only**.
+- **Why:** The Open Source challenge requires a separate, additional project or contribution (the form asks for both a contribution URL and a project repo URL), and a project can win only one mini-challenge prize.
+- **Consequence:** No extra repo or upstream PR work is planned.
+
+## D-003 – Model choice is ours; MODEL_PROVIDER is configurable; mock-first (2026-09-29)
+- **Decision:** Model choice is free. The provider is selected by `MODEL_PROVIDER` (`mock` by default, `bedrock` when available, others possible). Stub Bedrock early (the FAQ itself recommends this).
+- **Bedrock block:** an AWS Support matter, not an organizer one. Nothing to ask the organizers.
+- **Unchanged:** the 2026-10-13 decision point on where eval numbers come from. Mock-based numbers are labelled as harness validation, not model reliability.
+
+## D-004 – Judging window and README readiness (2026-09-29)
+- **Facts:** Judging runs Nov 9–20 and may include automated AI-driven review.
+- **Decisions:**
+  - The README must have clear setup and run instructions that work from a fresh clone (verified in P4-4 on a clean checkout, using the Docker path).
+  - Do not plan on keeping AWS resources running. Spin them up for tests and the demo, then tear them down (scripted, documented).
+  - The license (Apache-2.0) stays visible in the repo's About section (already done).
+
+## D-005 – Deadline (2026-09-29)
+- **Deadline:** 2026-10-23 12:00 PDT. Submission target remains 2026-10-22; 10-23 is the spare day.
+
+## D-006 – Organizer questions withdrawn (2026-09-29)
+- The questions in design §15 are no longer to be sent; the FAQ and rules answer what we needed (see D-001, D-002). Remaining unknowns are handled by design fallbacks, not by asking.
+
+## D-007 – The local profile is what judges run (2026-09-29)
+- **Decision:** A fresh clone plus `docker compose up` starts everything with **no AWS account**:
+  - the MCP server (Streamable HTTP, spec 2025-11-25);
+  - DynamoDB Local;
+  - the consent page and owner console (`web/`);
+  - a **dev JWT issuer** (`devauth/`) standing in for Cognito, with seeded test users;
+  - the simulator with `MODEL_PROVIDER=mock` as the default. A real provider is opt-in via env.
+- **Test login credentials are listed in the README.** They are dev-only values seeded into the local issuer, not secrets. The secret-scan test must allow them explicitly.
+- **Dev issuer scope (minimum needed for the demo and RT1/RT3/RT4):**
+  - publishes a JWKS and OIDC-style metadata;
+  - issues user tokens (`sub`, `username`, `agent_tier`, `agent_id`, scope `fairtable/book`) after a simple login;
+  - issues M2M `client_credentials` tokens for a bot client that has **no** `username` and no `agent_tier` (this is what makes RT1 and RT3 reproducible locally);
+  - mirrors the Cognito pre-token V2/V3 logic in plain Python.
+- **Switching to Cognito is configuration only:** issuer URL, JWKS URL, audience. The server verifier is the same code in both profiles.
+
+## D-008 – G1–G4 also run in cedarpy (2026-09-29)
+- **Decision:** The local build enforces the **full rule set** in the server with `cedarpy`: PEP-1 rules G1–G4 (including the `has`-guard on G4) **and** PEP-2 rules P0 + S1–S4.
+- **AWS profile:** AgentCore Gateway Policy (G1–G4 at the Gateway) becomes **defense in depth**, not the only place these rules live.
+- **Consequences:**
+  - Evaluation order in the server: PEP-1 (stateless, claims and request shape) then PEP-2 (stateful).
+  - Local G1–G4 use the local Cedar schema built from the verified JWT claims. The Gateway-generated schema may differ, so the two policy sets stay separate files but share one **behavioural test suite** (same scenarios, same expected outcomes).
+  - The design's fallback "move G1–G4 into cedarpy" is now the default, not a fallback.
+  - RT1, RT3 and RT4 become fully local tests.
+
+## D-009 – All submission material is in English (2026-09-29)
+- **Decision:** All submission materials, including code documentation, must be in English. Everything written from now on (code, comments, docs) is English.
+- **Existing Vietnamese material:** `docs/fairtable-solution-design.md`, `docs/research-alexa-plus-round3-2026-09.md` and the labels inside both `.drawio` files.
+- **Plan:** before the feature freeze, write `docs/ARCHITECTURE.md` in English (authoritative from then on), relabel the diagrams in English, and move the Vietnamese documents out of the repo (see `docs/PLAN.md`, tasks P0-5, P3-6, P3-7).
+- Until `ARCHITECTURE.md` exists, the Vietnamese design doc remains the source of truth for design questions.
+
+## D-010 – MCP Tasks are optional; DynamoDB is the source of truth for waitlists (2026-09-29)
+- **Facts:** FastMCP's tasks extra relies on `pydocket`, which is built for Redis; the `memory://` backend is for testing only.
+- **Decision:**
+  - DynamoDB is the source of truth for watches and drop entries.
+  - `waitlist_status` is the **primary** path for agents.
+  - MCP Tasks are an **optional view** on top, behind a config flag (default off). `memory://` is acceptable for the local demo.
+  - Every feature works fully with Tasks disabled.
+  - **No Redis or ElastiCache** anywhere in the plan.
+- **Consequence:** the design's "Tasks fallback" date (10-16) is no longer a risk to a Must feature.
+
+## D-011 – AWS Builder: keep Phase 2; document it; show it in the video (2026-09-29)
+- **Decision:** Keep Phase 2 (AgentCore Runtime, Gateway + Policy, Cognito, DynamoDB).
+- Add `docs/aws-integration.md` describing each AWS service used and how.
+- The demo video must show the **AWS-deployed path at least once**.
+- Qualification for the Alexa+ track does not depend on it (D-001). The AWS Builder claim does.
+- Minimum demonstrable AWS path if time runs short: Runtime + Cognito + DynamoDB. Cut order for the rest: Gateway Policy first, then the Gateway and interceptor.
+
+## D-012 – Verified facts (2026-09-29, reported by the developer)
+- `mcp` 1.30.0 reports `LATEST_PROTOCOL_VERSION = 2025-11-25`.
+- `fastmcp` 3.4.7 requires `mcp>=1.24,<2.0`.
+- No change to the pins. Spike P0-3 no longer needs to check the protocol version.
+
+## D-013 – Working agreement (2026-09-29)
+- The developer runs `git add .` and commits. The assistant does not commit.
+- Current phase: documentation and codebase organisation first. Implementation is done later on the developer's PC.

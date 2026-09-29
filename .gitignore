@@ -40,3 +40,8 @@ Thumbs.db
 
 # --- Node (web assets, if any) ---
 node_modules/
+
+# --- Local profile artefacts ---
+devauth/keys/
+.data/
+dynamodb-data/
