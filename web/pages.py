@@ -20,7 +20,7 @@ form{display:inline}
 button{font-size:1rem;padding:.7rem 1.4rem;border:0;border-radius:8px;cursor:pointer;margin-right:.6rem}
 .approve{background:#1a7f37;color:#fff}.decline{background:#e5e5e5}
 input{font-size:1rem;padding:.5rem;width:100%;box-sizing:border-box;margin:.3rem 0 .8rem}
-.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
+.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
 """
 
 
@@ -78,6 +78,16 @@ def consent_page(approval: Approval, username: str, csrf: str) -> str:
     )
 
 
+def landing_page() -> str:
+    return layout(
+        "FairTable",
+        "<h1>FairTable</h1><p>Book a table through a simulated voice assistant, approve what it asks for, "
+        "or manage a restaurant.</p>"
+        "<p><a href='/chat'>Sign in and chat</a> &middot; <a href='/owner'>Restaurant owners</a></p>"
+        "<p class='muted'>Have an approval link from your assistant? Open it and sign in.</p>",
+    )
+
+
 def message_page(title: str, text: str) -> str:
     return layout(title, f"<h1>{escape(title)}</h1><p>{escape(text)}</p>")
 
@@ -117,12 +127,69 @@ def _linkify(text: str, consent_prefix: str) -> str:
     return pattern.sub(lambda m: f"<a href='{m.group(0)}' target='_blank' rel='noopener'>{m.group(0)}</a>", safe)
 
 
+BOLD = re.compile(r"\*\*(.+?)\*\*")
+ITALIC = re.compile(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])")
+CODE = re.compile(r"`([^`]+)`")
+BULLET = re.compile(r"^\s*[-*•]\s+(.*)$")
+NUMBERED = re.compile(r"^\s*\d{1,3}[.)]\s+(.*)$")
+HEADING = re.compile(r"^\s*#{1,6}\s+(.*)$")
+
+
+def _inline(line: str, consent_prefix: str) -> str:
+    """One line: escaped first, then the few markdown marks we honour (bold, italic, code, our own links)."""
+    out = _linkify(line, consent_prefix)
+    out = CODE.sub(lambda m: f"<code>{m.group(1)}</code>", out)
+    out = BOLD.sub(lambda m: f"<b>{m.group(1)}</b>", out)
+    return ITALIC.sub(lambda m: f"<i>{m.group(1)}</i>", out)
+
+
+def render_message(text: str, consent_prefix: str) -> str:
+    """The assistant's text as safe HTML. Everything is escaped before any mark is applied, so the model
+    (or a diner) cannot inject markup; only bold, italic, `code`, bullet and numbered lists, headings
+    (shown bold), paragraphs, line breaks and links to our own consent page are recognised."""
+    blocks: list[str] = []
+    items: list[str] = []
+    kind = ""
+    lines: list[str] = []
+
+    def close_list() -> None:
+        nonlocal items, kind
+        if items:
+            blocks.append(f"<{kind}>" + "".join(f"<li>{i}</li>" for i in items) + f"</{kind}>")
+        items, kind = [], ""
+
+    def close_paragraph() -> None:
+        nonlocal lines
+        if lines:
+            blocks.append("<p>" + "<br>".join(lines) + "</p>")
+        lines = []
+
+    for raw in text.replace("\r\n", "\n").split("\n"):
+        bullet, numbered, heading = BULLET.match(raw), NUMBERED.match(raw), HEADING.match(raw)
+        if bullet or numbered:
+            close_paragraph()
+            want = "ul" if bullet else "ol"
+            if kind and kind != want:
+                close_list()
+            kind = want
+            items.append(_inline((bullet or numbered).group(1), consent_prefix))
+        elif not raw.strip():
+            close_list()
+            close_paragraph()
+        else:
+            close_list()
+            lines.append(f"<b>{_inline(heading.group(1), consent_prefix)}</b>" if heading else _inline(raw, consent_prefix))
+    close_list()
+    close_paragraph()
+    return "".join(blocks)
+
+
 def chat_page(username: str, turns: list[tuple[str, str]], inbox: list[dict[str, Any]], csrf: str,
               consent_prefix: str) -> str:
     """The demo chat: what the diner said, what the assistant answered, and the dev inbox."""
     talk = "".join(
         f"<div class='{'you' if who == 'you' else 'bot'}'><b>{'You' if who == 'you' else 'Assistant'}:</b> "
-        f"{_linkify(text, consent_prefix)}</div>"
+        f"{render_message(text, consent_prefix) if who != 'you' else _linkify(text, consent_prefix)}</div>"
         for who, text in turns
     ) or ("<p class='muted'>Try: <i>Book a table at Luna Trattoria for 2 tomorrow at 7pm</i></p>")
     mail = "".join(
@@ -138,6 +205,7 @@ def chat_page(username: str, turns: list[tuple[str, str]], inbox: list[dict[str,
         f"<input type='hidden' name='csrf' value='{token}'>"
         "<input name='message' maxlength='500' autocomplete='off' autofocus required placeholder='Say something'>"
         "<button class='approve' type='submit'>Send</button></form>"
+        "<p class='muted'>A real model can take several seconds: press Send once and wait for the answer.</p>"
         f"<form method='post' action='/chat/reset'><input type='hidden' name='csrf' value='{token}'>"
         "<button class='decline' type='submit'>Start over</button></form>"
         "<h2>Notifications</h2>"

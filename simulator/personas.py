@@ -70,8 +70,10 @@ def _get(steps: list[Step], tool: str) -> Step | None:
 
 
 def _key(noise: Noise, what: str, goal: Goal) -> str:
+    """The same request always gets the same key (a retry after approval must repeat it); a request that
+    differs in restaurant, day, time or party size gets its own, or the server rightly calls it a conflict."""
     where = (goal.restaurant_id or goal.restaurant or "x").replace(" ", "")
-    return f"sim-{noise.seed}-{what}-{where}-{goal.date}"[:80]
+    return f"sim-{noise.seed}-{what}-{where}-{goal.date}-{goal.time.replace(':', '')}-p{goal.party_size}"[:100]
 
 
 def _rng(noise: Noise, n: int) -> random.Random:

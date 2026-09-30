@@ -53,7 +53,8 @@ def test_the_chat_page_needs_a_sign_in(chat_env):
     r = browser.get("/chat")
     assert r.status_code == 303 and r.headers["location"] == "/login?next=/chat"
     assert browser.post("/chat", data={"message": "hi", "csrf": "x"}).status_code == 303
-    assert browser.get("/").status_code == 200  # signed out: a plain landing page
+    landing = browser.get("/")  # signed out: a landing page with the way in
+    assert landing.status_code == 200 and "href='/chat'" in landing.text
 
 
 def test_the_landing_page_sends_each_person_to_their_own_page(chat_env):
@@ -71,6 +72,17 @@ async def test_a_diner_books_a_table_by_chatting(chat_env):
     html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
     assert "Assistant:" in html and "booked" in html.lower()
     assert len(world.store.reservations_of_user(world_sub(world, "alice"))) == 1
+
+
+async def test_one_conversation_can_make_several_different_requests(chat_env):
+    """Each new request starts a new task: two bookings in one chat are two reservations, not a repeat."""
+    world, browser, _ = chat_env
+    sign_in(browser, "alice")
+    say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
+    html = say(browser, f"Book a table at Luna Trattoria for 4 on {day(world)} at 8pm")
+    assert html.lower().count("booked") >= 2
+    reservations = world.store.reservations_of_user(world_sub(world, "alice"))
+    assert sorted((r.time, r.party_size) for r in reservations) == [("19:00", 2), ("20:00", 4)]
 
 
 def world_sub(world: World, who: str) -> str:
@@ -164,3 +176,9 @@ def test_an_owner_cannot_use_a_diner_only_page_by_accident(chat_env):
     diner = world.web(chat=service)
     sign_in(diner, "alice")
     assert diner.get("/owner").status_code == 403
+
+
+def test_the_assistant_is_told_todays_date(chat_env):
+    world, _, service = chat_env
+    prompt = service.system_prompt()
+    assert "Today is" in prompt and f"{world.clock.now():%Y-%m-%d}" in prompt

@@ -74,3 +74,28 @@ def test_deepseek_defaults_are_the_documented_flash_model():
     from simulator import model
 
     assert model.DEEPSEEK_BASE_URL == "https://api.deepseek.com" and model.DEEPSEEK_MODEL == "deepseek-flash"
+
+
+def _messages(*turns):
+    return [{"role": "user", "content": [{"text": text}]} for text in turns]
+
+
+async def test_a_new_request_starts_a_new_task_instead_of_repeating_the_first():
+    from datetime import date
+
+    model = ScriptedModel(today=date(2026, 10, 1))
+    first = _messages("Book a table at Luna Trattoria for 2 tomorrow at 7pm")
+    second = first + _messages("Book a table at Ember Grill for 4 on 2026-10-05 at 8pm")
+    a = await events_of(model, first)
+    b = await events_of(model, second)
+    args = lambda evs: json.loads(next(e for e in evs if "contentBlockDelta" in e)["contentBlockDelta"]["delta"]["toolUse"]["input"])
+    assert args(a)["date"] == "2026-10-02" and args(a)["party_size"] == 2
+    assert args(b)["date"] == "2026-10-05" and args(b)["party_size"] == 4  # the newer request wins
+
+
+async def test_a_follow_up_without_a_date_continues_the_current_task():
+    from datetime import date
+
+    model = ScriptedModel(today=date(2026, 10, 1))
+    events = await events_of(model, _messages("Book a table at Luna Trattoria for 2 tomorrow at 7pm", "I approved it"))
+    assert next(e for e in events if "contentBlockStart" in e)["contentBlockStart"]["start"]["toolUse"]["name"] == "restaurant_search"

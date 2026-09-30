@@ -55,18 +55,24 @@ class ScriptedModel(Model):
     def structured_output(self, output_model, prompt, system_prompt=None, **kwargs):
         raise NotImplementedError("the scripted model has no structured output")
 
-    def _goal_from(self, events: list) -> Goal | None:
+    def _goal_from(self, events: list) -> tuple[Goal | None, list]:
+        """The goal to pursue and the events that belong to it.
+
+        With a fixed goal (eval tasks) that is the whole conversation. Without one, the goal is the diner's
+        *latest* sentence that reads as a request: a new request starts a new task and what came before it
+        is left behind. A follow-up such as "I approved it" has no date, so it does not start a new task."""
         if self._goal is not None:
-            return self._goal
+            return self._goal, events
         today = self._today or datetime.now(UTC).date()
-        for e in events:
+        for i in range(len(events) - 1, -1, -1):
+            e = events[i]
             if isinstance(e, UserSaid) and (g := parse_request(e.text, today)) is not None:
-                return g
-        return None
+                return g, events[i:]
+        return None, events
 
     async def stream(self, messages, tool_specs=None, system_prompt=None, **kwargs: Any) -> AsyncIterable[dict]:
         events = transcript(list(messages))
-        goal = self._goal_from(events)
+        goal, events = self._goal_from(events)
         action = decide(goal, events, self._noise) if goal is not None else Say(HELP)
         n_calls = sum(1 for m in messages for b in m.get("content", []) if "toolUse" in b)
         async for event in _emit(action, f"sim-call-{n_calls + 1}"):

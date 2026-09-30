@@ -218,3 +218,7 @@ Built for plan task P1-23; nothing here touches AWS.
 - **Model.** `MODEL_PROVIDER` defaults to `mock`; `DEEPSEEK_*` are passed through only when set. No AWS variable is passed to any container (an empty `AWS_PROFILE` breaks boto3; `.env.example` now leaves it commented out).
 - **Checked.** `tests/integration/test_compose_smoke.py` (`pytest -m docker`) drives the running stack over real HTTP: tools, refusal of a missing token and a foreign Host, the chat booking with approval on the consent page, the owner console. Run once on the working tree and once on a copy holding only tracked and unignored files, without any `.env`.
 - **Not done here (by design).** Exact dependency versions and the image lock file are P3-8 (D-015); `joserfc`, `pydantic`, `boto3` and `httpx` are still unpinned.
+
+## D-030 – Credits confirmed; small UX fix found by hand-testing (2026-09-30)
+- **Credits:** the developer confirmed the **$150 hackathon credit is real** (seen in the Billing console; the IAM user used for the read-only check cannot see it, D-025). The Phase 2 plan therefore does not need the free-tier fallback of D-015; the $5 budget alarm, the Budgets alerts in P2-1 and the "tell the cost before creating anything" rule (D-016) still apply. Credits do not cap spending.
+- **Landing page:** the signed-out home page had no way in. It now links to the chat and the owner console.

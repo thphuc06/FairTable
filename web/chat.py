@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from strands.models import Model
 
 from server.domain.clock import Clock, epoch_seconds
-from simulator.assistant import Assistant
+from simulator.assistant import SYSTEM_PROMPT, Assistant
 
 log = logging.getLogger("fairtable.chat")
 
@@ -47,6 +47,11 @@ class ChatService:
         self._make_model = make_model
         self._clock = clock
         self._conversations: dict[str, _Conversation] = {}
+
+    def system_prompt(self) -> str:
+        """The assistant's instructions plus today's date: a model cannot resolve "tomorrow" without it."""
+        now = self._clock.now()
+        return f"{SYSTEM_PROMPT} Today is {now:%A, %Y-%m-%d} (UTC). Dates you give to tools are YYYY-MM-DD."
 
     def remember(self, sub: str, token: str, expires_in_s: int) -> None:
         """Called at sign-in: a fresh token means a fresh conversation."""
@@ -90,6 +95,8 @@ class ChatService:
         text = text.strip()[:MAX_MESSAGE_CHARS]
         if c is None or not text:
             return
+        if c.lock.locked():
+            return  # the previous message is still being answered: a second press of Send is dropped, not queued
         async with c.lock:
             c.turns.append(Turn("you", text))
             if c.expires_at <= epoch_seconds(self._clock):
@@ -97,7 +104,7 @@ class ChatService:
                 return
             try:
                 if c.assistant is None:
-                    assistant = Assistant(self._mcp_url, c.token, self._make_model())
+                    assistant = Assistant(self._mcp_url, c.token, self._make_model(), self.system_prompt())
                     await asyncio.to_thread(assistant.__enter__)  # blocks while it connects
                     c.assistant = assistant
                 reply = await c.assistant.say(text)

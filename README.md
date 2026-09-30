@@ -40,7 +40,7 @@ Stop with `docker compose down`. Data is in memory, so every `up` starts from th
 
 ### Try it (about two minutes)
 1. **Instant booking.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 on <a date in the next two weeks> at 7pm` (use `YYYY-MM-DD`, or "tomorrow"). Alice has a standing permission at Luna, so it is booked at once.
-2. **Step-up approval.** Sign out (or use another browser), sign in as `diner-bob` / `bob-dev-pass` and send the same request. Bob has no standing permission, so the assistant hands over an approval link. Open it, press **Approve**, go back to the chat and type `I approved it`: the booking completes. (Declining books nothing.)
+2. **Step-up approval.** There is no sign-out button: open a private window, go to http://localhost:8080/chat, sign in as `diner-bob` / `bob-dev-pass` and send the same request. Bob has no standing permission, so the assistant hands over an approval link. Open it, press **Approve**, go back to the chat and type `I approved it`: the booking completes. (Declining books nothing.)
 3. **Owner rules.** Sign in as `owner-luna` / `luna-dev-pass` at http://localhost:8080/owner, lower the agent share to 0 and save. The next booking an assistant tries at Luna is refused by rule S2, and the audit list shows the change.
 4. **Call the tools yourself.** Get a token and use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport **Streamable HTTP**, URL `http://localhost:8000/mcp`, custom header `x-ft-user-token: <token>`):
 

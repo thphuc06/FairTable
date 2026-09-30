@@ -85,6 +85,16 @@ Open design points to settle inside the batch that owns them:
 
 ## Entries (newest first)
 
+### 2026-09-30 · P1-19 · [web] [simulator] · Change: found by hand-testing the chat
+- **Goal:** fix what the first manual test of the chat page showed, and make the chat usable with a real model.
+- **Done:** (1) the scripted assistant stuck to the *first* request of a conversation and repeated its answer; a new request now starts a new task, while a follow-up without a date ("I approved it") continues the current one. (2) Idempotency keys now include restaurant, day, time and party size, so two different requests in one chat no longer collide (the server was right to refuse). (3) The assistant is told today's date (a real model cannot resolve "tomorrow" without it). (4) The chat page renders the assistant's markdown safely: text is escaped first, then only bold, italic, code, bullet and numbered lists, headings, paragraphs, line breaks and links to our own consent page are honoured. (5) The signed-out landing page links to the chat and the owner console. (6) `.env` now selects `MODEL_PROVIDER=deepseek`; a free-text Vietnamese question and a "bullet list with bold names" request were answered by the real model and rendered correctly.
+- **Files:** `simulator/{model,personas}.py`, `web/{chat,pages,app}.py`, `README.md`, `tests/unit/simulator/test_model.py`, `tests/unit/web/test_render_message.py` (16), `tests/integration/test_chat_web.py` (+2).
+- **Tests:** whole suite result: see the batch report. New: two requests in one conversation give two reservations; a new request beats the first one; the prompt carries today's date; 16 renderer tests including markup injection (only allowed tags can appear).
+- **Decisions:** none new. The mock understands booking and waitlist requests only, not cancelling, although its help text mentions it (left as is; a real model handles it).
+- **Surprises / friction:** the shell tool of this session unescapes backslashes once, which corrupted two edits (`` became a control character and `
+` became real newlines); found by the tests, fixed by writing those lines without backslashes in the shell command.
+- **Follow-ups:** none blocking.
+
 ### 2026-09-30 · P1-24 · [docs] [docker] · README and wrap-up
 - **Goal:** a stranger can go from clone to a working demo by following the README.
 - **Done:** README rewritten: what works and what does not (AWS not built), Docker quick start with a URL table, a two-minute try-it script (instant booking, step-up approval, owner rule change, tools by hand, waitlist and Fair Drop), the test-login tables, opt-in real model (DeepSeek), the non-Docker route, tests, evaluation and red-team commands, and an honest AWS section. `.env.example` fixed (empty `AWS_PROFILE=` broke boto3) and points at DynamoDB Local on 8001. `docs/aws-integration.md`, `infra/README.md` and `tests/README.md` brought up to date.

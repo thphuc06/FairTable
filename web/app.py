@@ -115,7 +115,7 @@ def create_app(deps: WebDeps) -> FastAPI:
     def home(request: Request) -> Response:
         session = session_of(request)
         if session is None:
-            return page(200, "FairTable", "Open the approval link your assistant gave you, or sign in to chat.")
+            return HTMLResponse(pages.landing_page())
         return RedirectResponse("/owner" if session.owner_of else "/chat", status_code=303)
 
     @app.get("/login", response_class=HTMLResponse)
