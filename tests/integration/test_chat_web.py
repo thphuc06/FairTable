@@ -182,3 +182,24 @@ def test_the_assistant_is_told_todays_date(chat_env):
     world, _, service = chat_env
     prompt = service.system_prompt()
     assert "Today is" in prompt and f"{world.clock.now():%Y-%m-%d}" in prompt
+
+
+async def test_the_chat_shows_the_tool_calls_and_the_rule_behind_each_answer(chat_env):
+    """The proof for a demo: what the assistant asked of the server and what the server decided."""
+    world, browser, _ = chat_env
+    sign_in(browser, "alice")
+    html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
+    summary = re.search(r"<summary>(.*?)</summary>", html).group(1)
+    for tool in ("restaurant_search", "availability_check", "reservation_hold", "reservation_confirm"):
+        assert tool in summary
+    assert "&#10007;" not in summary  # every step succeeded
+
+    html = say(browser, f"Book a table at Luna Trattoria for 12 on {day(world)} at 7pm")
+    assert "G3_party_size_max_10" in html and "refused" in html  # the rule that stopped it, from the server
+
+
+async def test_a_step_up_shows_as_waiting_for_approval_not_as_a_failure(chat_env):
+    world, browser, _ = chat_env
+    sign_in(browser, "bob")
+    html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
+    assert "needs approval" in html and "CONSENT_REQUIRED" in html and "chip wait" in html

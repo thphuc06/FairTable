@@ -28,6 +28,7 @@ from server.domain.models import Identity
 from server.domain.tool_names import ToolName
 from server.kernel import Decision, DecisionKind, PolicyContext, VenueRef, deny_to_error
 from server.store import Store, TransactionCancelled, TxOp
+from server.telemetry import annotate, annotate_decision
 from server.tools.common import AppDeps
 
 log = logging.getLogger("fairtable.pipeline")
@@ -127,6 +128,8 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
 
     # 1. PEP-1: claims and request shape (stateless).
     pep1 = deps.kernel.pep1.decide(identity=identity, action=op.tool, party_size=op.party_size)
+    annotate(venue_id=op.venue_id, party_size=op.party_size or None)
+    annotate_decision("pep1", pep1)
     if not pep1.allowed:
         _audit_quietly(deps, _audit(deps, identity, op, "deny", pep1.rule_ids))
         raise deny_to_error(pep1)
@@ -148,6 +151,7 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
     pep2 = deps.kernel.pep2.decide(
         action=op.tool, diner_id=identity.sub, venue=facts.venue, ctx=facts.ctx
     )
+    annotate_decision("pep2", pep2)
     if pep2.kind is not DecisionKind.ALLOW:
         late = _late_replay(deps, identity, key, digest)
         if late is not None:

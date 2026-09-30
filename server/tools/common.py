@@ -16,6 +16,7 @@ from server.kernel import TrustKernel, deny_to_error
 from server.notify import DevInboxNotifier, Notifier
 from server.ratelimit import RateLimiter
 from server.store import Store
+from server.telemetry import annotate, annotate_caller, annotate_decision
 
 
 @dataclass
@@ -43,7 +44,9 @@ class AppDeps:
 
 def authenticate(deps: AppDeps) -> Identity:
     """Verify the caller's token only. Write tools use this; ``run_write`` then applies PEP-1."""
-    return deps.verifier.verify_headers(deps.header_provider())
+    identity = deps.verifier.verify_headers(deps.header_provider())
+    annotate_caller(identity)
+    return identity
 
 
 def authorize(deps: AppDeps, tool: ToolName, *, party_size: int = 0) -> Identity:
@@ -53,11 +56,14 @@ def authorize(deps: AppDeps, tool: ToolName, *, party_size: int = 0) -> Identity
     it, so the request is refused without leaking why.
     """
     identity = deps.verifier.verify_headers(deps.header_provider())
+    annotate_caller(identity)
     check_pep1(deps, identity, tool, party_size)
     return identity
 
 
 def check_pep1(deps: AppDeps, identity: Identity, tool: ToolName, party_size: int = 0) -> None:
     decision = deps.kernel.pep1.decide(identity=identity, action=tool, party_size=party_size)
+    annotate(party_size=party_size or None)
+    annotate_decision("pep1", decision)
     if not decision.allowed:
         raise deny_to_error(decision)

@@ -29,7 +29,7 @@ Working agreement (D-013): the developer commits; the assistant does not. Everyt
 11. **The pitch is measured:** eval harness with A0 (open store) / A1 (FairTable) / A2 (no step-up), 40 YAML tasks (HAPPY 12, NEG 8, ROB 8, ADV 12), red-team RT1–RT12, and pass@1, pass^k, C_out, violations, false-block rate. The simulator uses the mock model by default.
 12. **AWS Builder (D-011):** Phase 2 deploys the same server to AgentCore Runtime behind Gateway + Policy with Cognito and DynamoDB, documented in `docs/aws-integration.md`. The demo video shows the AWS-deployed path at least once. Qualification for the Alexa+ track does not depend on it.
 
-Explicitly **not** in the MVP: background workers, Redis, MCP Apps, Automated Reasoning, Nova Sonic, Nova Act, Web Bot Auth, ACE, Memory, KMS-signed mandates. Should/Could items need your go-ahead first.
+Explicitly **not** in the MVP: background workers, Redis, MCP Apps, Automated Reasoning, Nova Sonic, Nova Act, Web Bot Auth, ACE, Memory (decided out, D-031), KMS-signed mandates. Should/Could items need your go-ahead first.
 
 ---
 
@@ -128,7 +128,7 @@ Conventions
 **Gate 1 (end of 10-13):** all Phase 1 tests green; `docker compose up` works from a clean clone; hold to step-up to confirm, waitlist match and Fair Drop demo locally; RT1–RT12 blocked under A1.
 
 ### Phase 2 – AWS Builder path (10-14 → 10-17)
-Resources are created for tests and the demo and torn down afterwards (D-004). **Credits: the $150 request is submitted, no reply yet; if nothing has arrived by 10-14, stay on the free tier with Budgets alerts and the minimum path (D-015).** Nothing account-specific in code. Full plan of what each service does: `docs/aws-integration.md`.
+Resources are created for tests and the demo and torn down afterwards (D-004). **Credits: the $150 credit is confirmed (D-030), so the free-tier fallback of D-015 is not needed; credits do not cap spending, so Budgets alerts and the cost-before-creating rule (D-016) stay.** Nothing account-specific in code. Full plan of what each service does: `docs/aws-integration.md`.
 
 | ID | Date | Task | Acceptance criteria | Tests that prove it |
 |---|---|---|---|---|
@@ -139,6 +139,7 @@ Resources are created for tests and the demo and torn down afterwards (D-004). *
 | P2-5 | 10-16 | **Gateway:** `CUSTOM_JWT`, MCP target with outbound OAuth, REQUEST interceptor (strip client `x-ft-user-token`, copy from verified `Authorization`, `passRequestHeaders`). (½d) | Through the Gateway the server sees a valid `x-ft-user-token`; a forged header is removed. | Interceptor unit tests; `tests/aws/test_gateway_identity.py`. |
 | P2-6 | 10-16 | **Gateway Policy G1–G4 (defense in depth).** Dump the generated Cedar schema first (❓). (½d) | Schema documented in the friction log; G2 and G4 deny as in the local suite. | `tests/aws/test_pep1.py` sharing scenarios with the local suite (D5). |
 | P2-7 | 10-17 | **Decision point + -32042 through Gateway.** If the Gateway rewrites the error or Policy blocks, keep what works and document the rest. (½d) | Decision written down; step-up works through the Gateway or the direct Runtime route is used. | `tests/aws/test_stepup_through_gateway.py`. |
+| P2-9 | 10-17 | **AgentCore Observability (D-031, required). Server part built 2026-09-30 (D-032); the AWS part remains.** Verify prices first. Enable CloudWatch Transaction Search; instrument the Strands agent (ADOT, `strands-agents[otel]`, session id baggage); enable Gateway and Runtime spans; add policy-decision attributes to the server's spans (this part can be built and tested earlier with an in-memory exporter); capture one booking trace for the video. (½d) | One booking produces one trace showing agent, Gateway and server steps, with the rule ids; no token or personal data in any span. | Unit test with an in-memory span exporter (server attributes, no secrets); manual check in CloudWatch. |
 | P2-8 | 10-17 | **Teardown scripts + `docs/aws-integration.md` filled in.** One documented command to deploy and one to destroy. (½d) | After teardown nothing billable remains; each AWS service in the doc has role, usage, what worked, what needs work. | Teardown dry-run lists resources by tag; listing after teardown recorded in the friction log. |
 
 **Gate 2 (10-17):** at minimum Runtime + Cognito + DynamoDB run and can be demoed. If Phase 2 slips, cut in the order in D-011 (Gateway Policy, then Gateway + interceptor). The local Docker profile is unaffected.
@@ -193,6 +194,12 @@ Environment: Python 3.12.14 (conda env `fairtable`), `fastmcp==3.4.7` (+ `fastmc
 
 **MCP client capabilities** [`tests/integration/test_reservation_confirm.py`]
 - In a tool: `fastmcp.server.dependencies.get_context().session.client_params.capabilities.elicitation` (an `mcp.types.ElicitationCapability` with `form` / `url`, each `None` when not declared). `ServerSession.check_client_capability(...)` only tests that `elicitation` exists, so it cannot tell URL mode from form mode; read `.url` directly. The `mcp` client declares both `form` and `url` only when given an elicitation callback (`fastmcp.Client(..., elicitation_handler=...)`), otherwise none. No initialize params (stateless) means `client_params is None`.
+
+**OpenTelemetry in the server** [`tests/unit/test_telemetry.py`, `tests/integration/test_telemetry_spans.py`, 2026-09-30]
+- `opentelemetry-api` / `-sdk` 1.45.0 come with `strands-agents`; `opentelemetry.sdk.trace.export.in_memory_span_exporter.InMemorySpanExporter` collects spans in tests; `trace.get_tracer(name, tracer_provider=...)` takes an explicit provider.
+- A FastMCP `Middleware.on_call_tool(context, call_next)` sees `context.message` (`mcp.types.CallToolRequestParams`: `name`, `arguments`, and `meta`, which is `None` even when the client sent `_meta`). The client's `_meta` (with `traceparent`) is on `context.fastmcp_context.request_context.meta`. `Client.call_tool_mcp(name, args, meta={...})` sends it.
+- FastMCP starts its own span inside the tool call; when only a custom provider is set, that inner span is a `NonRecordingSpan`, so `trace.get_current_span()` in the tool cannot be annotated. Keep your own span in a `ContextVar`; anyio's thread pool copies context variables to the worker thread.
+- Strands' `MCPClient` injects the active trace context into `_meta` of outgoing tool calls (`strands.tools.mcp.mcp_instrumentation.inject_trace_context`).
 
 **FastMCP resources** [`tests/integration/test_fair_drop.py`]
 - `@mcp.resource("scheme://{param}/path", mime_type="...")` on a function returning `str` registers a resource template (`Client.list_resource_templates()` shows `uriTemplate`); `Client.read_resource(uri)` returns a list whose items have `.text`. Raising `fastmcp.exceptions.ResourceError("message")` reaches the client as `mcp.shared.exceptions.McpError` with that message (it is not masked).

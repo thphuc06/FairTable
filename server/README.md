@@ -29,6 +29,8 @@ No LLM is called from anywhere in this package.
 | `WEB_HOST`, `WEB_PORT`, `WEB_SESSION_SECRET` | `127.0.0.1`, `8080`, dev value | the consent page (`python -m web`); the `aws` profile needs a real secret |
 | `POLICY_DIR` | repo `policies/` | Cedar policy files |
 
+Tracing: `telemetry.py` turns every tool call into an OpenTelemetry span (which tool, what each policy layer decided and by which rule, ok / refused / approval needed / error) using an allow-list of attributes, so no token or personal data can be attached (D-032). It is a no-op until an OpenTelemetry SDK is configured; on AWS the Distro for OpenTelemetry does that.
+
 Other modules: `pipeline.py` (the write pipeline all state-changing tools use), `ratelimit.py`, `config.py`, `app.py` (assembly).
 
 ## Tools and where their logic lives

@@ -85,13 +85,32 @@ Open design points to settle inside the batch that owns them:
 
 ## Entries (newest first)
 
+### 2026-09-30 · P2-9 (server part, built early) · [observability] · Tool-call spans with policy decisions
+- **Goal:** make every tool call traceable (which rule allowed, refused or asked for approval) so problems can be found in CloudWatch later, and build it now because it needs no AWS.
+- **Done:** `server/telemetry.py`: `TelemetryMiddleware` (one span per tool call, outermost), an allow-list of attributes (`annotate` refuses any other name), annotations at the identity check, PEP-1, PEP-2 and the final result, join to the caller's trace through `_meta`, error status only for bugs (class name, no message). No exporter or provider is configured by the server; without an SDK it is a no-op.
+- **Files:** `server/{telemetry,app,pipeline}.py`, `server/tools/common.py`, `server/README.md`, `tests/unit/test_telemetry.py` (14), `tests/integration/test_telemetry_spans.py` (10), `docs/{DECISIONS,PLAN}.md`.
+- **Tests:** in-memory exporter: a read call (caller, PEP-1 rule), a refusal (`DROP_CONTROLLED` by S4, PEP-2 deny, restaurant, span not marked as an error), a machine client stopped by PEP-1 (no PEP-2 attributes), a step-up (`CONSENT_REQUIRED`, S3), an idempotent replay flag, a missing token (no caller), a bug (error span, exception class only, message absent), joining a client's `traceparent`, an own trace when none is sent, and a scan of every span of a whole booking for token, slot token, user id, username, idempotency keys, hold id and approval link (none present, no span events).
+- **Decisions:** D-032.
+- **Surprises / friction:** FastMCP's own inner span hides the tool span when only a custom provider is set, and `context.message.meta` is `None` even when the client sends `_meta` (it is on the request context). Both found by the tests and recorded in `PLAN.md` section 3a.
+- **Follow-ups:** the AWS part of P2-9: prices, CloudWatch Transaction Search, ADOT and `strands-agents[otel]` for the simulator, Gateway and Runtime spans, session id baggage (needs "wire AWS").
+
+### 2026-09-30 · P1-19 · [web] [docs] · Change: the chat shows the agent's tool calls; Observability and Memory decisions
+- **Goal:** prove in the demo that the server, not the assistant, does the checking, and settle two AWS questions.
+- **Done:** under each assistant answer the chat lists the tool calls behind it (a summary line such as `4 steps: restaurant_search ✓ → … → reservation_confirm ✗`, expandable): tool, key arguments (long tokens shortened, the approval link not repeated), the server's outcome (ok, refused with the rule id and message, or needs approval), the suggested next step and any words the assistant wrote next to the call. Everything is escaped. Not shown: hidden reasoning. Decisions: AgentCore Observability is required (new plan task P2-9), AgentCore Memory is out (D-031); `aws-integration.md`, `PLAN.md` and the README updated.
+- **Files:** `simulator/events.py` (`Step.note`), `web/{chat,pages,app}.py`, `tests/unit/web/test_steps_html.py` (10), `tests/integration/test_chat_web.py` (+2), docs.
+- **Tests:** renderer (escaping, shortened tokens, approval shown as waiting not as failure, rule id shown), and through the real chat: a booking lists its four calls all ok, a party of 12 shows `G3_party_size_max_10`, a step-up shows "needs approval".
+- **Decisions:** D-031.
+- **Surprises / friction:** none.
+- **Follow-ups:** server-side OpenTelemetry spans with policy-decision attributes (P2-9; buildable and testable locally with an in-memory exporter, needs the developer's go-ahead to start).
+
 ### 2026-09-30 · P1-19 · [web] [simulator] · Change: found by hand-testing the chat
 - **Goal:** fix what the first manual test of the chat page showed, and make the chat usable with a real model.
 - **Done:** (1) the scripted assistant stuck to the *first* request of a conversation and repeated its answer; a new request now starts a new task, while a follow-up without a date ("I approved it") continues the current one. (2) Idempotency keys now include restaurant, day, time and party size, so two different requests in one chat no longer collide (the server was right to refuse). (3) The assistant is told today's date (a real model cannot resolve "tomorrow" without it). (4) The chat page renders the assistant's markdown safely: text is escaped first, then only bold, italic, code, bullet and numbered lists, headings, paragraphs, line breaks and links to our own consent page are honoured. (5) The signed-out landing page links to the chat and the owner console. (6) `.env` now selects `MODEL_PROVIDER=deepseek`; a free-text Vietnamese question and a "bullet list with bold names" request were answered by the real model and rendered correctly.
 - **Files:** `simulator/{model,personas}.py`, `web/{chat,pages,app}.py`, `README.md`, `tests/unit/simulator/test_model.py`, `tests/unit/web/test_render_message.py` (16), `tests/integration/test_chat_web.py` (+2).
 - **Tests:** whole suite result: see the batch report. New: two requests in one conversation give two reservations; a new request beats the first one; the prompt carries today's date; 16 renderer tests including markup injection (only allowed tags can appear).
 - **Decisions:** none new. The mock understands booking and waitlist requests only, not cancelling, although its help text mentions it (left as is; a real model handles it).
-- **Surprises / friction:** the shell tool of this session unescapes backslashes once, which corrupted two edits (`` became a control character and `
+- **Surprises / friction:** the shell tool of this session unescapes backslashes once, which corrupted two edits (`` became a control character and `
+
 ` became real newlines); found by the tests, fixed by writing those lines without backslashes in the shell command.
 - **Follow-ups:** none blocking.
 

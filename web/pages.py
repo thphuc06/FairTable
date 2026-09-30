@@ -8,6 +8,7 @@ from server.domain.booking import KIND_CANCEL_FEE, Approval
 from server.domain.models import Venue
 from server.resources import policy_text
 from server.tools.present import cancel_policy_text_from_terms, say_date, say_money, say_time
+from simulator.events import Step
 
 STYLE = """
 body{font-family:system-ui,sans-serif;background:#f6f5f2;color:#1c1c1c;margin:0}
@@ -20,7 +21,7 @@ form{display:inline}
 button{font-size:1rem;padding:.7rem 1.4rem;border:0;border-radius:8px;cursor:pointer;margin-right:.6rem}
 .approve{background:#1a7f37;color:#fff}.decline{background:#e5e5e5}
 input{font-size:1rem;padding:.5rem;width:100%;box-sizing:border-box;margin:.3rem 0 .8rem}
-.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
+.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.steps{margin-top:.4rem;font-size:.85rem}.steps summary{cursor:pointer;color:#555}.steps ol{margin:.4rem 0;padding-left:1.3rem}.chip{display:inline-block;padding:0 .4rem;border-radius:6px;background:#e3f1e6;color:#1a5f2c}.chip.no{background:#fbe3e3;color:#8a1c1c}.chip.wait{background:#fff1d6;color:#8a5a00}.badge{font-size:.75rem;padding:0 .35rem;border-radius:6px}.badge.ok{background:#e3f1e6;color:#1a5f2c}.badge.no{background:#fbe3e3;color:#8a1c1c}.badge.wait{background:#fff1d6;color:#8a5a00}.say{color:#333;font-style:italic}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
 """
 
 
@@ -184,13 +185,61 @@ def render_message(text: str, consent_prefix: str) -> str:
     return "".join(blocks)
 
 
-def chat_page(username: str, turns: list[tuple[str, str]], inbox: list[dict[str, Any]], csrf: str,
+SHOWN_ARGS = ("restaurant_id", "date", "time_window", "party_size", "action", "query", "drop_id", "new_party_size")
+SHOWN_IDS = ("hold_id", "reservation_id", "watch_id", "slot_token", "idempotency_key")
+
+
+def _short(value: object, limit: int = 60) -> str:
+    text = str(value)
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _step_outcome(step: Step) -> tuple[str, str, str]:
+    """(css class, badge, one line) for what the server did with this call. Only what the tool returned."""
+    r = step.result
+    if not step.is_error:
+        return "ok", "ok", str(r.get("spoken_summary") or "")
+    code, rule = str(r.get("error") or "error"), r.get("rule_id")
+    kind = "wait" if code in ("CONSENT_REQUIRED", "FEE_APPLIES") else "no"
+    badge = "needs approval" if kind == "wait" else "refused"
+    label = f"{code} by {rule}" if rule else code
+    return kind, badge, f"{label}: {r.get('message') or ''}".strip()
+
+
+def steps_html(steps: tuple[Step, ...]) -> str:
+    """A collapsible list of the tool calls behind an answer: proof of what was asked of the server and
+    what the server decided. Everything is escaped; long tokens are shortened; no secrets are shown."""
+    if not steps:
+        return ""
+    chips, rows = [], []
+    for step in steps:
+        css, badge, line = _step_outcome(step)
+        chips.append(f"<span class='chip {css}'>{escape(step.tool)} {'&#10003;' if css == 'ok' else '&#10007;'}</span>")
+        args = ", ".join(f"{k}={escape(_short(v))}" for k, v in step.args.items() if k in SHOWN_ARGS)
+        ids = ", ".join(f"{k}={escape(_short(step.args[k], 14))}" for k in SHOWN_IDS if k in step.args)
+        follow = (step.result.get("next_step") or {}).get("tool") if step.is_error else None
+        rows.append(
+            f"<li><b>{escape(step.tool)}</b>({args}"
+            + (f"; <span class='muted'>{ids}</span>" if ids else "")
+            + f") <span class='badge {css}'>{badge}</span>"
+            + (f"<div class='muted'>{escape(_short(line, 220))}</div>" if line else "")
+            + (f"<div class='muted'>suggested next step: {escape(str(follow))}</div>" if follow else "")
+            + (f"<div class='say'>assistant said: {escape(_short(step.note, 200))}</div>" if step.note else "")
+            + "</li>"
+        )
+    return (f"<details class='steps'><summary>{len(steps)} step{'s' if len(steps) != 1 else ''}: "
+            + " &rarr; ".join(chips) + "</summary><ol>" + "".join(rows) + "</ol></details>")
+
+
+def chat_page(username: str, turns: list[tuple[str, str, tuple]], inbox: list[dict[str, Any]], csrf: str,
               consent_prefix: str) -> str:
-    """The demo chat: what the diner said, what the assistant answered, and the dev inbox."""
+    """The demo chat: what the diner said, what the assistant answered (with the tool calls behind it), and
+    the dev inbox."""
     talk = "".join(
         f"<div class='{'you' if who == 'you' else 'bot'}'><b>{'You' if who == 'you' else 'Assistant'}:</b> "
-        f"{render_message(text, consent_prefix) if who != 'you' else _linkify(text, consent_prefix)}</div>"
-        for who, text in turns
+        f"{render_message(text, consent_prefix) if who != 'you' else _linkify(text, consent_prefix)}"
+        f"{steps_html(steps) if who != 'you' else ''}</div>"
+        for who, text, steps in turns
     ) or ("<p class='muted'>Try: <i>Book a table at Luna Trattoria for 2 tomorrow at 7pm</i></p>")
     mail = "".join(
         f"<li><b>{escape(str(m.get('subject', '')))}</b> {_linkify(str(m.get('body', '')), consent_prefix)}</li>"

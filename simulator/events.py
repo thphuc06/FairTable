@@ -19,6 +19,7 @@ class Step:
     args: dict[str, Any]
     result: dict[str, Any] = field(default_factory=dict)
     is_error: bool = False
+    note: str = ""  # what the assistant said in the same message as this call (visible remarks, not hidden reasoning)
 
     @property
     def error(self) -> str | None:
@@ -50,17 +51,18 @@ def _payload(tool_result: dict[str, Any]) -> dict[str, Any]:
 
 def transcript(messages: list[dict[str, Any]]) -> list[Event]:
     """Strands messages -> events, in order. A tool call whose result has not arrived yet is skipped."""
-    calls: dict[str, tuple[str, dict[str, Any]]] = {}
+    calls: dict[str, tuple[str, dict[str, Any], str]] = {}
     events: list[Event] = []
     for message in messages:
         for block in message.get("content", []):
             if "toolUse" in block:
                 use = block["toolUse"]
-                calls[use["toolUseId"]] = (use["name"], dict(use.get("input") or {}))
+                said = " ".join(b["text"] for b in message.get("content", []) if "text" in b).strip()
+                calls[use["toolUseId"]] = (use["name"], dict(use.get("input") or {}), said if message.get("role") == "assistant" else "")
             elif "toolResult" in block:
                 result = block["toolResult"]
-                name, args = calls.get(result["toolUseId"], ("?", {}))
-                events.append(Step(name, args, _payload(result), result.get("status") == "error"))
+                name, args, note = calls.get(result["toolUseId"], ("?", {}, ""))
+                events.append(Step(name, args, _payload(result), result.get("status") == "error", note))
             elif "text" in block and message.get("role") == "user":
                 events.append(UserSaid(block["text"]))
     return events

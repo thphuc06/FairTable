@@ -22,12 +22,14 @@ Everything below is **planned** as of 2026-09-30: the local profile calls no AWS
 | **Amazon Cognito** (Essentials tier) | User pool, OAuth code + PKCE, token claims | Pre-token-generation Lambda **V2** (user tokens) and **V3** (M2M tokens) add `agent_tier` and `agent_id` | `devauth/` dev JWT issuer | planned |
 | **AWS Lambda** | Pre-token trigger; Gateway interceptor; optional workers later | Small Python functions; workers reuse the same pure functions as the lazy in-server paths | Same logic runs in-process | planned |
 | **Amazon DynamoDB** | Single-table store: slots, holds, reservations, mandates, counters, idempotency records, audit, waitlists, drops | `TransactWriteItems` for every state change; conditions are the final concurrency guarantee. No reliance on TTL for business logic | DynamoDB Local | planned |
-| **Amazon CloudWatch / AgentCore Observability** | Logs and traces for the demo and eval runs | Standard logging from the Runtime | Container logs | planned |
+| **AgentCore Observability** (on **Amazon CloudWatch**, OpenTelemetry) | Trace every step of a booking to troubleshoot and to show in the demo (D-031) | One-time CloudWatch *Transaction Search* (spans go to the `aws/spans` log group); Strands agent instrumented with ADOT and `strands-agents[otel]` (our simulator runs outside Runtime); Gateway and Runtime spans; session id as OpenTelemetry baggage; the server adds the policy decision of each call (tool, decision, rule ids, error code) as span attributes, never tokens or personal data | The chat page's *steps* list and the owner console's audit list | planned (required; prices to verify before enabling) |
 | **AWS Budgets** | Cost alerts at $50 / $100 / $140 | Created by the CDK app | – | planned |
 | **AWS CDK (Python) / CloudFormation** | Infrastructure as code | Table, Cognito, Lambdas, Budgets; AgentCore resources via the `agentcore` CLI or CDK as supported | – | planned |
 | **Amazon Bedrock (models)** | Optional real model for the simulator and eval | `MODEL_PROVIDER=bedrock`; currently **blocked on the account** (AWS Support case), so mock is the default | `MODEL_PROVIDER=mock` | blocked |
 
-Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local provider), API Gateway, S3, ElastiCache/Redis, AgentCore Evaluations, Memory, Nova Act, Nova Sonic. These are Should/Could items and need approval before starting.
+Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local provider), API Gateway, S3, ElastiCache/Redis, AgentCore Evaluations, Nova Act, Nova Sonic. These are Should/Could items and need approval before starting.
+
+**AgentCore Memory: decided out (D-031).** Short-term memory (the conversation, kept by the Strands agent) is enough for this use; durable state lives in DynamoDB.
 
 ## Per-service notes to fill in as we build
 

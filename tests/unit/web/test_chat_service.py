@@ -28,7 +28,7 @@ class SlowAssistant:
     async def say(self, text):
         SlowAssistant.asked.append(text)
         await asyncio.sleep(0.2)
-        return SimpleNamespace(text=f"answer to {text}")
+        return SimpleNamespace(text=f"answer to {text}", steps=[])
 
 
 @pytest.fixture

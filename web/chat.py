@@ -17,6 +17,7 @@ from strands.models import Model
 
 from server.domain.clock import Clock, epoch_seconds
 from simulator.assistant import SYSTEM_PROMPT, Assistant
+from simulator.events import Step
 
 log = logging.getLogger("fairtable.chat")
 
@@ -30,6 +31,7 @@ SIGNED_OUT = "Your sign-in has expired. Please sign in again."
 class Turn:
     who: str  # "you" | "assistant"
     text: str
+    steps: tuple[Step, ...] = ()  # the tool calls behind an assistant answer, in order
 
 
 @dataclass
@@ -108,7 +110,7 @@ class ChatService:
                     await asyncio.to_thread(assistant.__enter__)  # blocks while it connects
                     c.assistant = assistant
                 reply = await c.assistant.say(text)
-                c.turns.append(Turn("assistant", reply.text or "Sorry, I have no answer for that."))
+                c.turns.append(Turn("assistant", reply.text or "Sorry, I have no answer for that.", tuple(reply.steps)))
             except Exception:
                 log.exception("the assistant failed")
                 self._close_assistant(c)

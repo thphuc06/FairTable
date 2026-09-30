@@ -18,6 +18,7 @@ from server.matcher import safe_offer
 from server.middleware import ErrorMappingMiddleware
 from server.ratelimit import RateLimiter
 from server.store import Store, make_client
+from server.telemetry import TelemetryMiddleware
 from server.tools import (
     availability_check,
     mandate_status,
@@ -75,7 +76,7 @@ def create_server(deps: AppDeps) -> FastMCP:
     mcp = FastMCP(
         "fairtable",
         instructions=INSTRUCTIONS,
-        middleware=[ErrorMappingMiddleware()],
+        middleware=[TelemetryMiddleware(), ErrorMappingMiddleware()],  # telemetry outermost: it sees the final result
         mask_error_details=True,
     )
     for module in (

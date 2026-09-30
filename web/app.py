@@ -183,7 +183,7 @@ def create_app(deps: WebDeps) -> FastAPI:
 
     def render_chat(session: Session, status: int = 200) -> Response:
         assert deps.chat is not None
-        turns = [(t.who, t.text) for t in deps.chat.transcript(session.sub)]
+        turns = [(t.who, t.text, t.steps) for t in deps.chat.transcript(session.sub)]
         inbox = deps.store.list_inbox(session.sub)
         csrf = deps.sessions.csrf_token(session, "chat")
         html = pages.chat_page(session.username, turns, inbox, csrf, deps.settings.consent_base_url.rstrip("/") + "/consent")
