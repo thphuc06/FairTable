@@ -4,11 +4,11 @@ Used by the concurrency tests now and by the eval graders later (design section 
   I1  no booking outside the user's mandate unless the user approved that exact hold
   I2  no double-booked table (at most one live hold or confirmed reservation per slot)
   I3  a cancellation fee is charged only after the user approved it
+  I4  one Fair Drop ticket per person, and an allocated drop's audit verifies
   I5  no write without a verified identity
   plus the bookkeeping that makes the rules trustworthy:
   COUNTER  the S1 / S2 counters equal what the holds and reservations add up to
   SLOT     a slot's status agrees with the hold or reservation that owns it
-I4 (one Fair Drop ticket per person) arrives with the Fair Drop task.
 
 This module scans everything: for tests, graders and diagnostics, never for a request path.
 """
@@ -25,12 +25,15 @@ from server.domain.booking import (
     RES_CONFIRMED,
     Hold,
 )
+from server.domain.fairdrop import DROP_ALLOCATED, ENTRY_WON, verify_audit
 from server.domain.mandate import check_mandate
 from server.domain.models import SLOT_CONFIRMED, SLOT_HELD, SLOT_OPEN
 from server.domain.tool_names import WRITE_TOOLS
 from server.store import Store
 from server.store.mappers import (
     item_to_approval,
+    item_to_drop,
+    item_to_entry,
     item_to_hold,
     item_to_mandate,
     item_to_reservation,
@@ -135,6 +138,28 @@ def check_invariants(store: Store, now_iso: str) -> list[Violation]:
             if not (approval and approval.kind == KIND_CANCEL_FEE and approval.status == APPROVAL_USED
                     and approval.sub == r.sub):
                 out.append(Violation("I3", f"reservation {r.reservation_id} paid a fee without approval"))
+
+    # ---- I4: one ticket per person per drop; an allocated drop is consistent and verifiable
+    drops = {d.drop_id: d for d in map(item_to_drop, by_entity["drop"])}
+    tickets = list(map(item_to_entry, by_entity["entry"]))
+    seen: dict[tuple[str, str], str] = {}
+    for t in tickets:
+        who = (t.drop_id, t.sub)
+        if who in seen:
+            out.append(Violation("I4", f"{t.sub} holds two tickets in {t.drop_id}: {seen[who]} and {t.entry_id}"))
+        seen[who] = t.entry_id
+    for d in drops.values():
+        won = [t for t in tickets if t.drop_id == d.drop_id and t.status == ENTRY_WON]
+        if len(won) > d.capacity:
+            out.append(Violation("I4", f"{d.drop_id} has {len(won)} winners for {d.capacity} places"))
+        for t in won:
+            if not t.hold_id or t.hold_id not in holds:
+                out.append(Violation("I4", f"winner {t.entry_id} has no hold"))
+        if d.status == DROP_ALLOCATED:
+            for problem in verify_audit(d.audit or {}):
+                out.append(Violation("I4", f"{d.drop_id} audit: {problem}"))
+            if sorted(d.audit.get("winners", [])) != sorted(t.entry_id for t in won):
+                out.append(Violation("I4", f"{d.drop_id} audit winners differ from the stored tickets"))
 
     # ---- I5: nothing was written without an identity
     for h in holds.values():

@@ -307,3 +307,49 @@ def test_a_conflicting_key_stored_between_lookup_and_write_is_a_conflict(world):
         run_write(world.deps, who(world), outer, KEY)
     assert exc.value.code is ErrorCode.IDEMPOTENCY_CONFLICT
     assert counter_of(world) == 1 and slot_of(world, "19:00").ver == 2
+
+
+# ---------------------------------------------------------------- the copy that fails only because the original just won
+def test_a_copy_refused_for_a_reason_the_original_created_is_replayed_not_refused(world):
+    """The original commits between the copy's lookup and its checks, so the copy finds the slot
+    taken. The right answer is the stored result, not SLOT_TAKEN / HOLD_EXPIRED."""
+    inner = hold(world)
+
+    class Late(FakeHold):
+        def load_facts(self, store, identity, now_iso):
+            run_write(world.deps, identity, inner, KEY)  # the original finishes first
+            raise FairTableError(ErrorCode.SLOT_TAKEN, "That slot was just taken.")
+
+    day = world.clock.now().date().isoformat()
+    copy = Late("luna-trattoria", day, "19:00", "T4", 2, "h1")
+    result = run_write(world.deps, who(world), copy, KEY)
+    assert result["idempotent_replay"] is True and result["hold_id"] == "h1"
+    assert counter_of(world) == 1 and slot_of(world).ver == 2
+
+
+def test_the_same_window_with_different_parameters_is_a_conflict_not_a_refusal(world):
+    inner = hold(world)
+
+    class Late(FakeHold):
+        def params(self):
+            return {**super().params(), "note": "different"}
+
+        def load_facts(self, store, identity, now_iso):
+            run_write(world.deps, identity, inner, KEY)
+            raise FairTableError(ErrorCode.SLOT_TAKEN, "That slot was just taken.")
+
+    day = world.clock.now().date().isoformat()
+    with pytest.raises(FairTableError) as exc:
+        run_write(world.deps, who(world), Late("luna-trattoria", day, "19:00", "T4", 2, "h1"), KEY)
+    assert exc.value.code is ErrorCode.IDEMPOTENCY_CONFLICT
+
+
+def test_a_genuine_refusal_with_no_stored_key_is_still_a_refusal(world):
+    class Refused(FakeHold):
+        def load_facts(self, store, identity, now_iso):
+            raise FairTableError(ErrorCode.SLOT_TAKEN, "That slot was just taken.")
+
+    day = world.clock.now().date().isoformat()
+    with pytest.raises(FairTableError) as exc:
+        run_write(world.deps, who(world), Refused("luna-trattoria", day, "19:00", "T4", 2, "h1"), KEY)
+    assert exc.value.code is ErrorCode.SLOT_TAKEN

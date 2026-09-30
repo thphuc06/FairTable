@@ -48,6 +48,8 @@ class HoldOperation:
         self.venue_id = claims.restaurant_id
         self.party_size = claims.party_size
         self.time, self.group = parse_slot_key(claims.slot_key)
+        self.drop_exempt = False  # True only for a Fair Drop winner (the win is the authorisation)
+        self.extra_start: int | None = None
 
     def params(self) -> dict:
         c = self.claims
@@ -57,7 +59,10 @@ class HoldOperation:
     def load_facts(self, store: Store, identity: Identity, now_iso: str) -> WriteFacts:
         c = self.claims
         now = parse_iso(now_iso)
-        release_expired_for(store, venue_id=c.restaurant_id, date=c.date, sub=identity.sub, now_iso=now_iso)
+        for freed in release_expired_for(
+            store, venue_id=c.restaurant_id, date=c.date, sub=identity.sub, now_iso=now_iso
+        ):
+            self.deps.slot_released(freed.venue_id, freed.date, freed.time, freed.table_group)
 
         venue = store.get_venue(c.restaurant_id)
         slot = store.get_slot(c.restaurant_id, c.date, self.time, self.group)
@@ -84,7 +89,7 @@ class HoldOperation:
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(c.restaurant_id, c.date)),
                 party_size=c.party_size,
                 mandate_covers_booking=check.covered,
-                slot_is_drop_controlled=slot.drop_controlled,
+                slot_is_drop_controlled=slot.drop_controlled and not self.drop_exempt,
                 cancel_fee_cents=0,
                 cancel_fee_acknowledged=False,
             ),
@@ -126,6 +131,8 @@ class HoldOperation:
             ),
             self.deps.store.hold_put_op(self.hold),
         ]
+        self.extra_start = len(ops)
+        ops.extend(self.extra_ops(hold_id, now_iso))
         minutes = self.deps.settings.hold_ttl_s // 60
         if self.check.covered:
             next_step = {"tool": "reservation_confirm",
@@ -141,7 +148,18 @@ class HoldOperation:
             within_mandate=self.check.covered, outside_mandate_because=list(self.check.reasons),
             next_step=next_step,
         )
-        return WritePlan(ops, result, {"hold_id": hold_id, "slot": c.slot_key, "party": c.party_size})
+        return WritePlan(ops, self.decorate(result), {"hold_id": hold_id, "slot": c.slot_key, "party": c.party_size})
+
+    # ------------------------------------------------------------------ hooks for subclasses
+    def extra_ops(self, hold_id: str, now_iso: str) -> list[TxOp]:
+        """More conditional writes that must succeed or fail together with the hold."""
+        return []
+
+    def decorate(self, result: dict) -> dict:
+        return result
+
+    def explain_extra(self, failed: list[int]) -> FairTableError:
+        return FairTableError(ErrorCode.SLOT_TAKEN, "The request could not be completed; try again.")
 
     # ------------------------------------------------------------------ mapping a lost race
     def _taken(self, store: Store, slot, now) -> FairTableError:
@@ -152,6 +170,8 @@ class HoldOperation:
         )
 
     def explain_cancel(self, failed: list[int], exc: TransactionCancelled) -> FairTableError:
+        if self.extra_start is not None and any(i >= self.extra_start for i in failed):
+            return self.explain_extra([i - self.extra_start for i in failed if i >= self.extra_start])
         if 1 in failed:
             return FairTableError(ErrorCode.POLICY_DENIED, "The request is not allowed by the restaurant's booking rules.",
                                   rule_id="S1_max_active_holds",

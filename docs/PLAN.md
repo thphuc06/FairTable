@@ -194,6 +194,9 @@ Environment: Python 3.12.14 (conda env `fairtable`), `fastmcp==3.4.7` (+ `fastmc
 **MCP client capabilities** [`tests/integration/test_reservation_confirm.py`]
 - In a tool: `fastmcp.server.dependencies.get_context().session.client_params.capabilities.elicitation` (an `mcp.types.ElicitationCapability` with `form` / `url`, each `None` when not declared). `ServerSession.check_client_capability(...)` only tests that `elicitation` exists, so it cannot tell URL mode from form mode; read `.url` directly. The `mcp` client declares both `form` and `url` only when given an elicitation callback (`fastmcp.Client(..., elicitation_handler=...)`), otherwise none. No initialize params (stateless) means `client_params is None`.
 
+**FastMCP resources** [`tests/integration/test_fair_drop.py`]
+- `@mcp.resource("scheme://{param}/path", mime_type="...")` on a function returning `str` registers a resource template (`Client.list_resource_templates()` shows `uriTemplate`); `Client.read_resource(uri)` returns a list whose items have `.text`. Raising `fastmcp.exceptions.ResourceError("message")` reaches the client as `mcp.shared.exceptions.McpError` with that message (it is not masked).
+
 **FastMCP / mcp** [`tests/integration/test_fastmcp_spike.py`]
 - Error logging: an exception that is a `fastmcp.exceptions.FastMCPError` (for example `ToolError(msg, log_level=logging.INFO)`) is logged at that level without a traceback and re-raised as is; any other exception is logged at ERROR with a full traceback and wrapped in `ToolError`. Middleware `on_call_tool` may return a `ToolResult(is_error=True, structured_content=...)` to answer instead of raising.
 - (a) Structured error: `from fastmcp.tools import ToolResult`; `ToolResult(content="...", structured_content={...}, is_error=True)` gives `isError: true` plus `structuredContent`. Client side: `Client.call_tool_mcp(name, args)` returns the raw `CallToolResult`; `Client.call_tool(...)` raises `ToolError` on `isError`.

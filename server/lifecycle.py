@@ -70,10 +70,11 @@ def release_expired(store: Store, hold: Hold, now_iso: str) -> bool:
     return True
 
 
-def release_expired_for(store: Store, *, venue_id: str, date: str, sub: str, now_iso: str) -> int:
-    """Release expired holds that could distort a decision: the restaurant's day and the user's."""
+def release_expired_for(store: Store, *, venue_id: str, date: str, sub: str, now_iso: str) -> list[Hold]:
+    """Release expired holds that could distort a decision: the restaurant's day and the user's.
+    Returns the holds released now, so the caller can offer their tables to waiting watchers."""
     seen: set[str] = set()
-    released = 0
+    released: list[Hold] = []
     candidates = [
         *store.expired_holds_on_day(venue_id, date, now_iso),
         *(h for h in store.holds_of_user(sub) if h.status == HOLD_HELD and h.held_until <= now_iso),
@@ -82,7 +83,8 @@ def release_expired_for(store: Store, *, venue_id: str, date: str, sub: str, now
         if hold.hold_id in seen:
             continue
         seen.add(hold.hold_id)
-        released += release_expired(store, hold, now_iso)
+        if release_expired(store, hold, now_iso):
+            released.append(hold)
     return released
 
 

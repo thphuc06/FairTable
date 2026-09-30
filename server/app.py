@@ -8,11 +8,13 @@ from collections.abc import Mapping
 
 from fastmcp import FastMCP
 
+from server import resources
 from server.config import Settings
 from server.domain.clock import Clock, SystemClock
 from server.domain.slot_token import SlotTokenCodec
 from server.identity import HttpJwks, JwksProvider, TokenVerifier, VerifierConfig
 from server.kernel import TrustKernel
+from server.matcher import safe_offer
 from server.middleware import ErrorMappingMiddleware
 from server.ratelimit import RateLimiter
 from server.store import Store, make_client
@@ -23,6 +25,8 @@ from server.tools import (
     reservation_hold,
     reservation_manage,
     restaurant_search,
+    waitlist_status,
+    waitlist_watch,
 )
 from server.tools.common import AppDeps
 
@@ -63,6 +67,7 @@ def build_deps(
     )
     if header_provider is not None:
         deps.header_provider = header_provider
+    deps.slot_released = lambda venue_id, date, time, group: safe_offer(deps, venue_id, date, time, group)
     return deps
 
 
@@ -75,9 +80,10 @@ def create_server(deps: AppDeps) -> FastMCP:
     )
     for module in (
         restaurant_search, availability_check, mandate_status, reservation_hold,
-        reservation_confirm, reservation_manage,
+        reservation_confirm, reservation_manage, waitlist_watch, waitlist_status,
     ):
         module.register(mcp, deps)
+    resources.register(mcp, deps)
     return mcp
 
 

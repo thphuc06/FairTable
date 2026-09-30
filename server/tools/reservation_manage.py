@@ -52,9 +52,12 @@ def register(mcp: FastMCP, deps: AppDeps) -> None:
         else:
             op = CancelOperation(deps, res)
         try:
-            return run_write(deps, identity, op, idempotency_key)
+            result = run_write(deps, identity, op, idempotency_key)
         except StepUpRequired as exc:
             raise_step_up(deps, exc)
+        if action == "cancel" and not result.get("idempotent_replay"):
+            deps.slot_released(res.venue_id, res.date, res.time, res.table_group)  # waitlist matching
+        return result
 
 
 def _view(deps: AppDeps, res) -> dict:

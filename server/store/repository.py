@@ -17,23 +17,31 @@ from botocore.exceptions import ClientError
 
 from server.domain.audit import AuditEntry
 from server.domain.booking import Approval, Hold, Reservation
+from server.domain.fairdrop import Drop, DropEntry
 from server.domain.idempotency import IdempotencyRecord
 from server.domain.models import Mandate, Slot, Venue
+from server.domain.waitlist import Watch
 from server.store import keys
 from server.store.mappers import (
     approval_to_item,
+    drop_to_item,
+    entry_to_item,
     hold_to_item,
     item_to_approval,
+    item_to_drop,
+    item_to_entry,
     item_to_hold,
     item_to_mandate,
     item_to_reservation,
     item_to_slot,
     item_to_venue,
+    item_to_watch,
     mandate_to_item,
     plain,
     reservation_to_item,
     slot_to_item,
     venue_to_item,
+    watch_to_item,
 )
 
 RETRYABLE_REASONS = frozenset({"TransactionConflict", "ThrottlingError"})
@@ -377,3 +385,45 @@ class Store:
 
     def list_inbox(self, sub: str) -> list[dict[str, Any]]:
         return self.query(keys.inbox_partition(sub), consistent=True)
+
+    # ------------------------------------------------------------------ watches, drops, tickets
+    def get_watch(self, watch_id: str) -> Watch | None:
+        item = self.get_item(keys.watch(watch_id))
+        return item_to_watch(item) if item else None
+
+    @staticmethod
+    def watch_put_ops(watch: Watch) -> list[TxOp]:
+        """The watch plus its uniqueness key: one active watch per person, restaurant and day."""
+        key = keys.watch_slot(watch.sub, watch.venue_id, watch.date)
+        return [
+            TxOp("Put", item=watch_to_item(watch), condition="attribute_not_exists(PK)"),
+            TxOp("Put", item={"PK": key.pk, "SK": key.sk, "watch_id": watch.watch_id},
+                 condition="attribute_not_exists(PK)"),
+        ]
+
+    def waiting_watches(self, venue_id: str, date: str) -> list[Watch]:
+        items = self.query(keys.watch_day_partition(venue_id, date), index=keys.GSI1)
+        return [item_to_watch(i) for i in items]
+
+    def active_watch_id(self, sub: str, venue_id: str, date: str) -> str | None:
+        item = self.get_item(keys.watch_slot(sub, venue_id, date))
+        return item["watch_id"] if item else None
+
+    def put_drop(self, drop: Drop) -> None:
+        self.put_item(drop_to_item(drop))
+
+    def get_drop(self, drop_id: str) -> Drop | None:
+        item = self.get_item(keys.drop(drop_id))
+        return item_to_drop(item) if item else None
+
+    def entries_of_drop(self, drop_id: str) -> list[DropEntry]:
+        items = self.query(keys.drop_partition(drop_id), sk_prefix="ENTRY#", consistent=True)
+        return [item_to_entry(i) for i in items]
+
+    def get_entry(self, drop_id: str, digest: str) -> DropEntry | None:
+        item = self.get_item(keys.entry(drop_id, digest))
+        return item_to_entry(item) if item else None
+
+    @staticmethod
+    def entry_put_op(entry: DropEntry, digest: str) -> TxOp:
+        return TxOp("Put", item=entry_to_item(entry, digest), condition="attribute_not_exists(PK)")

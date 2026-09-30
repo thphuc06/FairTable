@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from server.domain.booking import starts_at
 from server.domain.clock import iso_z as _iso
 from server.domain.models import MANDATE_ACTIVE, Mandate, Slot, Venue
 
@@ -46,10 +47,23 @@ TABLE_GROUPS: dict[str, dict[str, int]] = {
 
 
 @dataclass(frozen=True)
+class DropSpec:
+    """A Fair Drop to create: the seed (and so the commitment) is drawn when it is stored."""
+
+    drop_id: str
+    venue_id: str
+    date: str
+    slot_keys: tuple[str, ...]
+    opens_at: str
+    drop_at: str
+
+
+@dataclass(frozen=True)
 class SeedData:
     venues: tuple[Venue, ...]
     slots: tuple[Slot, ...]
     mandates: tuple[Mandate, ...]
+    drops: tuple[DropSpec, ...] = ()
 
 
 def _slots(today: date) -> list[Slot]:
@@ -97,6 +111,23 @@ def _mandates(subs: Mapping[str, str], now: datetime) -> list[Mandate]:
     ]
 
 
+def _drops(slots: list[Slot], now: datetime) -> list[DropSpec]:
+    """One drop per ``drop_id``: entries open now; the draw is a day before the seats, but never
+    sooner than ten minutes from now so a fresh demo always has time to enter."""
+    grouped: dict[str, list[Slot]] = {}
+    for s in slots:
+        if s.drop_id:
+            grouped.setdefault(s.drop_id, []).append(s)
+    specs = []
+    for drop_id, group in sorted(grouped.items()):
+        first = min(group, key=lambda s: (s.time, s.table_group))
+        drop_at = max(starts_at(first.date, first.time) - timedelta(days=1), now + timedelta(minutes=10))
+        specs.append(DropSpec(drop_id, first.venue_id, first.date, tuple(sorted(s.slot_key for s in group)),
+                              _iso(now), _iso(drop_at)))
+    return specs
+
+
 def build_seed(today: date, now: datetime, subs: Mapping[str, str]) -> SeedData:
     """``subs`` maps "alice" / "carol" (and "bob") to the ``sub`` claim of their dev tokens."""
-    return SeedData(VENUES, tuple(_slots(today)), tuple(_mandates(subs, now)))
+    slots = _slots(today)
+    return SeedData(VENUES, tuple(slots), tuple(_mandates(subs, now)), tuple(_drops(slots, now)))

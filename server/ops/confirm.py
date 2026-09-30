@@ -76,7 +76,8 @@ class ConfirmOperation:
         if hold.status != HOLD_HELD:
             raise hold_expired()
         if hold.held_until <= now_iso:
-            release_expired(store, hold, now_iso)
+            if release_expired(store, hold, now_iso):
+                self.deps.slot_released(hold.venue_id, hold.date, hold.time, hold.table_group)
             raise hold_expired()
         self.hold = hold
 

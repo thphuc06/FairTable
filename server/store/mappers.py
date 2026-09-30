@@ -4,7 +4,9 @@ from decimal import Decimal
 from typing import Any
 
 from server.domain.booking import HOLD_HELD, Approval, Hold, Reservation
+from server.domain.fairdrop import Drop, DropEntry
 from server.domain.models import Mandate, Slot, Venue
+from server.domain.waitlist import WATCH_WAITING, Watch
 from server.store import keys
 
 
@@ -216,4 +218,86 @@ def item_to_approval(item: dict[str, Any]) -> Approval:
         venue_id=item["venue_id"], terms_hash=item["terms_hash"], terms=item["terms"],
         status=item["status"], created_at=item["created_at"], expires_at=item["expires_at"],
         decided_at=item.get("decided_at"),
+    )
+
+
+def watch_to_item(w: Watch) -> dict[str, Any]:
+    k = keys.watch(w.watch_id)
+    item: dict[str, Any] = {
+        "PK": k.pk, "SK": k.sk, "entity": "watch", "watch_id": w.watch_id, "sub": w.sub,
+        "username": w.username, "agent_tier": w.agent_tier, "agent_id": w.agent_id,
+        "scopes": sorted(w.scopes), "venue_id": w.venue_id, "date": w.date,
+        "window_start": w.window_start, "window_end": w.window_end, "party_size": w.party_size,
+        "status": w.status, "created_at": w.created_at,
+        "GSI2PK": keys.user_partition(w.sub), "GSI2SK": f"WATCH#{w.created_at}#{w.watch_id}",
+    }
+    if w.status == WATCH_WAITING:  # listed in arrival order only while it can still be matched
+        item["GSI1PK"] = keys.watch_day_partition(w.venue_id, w.date)
+        item["GSI1SK"] = f"{w.created_at}#{w.watch_id}"
+    for name in ("hold_id", "matched_at", "cancelled_at"):
+        if getattr(w, name) is not None:
+            item[name] = getattr(w, name)
+    return item
+
+
+def item_to_watch(item: dict[str, Any]) -> Watch:
+    item = plain(item)
+    return Watch(
+        watch_id=item["watch_id"], sub=item["sub"], username=item.get("username"),
+        agent_tier=item.get("agent_tier"), agent_id=item.get("agent_id"),
+        scopes=frozenset(item.get("scopes", [])), venue_id=item["venue_id"], date=item["date"],
+        window_start=item["window_start"], window_end=item["window_end"],
+        party_size=item["party_size"], status=item["status"], created_at=item["created_at"],
+        hold_id=item.get("hold_id"), matched_at=item.get("matched_at"),
+        cancelled_at=item.get("cancelled_at"),
+    )
+
+
+def drop_to_item(d: Drop) -> dict[str, Any]:
+    k = keys.drop(d.drop_id)
+    item: dict[str, Any] = {
+        "PK": k.pk, "SK": k.sk, "entity": "drop", "drop_id": d.drop_id, "venue_id": d.venue_id,
+        "date": d.date, "slot_keys": list(d.slot_keys), "opens_at": d.opens_at, "drop_at": d.drop_at,
+        "commitment": d.commitment, "status": d.status,
+    }
+    for name in ("seed_hex", "allocating_since", "allocated_at", "audit"):
+        if getattr(d, name) is not None:
+            item[name] = getattr(d, name)
+    return item
+
+
+def item_to_drop(item: dict[str, Any]) -> Drop:
+    item = plain(item)
+    return Drop(
+        drop_id=item["drop_id"], venue_id=item["venue_id"], date=item["date"],
+        slot_keys=tuple(item["slot_keys"]), opens_at=item["opens_at"], drop_at=item["drop_at"],
+        commitment=item["commitment"], status=item["status"], seed_hex=item.get("seed_hex"),
+        allocating_since=item.get("allocating_since"), allocated_at=item.get("allocated_at"),
+        audit=item.get("audit"),
+    )
+
+
+def entry_to_item(e: DropEntry, digest: str) -> dict[str, Any]:
+    k = keys.entry(e.drop_id, digest)
+    item: dict[str, Any] = {
+        "PK": k.pk, "SK": k.sk, "entity": "entry", "entry_id": e.entry_id, "drop_id": e.drop_id,
+        "sub": e.sub, "username": e.username, "agent_tier": e.agent_tier, "agent_id": e.agent_id,
+        "scopes": sorted(e.scopes), "party_size": e.party_size, "created_at": e.created_at,
+        "status": e.status,
+        "GSI2PK": keys.user_partition(e.sub), "GSI2SK": f"ENTRY#{e.created_at}#{e.entry_id}",
+    }
+    for name in ("hold_id", "reason"):
+        if getattr(e, name) is not None:
+            item[name] = getattr(e, name)
+    return item
+
+
+def item_to_entry(item: dict[str, Any]) -> DropEntry:
+    item = plain(item)
+    return DropEntry(
+        entry_id=item["entry_id"], drop_id=item["drop_id"], sub=item["sub"],
+        username=item.get("username"), agent_tier=item.get("agent_tier"), agent_id=item.get("agent_id"),
+        scopes=frozenset(item.get("scopes", [])), party_size=item["party_size"],
+        created_at=item["created_at"], status=item["status"], hold_id=item.get("hold_id"),
+        reason=item.get("reason"),
     )

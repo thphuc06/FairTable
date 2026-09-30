@@ -69,8 +69,8 @@ async def test_protocol_version_and_tool_surface(running):
         assert c.initialize_result.protocolVersion == "2025-11-25"
         tools = {t.name: t for t in await c.list_tools()}
     reads = {"restaurant_search", "availability_check", "mandate_status"}
-    writes = {"reservation_hold", "reservation_confirm", "reservation_manage"}
-    assert set(tools) == reads | writes  # waitlist tools arrive with the waitlist task
+    writes = {"reservation_hold", "reservation_confirm", "reservation_manage", "waitlist_watch", "waitlist_status"}
+    assert set(tools) == reads | writes  # the eight tools of the design
     assert all(tools[n].annotations.readOnlyHint for n in reads)
     assert not any(tools[n].annotations.readOnlyHint for n in writes)
     assert all(tools[n].annotations.idempotentHint for n in writes)  # safe to retry with the same key

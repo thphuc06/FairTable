@@ -99,3 +99,46 @@ async def test_a_record_without_a_user_is_flagged(world):
     item = world.store.get_item(keys.hold(h["hold_id"]))
     world.store.put_item({**item, "sub": ""})
     assert "I5" in codes(world)
+
+
+async def test_two_tickets_for_one_person_in_a_drop_are_flagged(world):
+    from server.domain import fairdrop as fd
+    from server.store.mappers import entry_to_item
+
+    friday = next(d for d in world.store.scan_all() if d.get("entity") == "drop")["drop_id"]
+    sub = "dev-alice"
+    real = fd.DropEntry(fd.entry_id(friday, sub), friday, sub, "diner-alice", "verified", "alexa-plus-sim",
+                        frozenset({"fairtable/book"}), 2, "2026-10-01T12:00:00Z")
+    world.store.put_item(entry_to_item(real, fd.entry_hash(friday, sub)))
+    assert problems(world) == []
+    twin = replace(real, entry_id=fd.entry_id(friday, sub) + "x", created_at="2026-10-01T12:00:05Z")
+    world.store.put_item(entry_to_item(twin, "f" * 64))  # a second ticket, hidden under another key
+    assert "I4" in codes(world)
+
+
+async def test_a_doctored_draw_audit_is_flagged(world):
+    from datetime import datetime, timedelta
+
+    from server.domain import fairdrop as fd
+    from server.dropper import maybe_allocate
+
+    drop = next(d for d in map(fd_item_to_drop, [i for i in world.store.scan_all() if i.get("entity") == "drop"]))
+    sub = "dev-alice"
+    ticket = fd.DropEntry(fd.entry_id(drop.drop_id, sub), drop.drop_id, sub, "diner-alice", "verified",
+                          "alexa-plus-sim", frozenset({"fairtable/book"}), 2, iso_z(world.clock.now()))
+    from server.store.mappers import entry_to_item
+
+    world.store.put_item(entry_to_item(ticket, fd.entry_hash(drop.drop_id, sub)))
+    world.clock.set(datetime.fromisoformat(drop.drop_at) + timedelta(seconds=1))
+    maybe_allocate(world.deps, drop.drop_id)
+    assert problems(world) == []
+    done = world.store.get_drop(drop.drop_id)
+    forged = {**done.audit, "seed": (b"x" * 32).hex()}  # a seed that does not match the commitment
+    world.store.put_drop(replace(done, audit=forged))
+    assert "I4" in codes(world)
+
+
+def fd_item_to_drop(item):
+    from server.store.mappers import item_to_drop
+
+    return item_to_drop(item)

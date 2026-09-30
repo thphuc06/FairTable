@@ -38,5 +38,7 @@ Other modules: `pipeline.py` (the write pipeline all state-changing tools use), 
 | `reservation_hold` | write | `ops/hold.py` (slot + S1 + S2 + hold in one transaction) |
 | `reservation_confirm` | write | `ops/confirm.py` (mandate or approval; step-up otherwise) |
 | `reservation_manage` | write | `ops/manage.py` (`view` in the tool; `modify` reduces the party; `cancel` decides the fee before writing) |
+| `waitlist_watch` | write | `ops/waitlist.py` (standing watch) and `ops/fairdrop.py` (`drop_id`: one ticket per person) |
+| `waitlist_status` | read + cancel | `tools/waitlist_status.py` (watch or drop ticket; the first request after a drop time runs the draw) |
 
-Write tools go through `pipeline.run_write`. `lifecycle.py` releases expired holds lazily, `consent.py` and `tools/stepup.py` create approvals and answer with -32042 or `consent_url`, `notify.py` is the notification seam (dev inbox), `invariants.py` checks I1, I2, I3, I5 and the counters over the whole table (tests and eval graders).
+Write tools go through `pipeline.run_write`. `lifecycle.py` releases expired holds lazily, `consent.py` and `tools/stepup.py` create approvals and answer with -32042 or `consent_url`, `notify.py` is the notification seam (dev inbox), `matcher.py` offers freed tables to waiting watchers (first come, first served), `dropper.py` runs a Fair Drop draw exactly once, `resources.py` serves the public policy and audit resources, `invariants.py` checks I1, I2, I3, I5 and the counters over the whole table (tests and eval graders).

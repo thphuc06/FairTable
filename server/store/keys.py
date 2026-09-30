@@ -71,6 +71,32 @@ def inbox(sub: str, timestamp: str, message_id: str) -> Key:
     return Key(inbox_partition(sub), f"{part(timestamp, 'timestamp')}#{part(message_id, 'message_id')}")
 
 
+def watch(watch_id: str) -> Key:
+    return Key(f"WATCH#{part(watch_id, 'watch_id')}", "META")
+
+
+def watch_slot(sub: str, venue_id: str, date: str) -> Key:
+    """One active watch per person per restaurant per day is a conditional write on this key."""
+    return Key(f"WATCHKEY#{part(sub, 'sub')}#{part(venue_id, 'venue_id')}#{part(date, 'date')}", "META")
+
+
+def watch_day_partition(venue_id: str, date: str) -> str:
+    return f"WATCHES#{part(venue_id, 'venue_id')}#{part(date, 'date')}"
+
+
+def drop(drop_id: str) -> Key:
+    return Key(f"DROP#{part(drop_id, 'drop_id')}", "META")
+
+
+def drop_partition(drop_id: str) -> str:
+    return f"DROP#{part(drop_id, 'drop_id')}"
+
+
+def entry(drop_id: str, digest: str) -> Key:
+    """One ticket per person per drop is a conditional write on this key (ticket hash, no sub)."""
+    return Key(drop_partition(drop_id), f"ENTRY#{part(digest, 'entry')}")
+
+
 def reservation(reservation_id: str) -> Key:
     return Key(f"RES#{part(reservation_id, 'reservation_id')}", "META")
 

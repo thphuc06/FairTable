@@ -1,6 +1,6 @@
 # Phase 1 – local core (10-02 → 10-13), no AWS
 
-Status: **in progress – batches A, B and C done 2026-09-29, waiting for review of C** (decisions D-016 … D-021) (decisions D-016 … D-019).
+Status: **in progress – batches A, B, C, D done 2026-09-29, waiting for review of D** (decisions D-016 … D-024)
 
 ## Plan
 Goal: everything a judge runs with `docker compose up`: the trust checks, the 8 tools, identity, storage, waitlist and Fair Drop, the supporting web pages, the simulator and the eval harness. Task list, acceptance criteria and tests: `docs/PLAN.md` §3, Phase 1.
@@ -26,6 +26,12 @@ Batch C plan (design in `DECISIONS.md` D-020):
 5. **P1-13** concurrency hardening: races on slot, S1, S2, confirm; invariant checker.
 Each task ends with the whole suite and `ruff` green and a devlog entry.
 
+Batch D plan (design in `DECISIONS.md` D-023):
+1. **P1-14** standing watches: watch records, `waitlist_watch`, `waitlist_status`, the lazy matcher hooked into cancel and hold-expiry, dev-inbox notice.
+2. **P1-15** Fair Drop core (pure): `SeedProvider`, commitment, entry ids, HMAC order, allocation walk, audit build and `verify_audit`.
+3. **P1-16** Fair Drop integration: drop records and seed data, entries with the one-ticket rule (I4, RT12), lazy exactly-once allocation, MCP resources for the audit and the policies.
+Each task ends with the whole suite and `ruff` green and a devlog entry.
+
 Open design points to settle inside the batch that owns them:
 - P1-10: step-up ladder when the client cannot open a URL (see `DECISIONS.md` D-014).
 
@@ -45,9 +51,9 @@ Open design points to settle inside the batch that owns them:
 | P1-11 consent page | C | done | 2026-09-29 | web/: login, terms, Approve/Decline, CSRF, same-user |
 | P1-12 `reservation_manage` | C | done | 2026-09-29 | view, reduce party, cancel with fee step-up |
 | P1-13 concurrency hardening | C | done | 2026-09-29 | RT6/RT7/RT9 under load, invariant checker |
-| P1-14 waitlist on DynamoDB | D | todo | | |
-| P1-15 Fair Drop core | D | todo | | |
-| P1-16 Fair Drop integration | D | todo | | |
+| P1-14 waitlist on DynamoDB | D | done | 2026-09-29 | standing watches, lazy matcher on cancel and expiry, status/cancel |
+| P1-15 Fair Drop core | D | done | 2026-09-29 | commitment, tickets, HMAC order, verifiable audit |
+| P1-16 Fair Drop integration | D | done | 2026-09-29 | entries, exactly-once lazy draw, audit and policy resources, I4 |
 | P1-17 owner console | E | todo | | |
 | P1-18 simulator core | E | todo | | |
 | P1-19 chat page and login | E | todo | | |
@@ -58,6 +64,51 @@ Open design points to settle inside the batch that owns them:
 | P1-24 README and wrap-up | F | todo | | |
 
 ## Entries (newest first)
+
+### 2026-09-29 · environment · [aws] · The new AWS account, read-only check
+- **Goal:** find out what the developer's new AWS account can do before any AWS wiring.
+- **Done:** signed in with `aws login` (IAM user with admin, no access keys); read-only checks of identity, IAM, Bedrock models, availability, quotas and invocation, and the services the project will use. Findings in D-025 and the friction log.
+- **Files:** `docs/DECISIONS.md` (D-025), `docs/friction-log.md`.
+- **Tests:** not applicable (no code changed). Two Bedrock `converse` attempts were refused (nothing billed); Cost Explorer was queried three times (small per-request charge, to be confirmed).
+- **Decisions:** D-025.
+- **Surprises / friction:** Bedrock refuses all invocations with an unspecific error while quotas read 0 (friction log).
+- **Follow-ups:** the developer decides about the Anthropic first-time-use form, a quota-increase request, MFA for the IAM user, payment method and credit check; then "wire AWS" part by part (DynamoDB first).
+
+### 2026-09-29 · P1-8 · [store] · Change: a duplicate that loses a race is answered from the stored result
+- **Goal:** close a race the batch D concurrency tests exposed (about one run in five).
+- **Done:** every failure after the first idempotency lookup now looks the key up once more; if the original has committed meanwhile, the copy gets the stored result (or `IDEMPOTENCY_CONFLICT` if its parameters differ) instead of a misleading "slot taken" or "hold no longer active".
+- **Files:** `server/pipeline.py` (`_late_replay`), `tests/integration/test_write_pipeline.py` (3 deterministic tests for the window).
+- **Tests:** 558 passed; the red-team file was run eight times in a row without a failure.
+- **Decisions:** D-024.
+- **Surprises / friction:** the bug only shows with real concurrency, which is why those tests exist.
+- **Follow-ups:** none.
+
+### 2026-09-29 · P1-16 · [fairdrop] · Fair Drop integration
+- **Goal:** a lottery hot-table seekers can trust: committed in advance, one ticket per person, checkable afterwards.
+- **Done:** drops are created with the seed data (secret seed, public commitment); `waitlist_watch(drop_id)` issues one ticket per verified person (RT12, invariant I4) while the drop is open; the first request after the drop time (a ticket status, an entry attempt, an audit read) claims the drop with a conditional status change, walks the entries in HMAC order giving each a hold on the next free seat that fits, skips people the rules refuse (S1, S2, P0) with the rule named, marks the rest lost, reveals the seed and stores the audit; a claim older than 60 s is taken over, so a crashed run is finished. Winners confirm through the normal flow. Public resources: the drop audit and each restaurant's rules in plain English. `verify_audit` recomputes the draw from the published data; the invariant checker now enforces I4 and audit validity.
+- **Files:** `server/ops/fairdrop.py`, `server/dropper.py`, `server/resources.py`, `server/tools/{waitlist_watch,waitlist_status}.py`, store additions (tickets, drops), `server/store/{seed_data,seeding}.py`, `server/invariants.py`, `tests/integration/test_fair_drop.py`, `tests/redteam/test_rt09_concurrency.py` (RT12), `tests/integration/test_invariants.py`.
+- **Tests:** 21 Fair Drop + 2 RT12/entry-storm + 2 invariant checks. Includes: draw order equals the published order, two places / five tickets / a party that fits no seat, 16 simultaneous first requests run the draw exactly once, an interrupted draw is finished, a running draw is not stolen, late entries refused.
+- **Decisions:** D-023, D-024.
+- **Surprises / friction:** none in the design; the real HTTP run shows all 8 tools and both resource templates.
+- **Follow-ups:** the owner console (P1-17) can set a drop's times; the simulator (P1-18) needs a drop scenario for the video.
+
+### 2026-09-29 · P1-15 · [fairdrop] · Fair Drop core (pure)
+- **Goal:** the trust mechanism as plain, testable functions.
+- **Done:** `SeedProvider` (local randomness; KMS as scaffold), `commitment`, ticket ids that hide the person, `order_entries` by HMAC-SHA256, `build_audit`, `pending_audit`, `verify_audit` (detects a wrong seed, wrong order, wrong draw keys, impossible winners, someone passed over, missing reasons).
+- **Files:** `server/domain/fairdrop.py`, `tests/unit/domain/test_fairdrop_core.py`.
+- **Tests:** 20, including a fairness sanity check (each of four tickets wins first about a quarter of the time over 400 seeds).
+- **Decisions:** D-023.
+- **Surprises / friction:** none.
+- **Follow-ups:** none.
+
+### 2026-09-29 · P1-14 · [waitlist] · Standing watches
+- **Goal:** register once, be given a table when one opens; no polling loop.
+- **Done:** `waitlist_watch` (one active watch per person, restaurant and day; declines to register when a table is free now), `waitlist_status` (status with `retry_after_s`, matched hold, cancel), and the lazy matcher: a freed table (a cancel, or an expired hold released by the lazy sweep, including the confirm path) goes to the first fitting watcher in arrival order through the normal write pipeline with their stored identity, so P0, S1 and S2 still apply and a refused watcher is skipped; the watch and the hold change together in one transaction; the watcher gets a dev-inbox notice; a failing matcher never breaks the cancel that triggered it.
+- **Files:** `server/domain/waitlist.py`, `server/ops/waitlist.py`, `server/matcher.py`, `server/tools/{waitlist_watch,waitlist_status}.py`, hooks in `ops/hold.py`, `ops/confirm.py`, `lifecycle.py`, `tools/reservation_manage.py`, store additions, `tests/integration/test_waitlist.py`, `tests/unit/domain/test_waitlist_match.py`.
+- **Tests:** 29 + 7.
+- **Decisions:** D-023.
+- **Surprises / friction:** none.
+- **Follow-ups:** MCP Tasks remain an optional view, off by default (D-010); not started.
 
 ### 2026-09-29 · P1-10 · [booking-tools] · Change: the hold is lengthened once when approval is needed
 - **Goal:** a user who needs a few minutes on their phone must not lose the table (found in the batch C review: hold 10 minutes vs approval 15).

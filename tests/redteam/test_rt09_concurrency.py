@@ -272,3 +272,44 @@ def _try(fn):
         return e.code.value
     except StepUpRequired:
         return "STEP_UP"
+
+
+# ---------------------------------------------------------------- RT12 and the draw under load
+def test_rt12_one_person_sending_twenty_entries_at_once_gets_one_ticket(world):
+    from server.domain.fairdrop import entry_hash
+    from server.ops.fairdrop import DropEntryOperation
+
+    friday = date_of(world)
+    while __import__("datetime").date.fromisoformat(friday).weekday() != 4:
+        friday = (__import__("datetime").date.fromisoformat(friday) + timedelta(days=1)).isoformat()
+    drop_id = f"drop-sakura-{friday}"
+    me = racer(1)
+    drop = world.store.get_drop(drop_id)
+    jobs = [
+        (lambda i=i: run_write(world.deps, me, DropEntryOperation(world.deps, drop, 2), f"rt12-key-{i:04d}"))
+        for i in range(20)
+    ]
+    outcomes = race(jobs)
+    assert counts(outcomes) == {"ALREADY_ENTERED": 19, "ok": 1}
+    entries = world.store.entries_of_drop(drop_id)
+    assert len(entries) == 1 and entries[0].sub == me.sub
+    assert world.store.get_entry(drop_id, entry_hash(drop_id, me.sub)) is not None
+    assert_invariants(world.store, now_iso(world))
+
+
+def test_twenty_people_entering_together_all_get_exactly_one_ticket_each(world):
+    from server.ops.fairdrop import DropEntryOperation
+
+    friday = date_of(world)
+    while __import__("datetime").date.fromisoformat(friday).weekday() != 4:
+        friday = (__import__("datetime").date.fromisoformat(friday) + timedelta(days=1)).isoformat()
+    drop_id = f"drop-sakura-{friday}"
+    drop = world.store.get_drop(drop_id)
+    users = [racer(i) for i in range(20)]
+    jobs = [
+        (lambda u=u, i=i: run_write(world.deps, u, DropEntryOperation(world.deps, drop, 2), f"enter-key-{i:04d}"))
+        for i, u in enumerate(users)
+    ]
+    assert counts(race(jobs)) == {"ok": 20}
+    assert len({e.sub for e in world.store.entries_of_drop(drop_id)}) == 20
+    assert_invariants(world.store, now_iso(world))

@@ -32,6 +32,9 @@ class AppDeps:
     # Ids for holds, reservations and audit entries. Tests swap it for a counter.
     new_id: Callable[[], str] = lambda: uuid.uuid4().hex
     notifier: Notifier | None = None  # default: the dev inbox (see server/notify.py)
+    # Called with (venue_id, date, time, table_group) after a table is freed; the waitlist matcher
+    # plugs in here (server/matcher.py). Default: nothing.
+    slot_released: Callable[[str, str, str, str], None] = lambda *_: None
 
     def __post_init__(self) -> None:
         if self.notifier is None:

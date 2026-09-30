@@ -104,6 +104,22 @@ def _replayed(record: IdempotencyRecord) -> dict[str, Any]:
     return {**record.result, "idempotent_replay": True}
 
 
+def _late_replay(deps: AppDeps, identity: Identity, key: str, digest: str) -> dict | None:
+    """After a failure that came *after* the first idempotency lookup, look once more.
+
+    A duplicate delivery can slip in between its lookup and its checks: the original commits in
+    that window, so the copy then sees state the original changed (slot taken, hold confirmed) and
+    fails for a reason that is really "this was already done". If the key is stored now, the right
+    answer is the stored result (or a conflict when the parameters differ), not that failure.
+    """
+    record = deps.store.get_idempotency(identity.sub, key)
+    if record is None:
+        return None
+    if record.params_hash != digest:
+        raise conflict()
+    return _replayed(record)
+
+
 def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency_key: str) -> dict:
     key = validate_key(idempotency_key)
     now_iso = _iso(deps)
@@ -121,11 +137,21 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
         assert record is not None
         return _replayed(record)
 
-    # 3. Facts, then PEP-2 (stateful).
-    facts = op.load_facts(deps.store, identity, now_iso)
+    # 3. Facts, then PEP-2 (stateful). Any refusal here re-checks the key once (see _late_replay).
+    try:
+        facts = op.load_facts(deps.store, identity, now_iso)
+    except FairTableError:
+        late = _late_replay(deps, identity, key, digest)
+        if late is not None:
+            return late
+        raise
     pep2 = deps.kernel.pep2.decide(
         action=op.tool, diner_id=identity.sub, venue=facts.venue, ctx=facts.ctx
     )
+    if pep2.kind is not DecisionKind.ALLOW:
+        late = _late_replay(deps, identity, key, digest)
+        if late is not None:
+            return late
     if pep2.kind is DecisionKind.DENY:
         _audit_quietly(deps, _audit(deps, identity, op, "deny", pep2.rule_ids))
         raise deny_to_error(pep2)
@@ -134,7 +160,13 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
         raise StepUpRequired(pep2, op, identity)
 
     # 4. One transaction: the tool's writes + idempotency record + audit entry.
-    plan = op.plan(deps.store, identity, now_iso, pep2)
+    try:
+        plan = op.plan(deps.store, identity, now_iso, pep2)
+    except FairTableError:
+        late = _late_replay(deps, identity, key, digest)
+        if late is not None:
+            return late
+        raise
     new_record = IdempotencyRecord(identity.sub, key, op.tool.value, digest, plan.result, now_iso)
     entry = _audit(deps, identity, op, "allow", pep2.rule_ids, plan.audit_detail)
     ops = [*plan.ops, deps.store.idempotency_op(new_record), deps.store.audit_op(entry)]
@@ -153,6 +185,9 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
             if winner.params_hash != digest:
                 raise conflict() from exc
             return _replayed(winner)
+        late = _late_replay(deps, identity, key, digest)
+        if late is not None:
+            return late
         error = op.explain_cancel([i for i in failed if i < idem_index], exc)
         _audit_quietly(deps, _audit(deps, identity, op, "failed", (), {"error": error.code.value}))
         raise error from exc

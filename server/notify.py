@@ -15,7 +15,7 @@ log = logging.getLogger("fairtable.notify")
 
 
 class Notifier(Protocol):
-    def notify(self, sub: str, *, subject: str, body: str, url: str) -> None: ...
+    def notify(self, sub: str, *, subject: str, body: str, url: str = "") -> None: ...
 
 
 class DevInboxNotifier:
@@ -24,7 +24,7 @@ class DevInboxNotifier:
         self._clock = clock
         self._new_id = new_id
 
-    def notify(self, sub: str, *, subject: str, body: str, url: str) -> None:
+    def notify(self, sub: str, *, subject: str, body: str, url: str = "") -> None:
         log.info("notify %s: %s -> %s", sub, subject, url)
         try:
             self._store.put_inbox(

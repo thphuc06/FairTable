@@ -40,11 +40,11 @@ TOKEN_REQUESTS = {
 class World:
     def __init__(
         self, client, table_name: str, endpoint: str, clock, *, per_hour: int = 20,
-        real_headers: bool = False, jwks=None,
+        real_headers: bool = False, jwks=None, seeds=None,
     ):
         self.clock = clock
         self.store = Store(client, table_name)
-        seed_store(self.store, clock, SUBS)
+        seed_store(self.store, clock, SUBS, seeds)
         issuer = IssuerSettings()
         self.auth = TestClient(create_devauth(issuer, clock=clock, key=load_or_create_key(None)))
         self._tokens: dict[str, str] = {}
