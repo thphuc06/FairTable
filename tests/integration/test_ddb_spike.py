@@ -8,7 +8,7 @@ Proves, against DynamoDB Local (no moto):
 
 Run:  docker compose -f infra/local/docker-compose.yml up -d
       pytest -m ddb tests/integration/test_ddb_spike.py
-The endpoint comes from DDB_ENDPOINT (default http://localhost:8000). Tests skip if it is unreachable.
+The endpoint comes from DDB_ENDPOINT_URL (default http://localhost:8000). Tests skip if it is unreachable.
 """
 
 import os
@@ -23,7 +23,7 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 
 pytestmark = pytest.mark.ddb
 
-ENDPOINT = os.environ.get("DDB_ENDPOINT", "http://localhost:8000")
+ENDPOINT = os.environ.get("DDB_ENDPOINT_URL", "http://localhost:8000")
 REGION = os.environ.get("AWS_REGION", "us-east-1")  # dummy for Local; never hard-coded in server code
 THREADS = 20
 

@@ -1,6 +1,6 @@
 # Phase 1 – local core (10-02 → 10-13), no AWS
 
-Status: **in progress – batches A–D done and committed; batch E done 2026-09-30, waiting for review** (decisions D-016 … D-027)
+Status: **Phase 1 code complete – batches A–F done 2026-09-30, batch F waiting for review; Gate 1 check pending** (decisions D-016 … D-029)
 
 ## Plan
 Goal: everything a judge runs with `docker compose up`: the trust checks, the 8 tools, identity, storage, waitlist and Fair Drop, the supporting web pages, the simulator and the eval harness. Task list, acceptance criteria and tests: `docs/PLAN.md` §3, Phase 1.
@@ -41,6 +41,11 @@ Batch E plan (research in `PLAN.md` §3a "Strands", design in `DECISIONS.md` D-0
 6. **P1-22** red-team suite RT1–RT12 as deterministic tests with a summary printer.
 Each task ends with the whole suite and `ruff` green and a devlog entry. Anything that would need a new dependency (`openai` for DeepSeek) is left as a lazy import and reported, not installed.
 
+Batch F plan (`PLAN.md` P1-23, P1-24):
+1. **P1-23** `Dockerfile` (pinned base image, non-root, source copied so `policies/` is found) and root `docker-compose.yml`: DynamoDB Local (pinned tag and digest, published only on `127.0.0.1:8001` so it does not clash with the MCP server on 8000), a one-shot seed that waits for the database, `devauth` (9000), the MCP server (8000), and `web` (8080: consent page, owner console and chat with the mock assistant). Health checks; nothing published beyond loopback; no AWS variables passed in. New setting `AUTH_TOKEN_URL` because inside compose the web container reaches the issuer as `devauth`, while tokens name `localhost:9000` as issuer. Smoke test `tests/integration/test_compose_smoke.py` (`-m docker`, skipped unless selected).
+2. **P1-24** README: Docker path first, plain Python second, test-login table, demo script, AWS services (scaffold status stated honestly), `.env.example` fixed (an empty `AWS_PROFILE=` breaks boto). Checked by running the README's commands on a copy of the tree that contains only tracked and unignored files (a stand-in for a fresh clone, since the batch is not committed yet).
+Each task ends with the whole suite and `ruff` green and a devlog entry. No AWS resources are created.
+
 P1-20 design (eval harness v0):
 - `eval/tasks.py` task YAML (id, category HAPPY|NEG|ROB|ADV, user, agent client, goal, noise, how the diner answers a consent link, expected end state) and loader that rejects unknown keys.
 - `eval/env.py` one isolated environment per trial: a fresh DynamoDB table (the per-run namespace), seed data, the dev issuer, the MCP server on a free port, the consent page; torn down after.
@@ -75,10 +80,29 @@ Open design points to settle inside the batch that owns them:
 | P1-20 eval harness v0 | E | done | 2026-09-30 | 10 starter tasks x k=2 all pass on A1; metrics checked by hand |
 | P1-21 A0 / A1 / A2 configs | E | done | 2026-09-30 | kernels selected by config; A1 clean, A0 and A2 show violations |
 | P1-22 red-team suite | E | done | 2026-09-30 | RT1-RT12 as scenarios: A1 12/12, A0 8/12, A2 11/12 |
-| P1-23 Docker profile | F | todo | | |
-| P1-24 README and wrap-up | F | todo | | |
+| P1-23 Docker profile | F | done | 2026-09-30 | compose stack up in about a minute; smoke test 5/5 on the tree and on a clean copy |
+| P1-24 README and wrap-up | F | done | 2026-09-30 | README rewritten; commands run on a clean copy and on the host |
 
 ## Entries (newest first)
+
+### 2026-09-30 · P1-24 · [docs] [docker] · README and wrap-up
+- **Goal:** a stranger can go from clone to a working demo by following the README.
+- **Done:** README rewritten: what works and what does not (AWS not built), Docker quick start with a URL table, a two-minute try-it script (instant booking, step-up approval, owner rule change, tools by hand, waitlist and Fair Drop), the test-login tables, opt-in real model (DeepSeek), the non-Docker route, tests, evaluation and red-team commands, and an honest AWS section. `.env.example` fixed (empty `AWS_PROFILE=` broke boto3) and points at DynamoDB Local on 8001. `docs/aws-integration.md`, `infra/README.md` and `tests/README.md` brought up to date.
+- **Checked by running it:** the compose stack and smoke test from a clean copy without `.env` (5 passed); the host route (seed, `python -m devauth`, `python -m server`, `python -m web`, a token from the issuer, health of each); the test command against the compose database (whole suite, see below).
+- **Files:** `README.md`, `.env.example`, `docs/aws-integration.md`, `infra/README.md`, `tests/README.md`.
+- **Tests:** not applicable for prose; the commands above are the check.
+- **Decisions:** D-029.
+- **Surprises / friction:** none new.
+- **Follow-ups:** P4-4 repeats the fresh-clone check on the real repository after the final commit and on a second machine if possible; the demo video script is P4-2.
+
+### 2026-09-30 · P1-23 · [docker] · Docker profile
+- **Goal:** `docker compose up --build` starts everything a judge needs, with no AWS account and no model account.
+- **Done:** `Dockerfile` (pinned base, non-root), `docker-compose.yml` (DynamoDB Local pinned and in memory, a one-shot seed that waits for the database, the dev issuer, the MCP server, the web pages with the chat on the mock model), health checks (`scripts/healthcheck.py`), loopback-only ports, `.dockerignore` (no `.env`, `.git`, docs or tests in the image), the `AUTH_TOKEN_URL` setting, `seed.py --wait`. A `docker` test marker that is skipped unless selected. Smoke test (5 tests) drives the running stack over real HTTP from the host.
+- **Files:** `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `scripts/{healthcheck,seed}.py`, `server/config.py`, `web/__main__.py`, `tests/conftest.py`, `tests/integration/test_compose_smoke.py`.
+- **Tests:** smoke test 5 passed on the working tree (75 s) and on a clean copy without `.env` (78 s); all services healthy on the first try. Whole suite: see the batch report.
+- **Decisions:** D-029.
+- **Surprises / friction:** none in Docker itself (cedarpy has a Linux wheel; the build took 46 s). `docker compose` reads a `.env` in the project folder for variable substitution, so a developer's key can reach the web container in mock mode; only `DEEPSEEK_*` and `MODEL_PROVIDER` are passed through.
+- **Follow-ups:** dependency and image lock files before the freeze (P3-8).
 
 ### 2026-09-30 · P1-18 · [simulator] · Change: DeepSeek flash verified live
 - **Goal:** replace the unverified DeepSeek placeholders with documented values and prove one real conversation works.

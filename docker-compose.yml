@@ -1,0 +1,95 @@
+# The local profile that judges run:   docker compose up --build
+# Needs Docker only: no AWS account, no model account. Everything listens on 127.0.0.1.
+#
+#   http://localhost:8080   web: chat with the simulated assistant, consent page, owner console
+#   http://localhost:8000/mcp   the MCP server (Streamable HTTP, header x-ft-user-token)
+#   http://localhost:9000   dev token issuer (stands in for Cognito)
+#   http://localhost:8001   DynamoDB Local (for the eval harness and the -m ddb tests)
+#
+# Test logins are listed in README.md. MODEL_PROVIDER=mock (default) needs nothing else; set
+# MODEL_PROVIDER=deepseek and DEEPSEEK_API in your shell or .env to use a real model.
+name: fairtable
+
+x-app: &app
+  image: fairtable-app:local
+  restart: "no"
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-store: &store
+  TABLE_NAME: fairtable
+  DDB_ENDPOINT_URL: http://dynamodb:8000
+  AWS_REGION: us-east-1
+
+x-auth: &auth
+  AUTH_ISSUER: http://localhost:9000            # the name inside every token; browsers never open it
+  AUTH_JWKS_URL: http://devauth:9000/.well-known/jwks.json
+
+services:
+  dynamodb:
+    # Same image as the "latest" the spikes used (DynamoDB Local 3.3.1), pinned so it cannot change.
+    image: amazon/dynamodb-local:3.3.1@sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports: ["127.0.0.1:8001:8000"]
+    restart: "no"
+
+  seed:
+    <<: *app
+    build: .
+    command: ["python", "scripts/seed.py", "--wait", "60"]
+    environment: *store
+    depends_on: [dynamodb]
+
+  devauth:
+    <<: *app
+    command: ["python", "-m", "devauth"]
+    environment:
+      DEVAUTH_HOST: 0.0.0.0
+    ports: ["127.0.0.1:9000:9000"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "http://127.0.0.1:9000/.well-known/jwks.json"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on: [seed]
+
+  server:
+    <<: *app
+    command: ["python", "-m", "server"]
+    environment:
+      <<: [*store, *auth]
+      MCP_HOST: 0.0.0.0
+      MCP_ALLOWED_HOSTS: localhost,127.0.0.1,server
+      CONSENT_BASE_URL: http://localhost:8080
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "http://127.0.0.1:8000/mcp", "--any-status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      seed: {condition: service_completed_successfully}
+      devauth: {condition: service_healthy}
+
+  web:
+    <<: *app
+    command: ["python", "-m", "web"]
+    environment:
+      <<: [*store, *auth]
+      WEB_HOST: 0.0.0.0
+      CONSENT_BASE_URL: http://localhost:8080
+      AUTH_TOKEN_URL: http://devauth:9000/token   # sign-in goes to the issuer by its service name
+      MCP_URL: http://server:8000/mcp             # the chat's assistant reaches the server the same way
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-mock}
+      DEEPSEEK_API: ${DEEPSEEK_API:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+    ports: ["127.0.0.1:8080:8080"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      seed: {condition: service_completed_successfully}
+      devauth: {condition: service_healthy}
+      server: {condition: service_healthy}

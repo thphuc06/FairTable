@@ -56,3 +56,13 @@ def restore_signal_handlers():
     yield
     for number, handler in saved.items():
         signal.signal(number, handler)
+
+
+def pytest_collection_modifyitems(config, items):
+    """Tests marked ``docker`` build images and bind fixed ports: run them only when asked for (``-m docker``)."""
+    if "docker" in (config.getoption("-m") or ""):
+        return
+    skip = pytest.mark.skip(reason="builds and starts the docker compose stack; run with: pytest -m docker")
+    for item in items:
+        if "docker" in item.keywords:
+            item.add_marker(skip)

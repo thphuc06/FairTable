@@ -28,7 +28,7 @@ if __name__ == "__main__":
         settings=settings,
         store=Store(make_client(settings.store), settings.store.table_name),
         clock=clock,
-        login=DevLogin(httpx.Client(timeout=3.0), settings.issuer.rstrip("/") + "/token", verifier),
+        login=DevLogin(httpx.Client(timeout=3.0), settings.token_url or settings.issuer.rstrip("/") + "/token", verifier),
         sessions=SessionCodec(settings.web_session_secret, clock),
         new_id=lambda: uuid.uuid4().hex,
         chat=ChatService(settings.mcp_url, build_model, clock),

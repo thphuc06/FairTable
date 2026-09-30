@@ -216,7 +216,7 @@ Environment: Python 3.12.14 (conda env `fairtable`), `fastmcp==3.4.7` (+ `fastmc
 - Providers in the package: `BedrockModel`, `OpenAIModel` (needs the optional `openai` package, `client_args={"base_url", "api_key"}`), plus others loaded lazily from `strands.models`.
 
 **DynamoDB Local** [`tests/integration/test_ddb_spike.py`, `-m ddb`]
-- `infra/local/docker-compose.yml` starts `amazon/dynamodb-local` on `127.0.0.1:8000` (`-inMemory -sharedDb`). Endpoint via `DDB_ENDPOINT` (default `http://localhost:8000`); tests skip if unreachable.
+- `infra/local/docker-compose.yml` starts `amazon/dynamodb-local` on `127.0.0.1:8000` (`-inMemory -sharedDb`). Endpoint via `DDB_ENDPOINT_URL` (default `http://localhost:8000`); tests skip if unreachable.
 - `transact_write_items` with 5 items and one failing condition raises `ClientError` code `TransactionCanceledException`; `err.response["CancellationReasons"]` has one entry per item (positional; `Code` is `None` or `ConditionalCheckFailed`); `ReturnValuesOnConditionCheckFailure="ALL_OLD"` returns the blocking item under `Item`. Nothing else is written.
 - 20 threads racing for one slot: exactly 1 success, 19 `ConditionalCheckFailed` at the slot item, no orphan holds. Counter with capacity 3: exactly 3 successes. Real DynamoDB may also return `TransactionConflict`; treat it as retryable.
 

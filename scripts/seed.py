@@ -9,6 +9,9 @@ hard-codes an account, ARN or region.
 
 import argparse
 import sys
+import time
+
+from botocore.exceptions import BotoCoreError, ClientError
 
 from devauth.accounts import USERS_BY_NAME
 from server.domain.clock import SystemClock
@@ -22,13 +25,29 @@ SUBS = {
 }
 
 
+def wait_for_database(client, seconds: int) -> None:
+    """Return once the database answers; raise the last error when ``seconds`` have passed."""
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            client.list_tables()
+            return
+        except (BotoCoreError, ClientError, OSError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reset", action="store_true", help="drop and recreate the table first")
+    parser.add_argument("--wait", type=int, default=0, metavar="SECONDS",
+                        help="keep trying for this long while the database is still starting")
     args = parser.parse_args(argv)
 
     config = StoreConfig.from_env()
     client = make_client(config)
+    wait_for_database(client, args.wait)
     if args.reset:
         delete_table(client, config.table_name)
     created = ensure_table(client, config.table_name)

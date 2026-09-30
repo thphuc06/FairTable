@@ -1,0 +1,16 @@
+# Keep secrets, history and bulk out of the build context.
+.git
+.env
+.env.*
+!.env.example
+**/__pycache__
+*.pyc
+.venv
+.pytest_cache
+.ruff_cache
+*.egg-info
+docs
+tests
+infra
+eval/reports
+CLAUDE.md

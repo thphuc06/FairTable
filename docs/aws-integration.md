@@ -3,7 +3,7 @@
 Which AWS services FairTable uses, why, and how. This document feeds the AWS Builder product feedback and the README service list.
 
 **Status legend:** _planned_ = designed, not built · _built_ = implemented · _verified_ = exercised against a real account.
-Everything below is **planned** as of 2026-09-29.
+Everything below is **planned** as of 2026-09-30: the local profile calls no AWS service. Interfaces and configuration exist for some (a KMS seed provider and an SNS notifier are written against fake clients only, D-016).
 
 **Principles**
 - The **local Docker profile needs no AWS account** (see `docs/DECISIONS.md` D-001, D-007). The AWS profile is the same server code with different configuration.
