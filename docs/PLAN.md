@@ -248,6 +248,13 @@ Environment: Python 3.12.14 (conda env `fairtable`), `fastmcp==3.4.7` (+ `fastmc
 
 ---
 
+### 3a-bis. Verified on the real account (Phase 2, 2026-09-30)
+- **CDK:** CLI `aws-cdk@2.1143.0` (npm, `infra/cdk/package.json`, run with `npx cdk`) with `aws-cdk-lib==2.271.0` and `constructs==10.8.1` (PyPI) synthesises and deploys; CLI and library versions are independent. `cdk bootstrap aws://<account>/us-east-1 --tags project=fairtable` created the `CDKToolkit` stack (default execution policy `AdministratorAccess`, qualifier `hnb659fds`). `cdk diff` before deploy showed exactly one table and one budget.
+- **`aws_dynamodb.Table` (2.271.0):** `point_in_time_recovery` is deprecated, use `point_in_time_recovery_specification=PointInTimeRecoverySpecification(point_in_time_recovery_enabled=...)`; `TableEncryption.DEFAULT` = AWS-owned key (no `SSESpecification` in the template, `DescribeTable` has no `SSEDescription`, the table is still encrypted at rest); `add_global_secondary_index(index_name, partition_key, sort_key, projection_type)`.
+- **`AWS::Budgets::Budget`:** `CostTypes.IncludeCredit` defaults to true (CloudFormation reference, "AWS::Budgets::Budget CostTypes"); absolute-value notification thresholds are supported (`ThresholdType: ABSOLUTE_VALUE`). Prices (AWS Price List API, `AWSBudgets`): cost budgets $0.00; action-enabled budgets free for 62 budget-days, then $0.10 per budget-day; reports $0.01 each. DynamoDB us-east-1 on-demand: $0.625 per million write units, $0.125 per million read units, storage free for 25 GB then $0.25 per GB-month (`AmazonDynamoDB` price list).
+- **Real DynamoDB behaviour:** `TransactWriteItems` does return `TransactionConflict` under contention (see D-036); the store's conditions still gave exactly one winner in 30 of 30 rounds of 20 simultaneous writers. Creating and deleting the table with two GSIs takes about 50 s.
+- **boto3 and `aws login`:** needs `awscrt`; blocked by Windows App Control here; use `aws configure export-credentials --format env` (friction log).
+
 ## 4. Repo skeleton (created in P0-0)
 
 ```

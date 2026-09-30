@@ -1,0 +1,8 @@
+{
+  "name": "fairtable-infra",
+  "private": true,
+  "description": "Pinned AWS CDK CLI for the FairTable AWS profile. Invoke with npx cdk.",
+  "devDependencies": {
+    "aws-cdk": "2.1143.0"
+  }
+}

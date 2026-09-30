@@ -7,7 +7,9 @@ positional, one entry per item, and ``ReturnValuesOnConditionCheckFailure=ALL_OL
 blocking item.
 """
 
+import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -45,8 +47,10 @@ from server.store.mappers import (
 )
 
 RETRYABLE_REASONS = frozenset({"TransactionConflict", "ThrottlingError"})
-MAX_TX_ATTEMPTS = 4
+MAX_TX_ATTEMPTS = 8
+TX_BACKOFF_CAP_S = 0.4
 BATCH_SIZE = 25
+BATCH_WORKERS = 8  # below the default connection pool of 10
 
 
 class ConditionFailed(Exception):
@@ -187,21 +191,27 @@ class Store:
             params["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
     def batch_put(self, items: list[dict[str, Any]]) -> None:
-        """Unconditional bulk write (seeding). Not for business state changes."""
-        for start in range(0, len(items), BATCH_SIZE):
-            pending = {
-                self._table: [
-                    {"PutRequest": {"Item": self._to_av(i)}} for i in items[start : start + BATCH_SIZE]
-                ]
-            }
-            for attempt in range(6):
-                response = self._client.batch_write_item(RequestItems=pending)
-                pending = response.get("UnprocessedItems") or {}
-                if not pending:
-                    break
-                self._sleep(0.05 * (attempt + 1))
-            else:
-                raise StoreBusy("batch write kept returning unprocessed items")
+        """Unconditional bulk write (seeding). Not for business state changes. The batches are sent
+        by a few threads at once: a request takes as long as the network round trip, so sending them
+        one after another made seeding a real table take half a minute."""
+        chunks = [items[start : start + BATCH_SIZE] for start in range(0, len(items), BATCH_SIZE)]
+        if len(chunks) <= 1:
+            for chunk in chunks:
+                self._write_chunk(chunk)
+            return
+        with ThreadPoolExecutor(max_workers=BATCH_WORKERS) as pool:
+            for _ in pool.map(self._write_chunk, chunks):
+                pass  # consume the results so the first error is raised
+
+    def _write_chunk(self, chunk: list[dict[str, Any]]) -> None:
+        pending = {self._table: [{"PutRequest": {"Item": self._to_av(i)}} for i in chunk]}
+        for attempt in range(6):
+            response = self._client.batch_write_item(RequestItems=pending)
+            pending = response.get("UnprocessedItems") or {}
+            if not pending:
+                return
+            self._backoff(attempt)
+        raise StoreBusy("batch write kept returning unprocessed items")
 
     # ------------------------------------------------------------------ transactions
     def _tx_item(self, op: TxOp) -> dict[str, Any]:
@@ -218,6 +228,11 @@ class Store:
         if op.condition:
             body["ReturnValuesOnConditionCheckFailure"] = "ALL_OLD"
         return {op.kind: body}
+
+    def _backoff(self, attempt: int) -> None:
+        """Full-jitter exponential backoff (AWS Architecture Blog, "Exponential Backoff And Jitter"):
+        competing writers that failed together must not retry together."""
+        self._sleep(random.uniform(0, min(TX_BACKOFF_CAP_S, 0.02 * 2**attempt)))
 
     def transact(self, ops: list[TxOp]) -> None:
         """Write everything or nothing. Raises ``TransactionCancelled`` when a condition fails and
@@ -239,11 +254,11 @@ class Store:
                     ]
                     failing = {r.code for r in reasons if r.code not in ("None", "")}
                     if failing and failing <= RETRYABLE_REASONS:
-                        self._sleep(0.02 * (attempt + 1))
+                        self._backoff(attempt)
                         continue
                     raise TransactionCancelled(reasons) from e
                 if code in ("TransactionConflictException", "ThrottlingException"):
-                    self._sleep(0.02 * (attempt + 1))
+                    self._backoff(attempt)
                     continue
                 raise
         raise StoreBusy("transaction kept conflicting with concurrent writes")

@@ -13,6 +13,7 @@ from ddb_env import ENDPOINT
 from devauth.accounts import USERS_BY_NAME
 from server.store import (
     Store,
+    StoreBusy,
     StoreConfig,
     TransactionCancelled,
     TxOp,
@@ -98,8 +99,8 @@ def test_twenty_racing_transactions_for_one_slot_have_exactly_one_winner(ddb_cli
                 TxOp("Put", item={"PK": f"HOLD#{i}", "SK": "META"}),
             ])
             return True
-        except TransactionCancelled:
-            return False
+        except (TransactionCancelled, StoreBusy):
+            return False  # StoreBusy: real DynamoDB kept cancelling with a conflict; nothing written
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         wins = list(pool.map(attempt, range(20)))
@@ -123,14 +124,14 @@ def test_seed_script_creates_and_fills_a_table(ddb_client):
     try:
         out = subprocess.run(
             [sys.executable, "scripts/seed.py"], cwd=REPO, env=env, capture_output=True, text=True,
-            timeout=60, check=True,
+            timeout=240, check=True,  # a table takes up to a minute to appear on the real service
         ).stdout
         assert f"created table {name}" in out and "3 venues" in out
         store = Store(make_client(StoreConfig(name, ENDPOINT, "us-east-1")), name)
         assert len(store.list_venues()) == 3
         again = subprocess.run(
             [sys.executable, "scripts/seed.py"], cwd=REPO, env=env, capture_output=True, text=True,
-            timeout=60, check=True,
+            timeout=240, check=True,  # a table takes up to a minute to appear on the real service
         ).stdout
         assert f"reused table {name}" in again  # running twice is safe
     finally:

@@ -3,7 +3,7 @@
 Which AWS services FairTable uses, why, and how. This document feeds the AWS Builder product feedback and the README service list.
 
 **Status legend:** _planned_ = designed, not built · _built_ = implemented · _verified_ = exercised against a real account.
-Everything below is **planned** as of 2026-09-30: the local profile calls no AWS service. Interfaces and configuration exist for some (a KMS seed provider and an SNS notifier are written against fake clients only, D-016).
+Status as of 2026-09-30: the local profile calls no AWS service; the DynamoDB table exists on the account (P2-1), everything else is **planned**. Interfaces and configuration exist for some (a KMS seed provider and an SNS notifier are written against fake clients only, D-016).
 
 **Principles**
 - The **local Docker profile needs no AWS account** (see `docs/DECISIONS.md` D-001, D-007). The AWS profile is the same server code with different configuration.
@@ -21,9 +21,9 @@ Everything below is **planned** as of 2026-09-30: the local profile calls no AWS
 | **AgentCore Identity** | Outbound OAuth from Gateway to the Runtime target | Gateway calls the Runtime with its own OAuth credentials | – | planned |
 | **Amazon Cognito** (Essentials tier) | User pool, OAuth code + PKCE, token claims | Pre-token-generation Lambda **V2** (user tokens) and **V3** (M2M tokens) add `agent_tier` and `agent_id` | `devauth/` dev JWT issuer | planned |
 | **AWS Lambda** | Pre-token trigger; Gateway interceptor; optional workers later | Small Python functions; workers reuse the same pure functions as the lazy in-server paths | Same logic runs in-process | planned |
-| **Amazon DynamoDB** | Single-table store: slots, holds, reservations, mandates, counters, idempotency records, audit, waitlists, drops | `TransactWriteItems` for every state change; conditions are the final concurrency guarantee. No reliance on TTL for business logic | DynamoDB Local | planned |
+| **Amazon DynamoDB** | Single-table store: slots, holds, reservations, mandates, counters, idempotency records, audit, waitlists, drops | `TransactWriteItems` for every state change; conditions are the final concurrency guarantee. No reliance on TTL for business logic | DynamoDB Local | **table deployed by CDK (2026-09-30); store tests verified on the real service** |
 | **AgentCore Observability** (on **Amazon CloudWatch**, OpenTelemetry) | Trace every step of a booking to troubleshoot and to show in the demo (D-031) | One-time CloudWatch *Transaction Search* (spans go to the `aws/spans` log group); Strands agent instrumented with ADOT and `strands-agents[otel]` (our simulator runs outside Runtime); Gateway and Runtime spans; session id as OpenTelemetry baggage; the server adds the policy decision of each call (tool, decision, rule ids, error code) as span attributes, never tokens or personal data | The chat page's *steps* list and the owner console's audit list | planned (required; prices to verify before enabling) |
-| **AWS Budgets** | Cost alerts at $50 / $100 / $140 | Created by the CDK app | – | planned |
+| **AWS Budgets** | Cost alerts at $50 / $100 / $140 | Created by the CDK app; credits excluded (`IncludeCredit` defaults to true and would silence the alerts) | – | built (waiting for the alert address to deploy) |
 | **AWS CDK (Python) / CloudFormation** | Infrastructure as code | Table, Cognito, Lambdas, Budgets; AgentCore resources via the `agentcore` CLI or CDK as supported | – | planned |
 | **Amazon Bedrock (models)** | Optional real model for the simulator and eval | `MODEL_PROVIDER=bedrock`; currently **blocked on the account** (AWS Support case), so mock is the default | `MODEL_PROVIDER=mock` | blocked |
 

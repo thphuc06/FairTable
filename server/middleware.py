@@ -18,7 +18,8 @@ from fastmcp.server.middleware import Middleware
 from fastmcp.tools import ToolResult
 from mcp.shared.exceptions import UrlElicitationRequiredError
 
-from server.domain.errors import FairTableError
+from server.domain.errors import ErrorCode, FairTableError
+from server.store import StoreBusy
 
 log = logging.getLogger("fairtable.tools")
 
@@ -42,6 +43,14 @@ def business_errors(fn):
             return fn(*args, **kwargs)
         except FairTableError as e:
             raise BusinessError(e) from None
+        except StoreBusy:
+            # Real DynamoDB can keep cancelling a transaction with TransactionConflict under heavy
+            # contention. Nothing was written, so asking the agent to repeat the call is safe.
+            raise BusinessError(
+                FairTableError(
+                    ErrorCode.TEMPORARILY_BUSY, "The service is busy right now.", retry_after_s=1
+                )
+            ) from None
 
     return wrapper
 

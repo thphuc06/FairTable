@@ -24,6 +24,7 @@ class ErrorCode(StrEnum):
     CONSENT_DECLINED = "CONSENT_DECLINED"
     ALREADY_ENTERED = "ALREADY_ENTERED"
     DROP_CLOSED = "DROP_CLOSED"
+    TEMPORARILY_BUSY = "TEMPORARILY_BUSY"
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,9 @@ DEFAULT_NEXT_STEP: dict[ErrorCode, NextStep] = {
     ErrorCode.CONSENT_DECLINED: NextStep("The user declined. Do not retry; offer alternatives."),
     ErrorCode.ALREADY_ENTERED: NextStep("Check the status.", ToolName.WAITLIST_STATUS),
     ErrorCode.DROP_CLOSED: NextStep("Look for other slots.", ToolName.AVAILABILITY_CHECK),
+    ErrorCode.TEMPORARILY_BUSY: NextStep(
+        "Nothing was changed. Wait a moment, then repeat the same call with the same idempotency_key."
+    ),
 }
 
 

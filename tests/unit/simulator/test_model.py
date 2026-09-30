@@ -88,7 +88,9 @@ async def test_a_new_request_starts_a_new_task_instead_of_repeating_the_first():
     second = first + _messages("Book a table at Ember Grill for 4 on 2026-10-05 at 8pm")
     a = await events_of(model, first)
     b = await events_of(model, second)
-    args = lambda evs: json.loads(next(e for e in evs if "contentBlockDelta" in e)["contentBlockDelta"]["delta"]["toolUse"]["input"])
+    def args(evs):
+        return json.loads(next(e for e in evs if "contentBlockDelta" in e)["contentBlockDelta"]["delta"]["toolUse"]["input"])
+
     assert args(a)["date"] == "2026-10-02" and args(a)["party_size"] == 2
     assert args(b)["date"] == "2026-10-05" and args(b)["party_size"] == 4  # the newer request wins
 
