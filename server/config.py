@@ -33,6 +33,7 @@ class Settings:
     web_host: str = "127.0.0.1"
     web_port: int = 8080
     web_session_secret: str = DEV_SESSION_SECRET
+    mcp_url: str = "http://127.0.0.1:8000/mcp"  # where the chat page's assistant reaches the MCP server
     store: StoreConfig = field(default_factory=lambda: StoreConfig("fairtable-dev"))
 
     def __post_init__(self) -> None:
@@ -65,5 +66,6 @@ class Settings:
             web_host=env.get("WEB_HOST", cls.web_host),
             web_port=int(env.get("WEB_PORT", cls.web_port)),
             web_session_secret=env.get("WEB_SESSION_SECRET", DEV_SESSION_SECRET),
+            mcp_url=env.get("MCP_URL", cls.mcp_url),
             store=StoreConfig.from_env(env),
         )

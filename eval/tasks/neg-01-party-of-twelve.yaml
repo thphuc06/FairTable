@@ -1,0 +1,6 @@
+id: neg-party-of-twelve
+category: NEG
+description: A group of twelve must call the restaurant; nothing is held or booked.
+user: alice
+goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 12}
+expect: {reservations: 0, active_holds: 0, refused_by: [G3_party_size_max_10]}

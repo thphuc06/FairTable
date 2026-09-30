@@ -63,6 +63,8 @@ class TokenIssuer:
         claims["username"] = user.username
         if user.groups:
             claims["cognito:groups"] = list(user.groups)
+        if user.venue_id:
+            claims["custom:venue_id"] = user.venue_id
         if client.agent_tier:
             claims["agent_tier"] = client.agent_tier
         if client.agent_id:

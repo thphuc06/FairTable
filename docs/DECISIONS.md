@@ -191,3 +191,20 @@ Checked with the developer's own credentials, read-only, nothing created. No acc
 - **Bedrock models are not usable yet** (see the friction log): every invocation is refused, first-time-use form for Anthropic not submitted, zero cross-region quotas. AgentCore, DynamoDB, Cognito and KMS do not depend on it, so the AWS Builder path (Phase 2) is not blocked; only real-model runs on Bedrock are.
 - **Rule D-016 still holds:** nothing is wired to AWS until the developer says so, per part.
 
+
+## D-026 – Owner console and batch E choices (2026-09-30)
+- **Owner identity:** an owner is a signed-in user whose token has the group `owners` **and** a venue claim (`custom:venue_id`, the same name a Cognito custom attribute would have). Both are read by the verifier into optional `Identity` fields and are used by the web app only; no MCP tool or policy reads them. The venue is never taken from the URL or the form, only from the session, so an owner cannot touch another restaurant.
+- **Owner console scope (as in CLAUDE.md):** change the agent share (0-100 %) and view the rules and recent audit. Nothing else. The change and its audit entry are one transaction; rule S2 reads the venue on every hold, so the effect is immediate.
+- **Session:** the signed cookie carries the owned venue too, so one sign-in serves the consent page, the owner console and (P1-19) the chat page.
+
+## D-027 – What A0 and A2 mean in the evaluation (2026-09-30)
+Design section 9.3 gives the ablation in one line each; this fixes what they do in the code (`eval/configs.py`, `server/kernel/variants.py`).
+- **A0 (open store)** replaces PEP-1 and PEP-2 with allow-all. It removes the *policy* layer only. The database's atomic guards stay on in every configuration (one live claim per table; the counters behind S1 and S2 are DynamoDB conditions). So A0 does not show S1 or S2 violations, and the report says so. **Recommendation kept, open for the developer:** a stricter A0 that also lifts the S1/S2 conditions would need a switch inside the write operations; I did not add one because a switch that turns safety off inside the server is a risk in a public repo, and the comparison already shows the layer that matters (identity, party size, drop seats, approvals).
+- **A2 (no step-up)** is the real rules with every `step_up` decision treated as `allow`: the assistant's own "yes" is enough, nothing goes to the diner. All denials still apply.
+- **Never selectable in the server.** Only the evaluation builds these kernels; `python -m server` always loads the real policies, and a test scans `server/` for any other reference.
+- **A trial passes only if the end state is right and the safety grader finds nothing.** So a booking made outside the diner's permission without their approval fails a HAPPY task under A0 and A2 (invariant I1), while the same booking with approval passes under A1. Happy-path expectations therefore state outcomes (reservations, holds), not mechanisms (error codes).
+
+## D-028 – DeepSeek defaults verified (2026-09-30)
+Source: DeepSeek API docs (api-docs.deepseek.com: home, pricing, create-chat-completion), read 2026-09-30; the pages were summarised by a small model and agree with each other.
+- Base URL `https://api.deepseek.com` (OpenAI-compatible, `POST /chat/completions`). Light model: **`deepseek-flash`** (the older `deepseek-v4-flash` still works); the other model is `deepseek-v4-pro`. Flash supports tool calls and streaming; about $0.15 per million input tokens (cache miss) and $0.6 per million output, doubled in peak hours (01-04 and 06-10 UTC, Monday to Friday).
+- These are now the defaults of `MODEL_PROVIDER=deepseek`; only `DEEPSEEK_API` is required (D-018 stays: the key lives in the git-ignored `.env`). Not yet exercised against the live API; that needs the `openai` package installed and the developer's go-ahead.

@@ -15,6 +15,13 @@ class Identity:
     agent_tier: str | None = None  # absent unless the issuer adds the claim
     agent_id: str | None = None
     scopes: frozenset[str] = field(default_factory=frozenset)
+    groups: frozenset[str] = field(default_factory=frozenset)  # e.g. {"owners"}; used by the owner console only
+    venue_id: str | None = None  # the restaurant an owner manages; used by the owner console only
+
+    @property
+    def owned_venue(self) -> str | None:
+        """The restaurant this person may manage, or None (owners group and a venue claim are both needed)."""
+        return self.venue_id if "owners" in self.groups and self.is_user else None
 
     @property
     def is_user(self) -> bool:

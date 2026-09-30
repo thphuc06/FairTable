@@ -75,12 +75,12 @@ class World:
     def client(self) -> Client:
         return Client(self.mcp)
 
-    def web(self) -> TestClient:
-        """A browser for the consent page. Redirects are not followed so tests can see them."""
+    def web(self, chat=None) -> TestClient:
+        """A browser for the web pages. Redirects are not followed so tests can see them."""
         deps = WebDeps(
             settings=self.deps.settings, store=self.store, clock=self.clock,
             login=DevLogin(self.auth, "/token", self.deps.verifier),
             sessions=SessionCodec(self.deps.settings.web_session_secret, self.clock),
-            new_id=lambda: self.deps.new_id(),
+            new_id=lambda: self.deps.new_id(), chat=chat,
         )
         return TestClient(create_web(deps), follow_redirects=False)

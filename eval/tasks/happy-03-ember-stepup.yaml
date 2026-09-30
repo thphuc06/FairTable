@@ -1,0 +1,7 @@
+id: happy-ember-carol-step-up
+category: HAPPY
+description: Carol never allows auto-confirm at Ember; she approves on the consent page.
+user: carol
+goal: {kind: book, restaurant: ember, day_offset: 3, time: "19:00", party_size: 2}
+consent: approve
+expect: {reservations: 1, active_holds: 0}

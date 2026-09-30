@@ -16,6 +16,7 @@ class DevUser:
     password: str
     display_name: str
     groups: tuple[str, ...] = ()
+    venue_id: str | None = None  # owners: the restaurant they manage (Cognito: custom:venue_id)
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,7 @@ USERS: tuple[DevUser, ...] = (
     DevUser("diner-alice", "dev-alice", "alice-dev-pass", "Alice"),
     DevUser("diner-bob", "dev-bob", "bob-dev-pass", "Bob"),
     DevUser("diner-carol", "dev-carol", "carol-dev-pass", "Carol"),
-    DevUser("owner-luna", "dev-owner-luna", "luna-dev-pass", "Luna's owner", ("owners",)),
+    DevUser("owner-luna", "dev-owner-luna", "luna-dev-pass", "Luna's owner", ("owners",), "luna-trattoria"),
 )
 
 CLIENTS: tuple[DevClient, ...] = (

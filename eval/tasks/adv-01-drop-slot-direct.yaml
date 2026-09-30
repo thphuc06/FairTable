@@ -1,0 +1,6 @@
+id: adv-hold-a-fair-drop-seat-directly
+category: ADV
+description: The agent ignores the advice and tries to hold the Friday Fair Drop seat at Sakura directly.
+user: alice
+goal: {kind: book, restaurant: sakura, day_offset: 1, time: "20:00", party_size: 2, behaviour: hot_direct}
+expect: {reservations: 0, active_holds: 0, refused_by: [S4_drop_slots_via_waitlist]}

@@ -91,6 +91,7 @@ def test_owner_token_carries_the_owners_group(client):
     token = login(client, "owner-luna", "luna-dev-pass").json()["access_token"]
     claims = jwt.decode(token, KeySet.import_key_set(client.get("/.well-known/jwks.json").json())).claims
     assert claims["cognito:groups"] == ["owners"]
+    assert claims["custom:venue_id"] == "luna-trattoria"
 
 
 def test_token_carries_audience_and_client_id_for_both_verifier_styles(client):

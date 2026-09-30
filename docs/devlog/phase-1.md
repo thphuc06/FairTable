@@ -1,6 +1,6 @@
 # Phase 1 – local core (10-02 → 10-13), no AWS
 
-Status: **in progress – batches A, B, C, D done 2026-09-29, waiting for review of D** (decisions D-016 … D-024)
+Status: **in progress – batches A–D done and committed; batch E done 2026-09-30, waiting for review** (decisions D-016 … D-027)
 
 ## Plan
 Goal: everything a judge runs with `docker compose up`: the trust checks, the 8 tools, identity, storage, waitlist and Fair Drop, the supporting web pages, the simulator and the eval harness. Task list, acceptance criteria and tests: `docs/PLAN.md` §3, Phase 1.
@@ -32,6 +32,21 @@ Batch D plan (design in `DECISIONS.md` D-023):
 3. **P1-16** Fair Drop integration: drop records and seed data, entries with the one-ticket rule (I4, RT12), lazy exactly-once allocation, MCP resources for the audit and the policies.
 Each task ends with the whole suite and `ruff` green and a devlog entry.
 
+Batch E plan (research in `PLAN.md` §3a "Strands", design in `DECISIONS.md` D-026; order is by dependency):
+1. **P1-17** owner console in `web/`: `/owner` (owners group + `custom:venue_id` claim), agent-share form with CSRF, rules text, recent audit; the change is audited and reaches rule S2 at once.
+2. **P1-18** simulator core: `LLMClient`/model factory by `MODEL_PROVIDER` (`mock` default; `bedrock` and `deepseek` opt-in, lazy imports), a scripted Strands `Model` driven by deterministic personas with seeded noise, Strands `Agent` + `MCPClient` to the server, user-side tools `say` / `approve_consent` / `decline`.
+3. **P1-19** chat page and login on the same web app (one sign-in for chat and consent), dev inbox shown.
+4. **P1-20** eval harness v0: task YAML schema, per-run table namespace, runner, state and safety graders (reuse `check_invariants`), pass@1, pass^k, C_out.
+5. **P1-21** A0 / A1 / A2 as configuration of the same server (A0 = no trust checks, A2 = no step-up).
+6. **P1-22** red-team suite RT1–RT12 as deterministic tests with a summary printer.
+Each task ends with the whole suite and `ruff` green and a devlog entry. Anything that would need a new dependency (`openai` for DeepSeek) is left as a lazy import and reported, not installed.
+
+P1-20 design (eval harness v0):
+- `eval/tasks.py` task YAML (id, category HAPPY|NEG|ROB|ADV, user, agent client, goal, noise, how the diner answers a consent link, expected end state) and loader that rejects unknown keys.
+- `eval/env.py` one isolated environment per trial: a fresh DynamoDB table (the per-run namespace), seed data, the dev issuer, the MCP server on a free port, the consent page; torn down after.
+- `eval/runner.py` runs the conversation with the simulator (assistant + simulated diner), then grades. `eval/graders.py`: state grader (expected reservations, holds, refusals) and safety grader (invariants I1-I5, counters, S1 and S2 limits). `eval/metrics.py`: pass@1, pass^k, C_out, violation, block and false-block rates, latency. `eval/report.py`, `python -m eval`.
+- 10 hand-written starter tasks; the 40-task generator is P3-1. Only configuration A1 exists until P1-21. Reports label the model provider; mock numbers are harness validation.
+
 Open design points to settle inside the batch that owns them:
 - P1-10: step-up ladder when the client cannot open a URL (see `DECISIONS.md` D-014).
 
@@ -54,16 +69,79 @@ Open design points to settle inside the batch that owns them:
 | P1-14 waitlist on DynamoDB | D | done | 2026-09-29 | standing watches, lazy matcher on cancel and expiry, status/cancel |
 | P1-15 Fair Drop core | D | done | 2026-09-29 | commitment, tickets, HMAC order, verifiable audit |
 | P1-16 Fair Drop integration | D | done | 2026-09-29 | entries, exactly-once lazy draw, audit and policy resources, I4 |
-| P1-17 owner console | E | todo | | |
-| P1-18 simulator core | E | todo | | |
-| P1-19 chat page and login | E | todo | | |
-| P1-20 eval harness v0 | E | todo | | |
-| P1-21 A0 / A1 / A2 configs | E | todo | | |
-| P1-22 red-team suite | E | todo | | |
+| P1-17 owner console | E | done | 2026-09-30 | /owner: share cap, rules, audit; cap change reaches S2 |
+| P1-18 simulator core | E | done | 2026-09-30 | scripted Strands model, personas, assistant, simulated diner |
+| P1-19 chat page and login | E | done | 2026-09-30 | /chat, one sign-in for chat, consent and owner console |
+| P1-20 eval harness v0 | E | done | 2026-09-30 | 10 starter tasks x k=2 all pass on A1; metrics checked by hand |
+| P1-21 A0 / A1 / A2 configs | E | done | 2026-09-30 | kernels selected by config; A1 clean, A0 and A2 show violations |
+| P1-22 red-team suite | E | done | 2026-09-30 | RT1-RT12 as scenarios: A1 12/12, A0 8/12, A2 11/12 |
 | P1-23 Docker profile | F | todo | | |
 | P1-24 README and wrap-up | F | todo | | |
 
 ## Entries (newest first)
+
+### 2026-09-30 · P1-18 · [simulator] · Change: DeepSeek flash verified live
+- **Goal:** replace the unverified DeepSeek placeholders with documented values and prove one real conversation works.
+- **Done:** defaults `https://api.deepseek.com` and `deepseek-flash` (from DeepSeek's API docs, D-028); only `DEEPSEEK_API` is required. `.env` gained `DEEPSEEK_MODEL` and `DEEPSEEK_BASE_URL` (no secrets; the key was already there and was never printed). `openai` 2.54.0 installed and declared in the `sim` extra (`pip check` clean, no pin changed). `Reply.tokens` reports the model's tokens per turn. Live run of task `happy-luna-alice-in-mandate` on the real model: search, availability, mandate, hold, confirm; final state 1 reservation, 0 violations; **29,840 tokens (at most about $0.04), 11 s.** The model's first confirm returned `IDEMPOTENCY_CONFLICT` (a real model mis-handled the key once; the server refused correctly and the model recovered). Not investigated further.
+- **Files:** `simulator/{model,assistant}.py`, `tests/unit/simulator/test_model.py`, `.env.example`, `pyproject.toml`, `docs/{DECISIONS,PLAN,friction-log}.md`.
+- **Tests:** unit tests updated (37 in `tests/unit/simulator`); the live call is a manual run, not a test (it needs the key and costs money). Whole suite result: see the batch report.
+- **Decisions:** D-028.
+- **Surprises / friction:** the Strands "reasoningContent" warning and the empty `AWS_PROFILE` problem (both in the friction log).
+- **Follow-ups:** P3-4 (real-provider eval runs with a budget guard: about $0.03 per booking conversation at this size, so the $1.80 balance allows roughly 50 conversations, less at peak hours); P1-23 must not pass empty AWS variables to containers.
+
+### 2026-09-30 · P1-22 · [eval] [redteam] · Red-team suite RT1-RT12
+- **Goal:** the design's twelve attacks as deterministic scenarios, with the "blocked x/12" row for A0, A1 and A2.
+- **Done:** `eval/redteam.py`: each attack runs against a real server in its own fresh environment and is judged from the database or the answers (blocked = the harmful effect did not happen), with the rule or error that stopped it. Uses real HTTP clients, a machine token (RT1), tokens minted with the issuer's key but missing a claim (RT3, RT9's twenty racers) and a token signed by another key (RT4). `python -m eval.redteam [--config A0,A1,A2]` prints the table and exits 1 if A1 misses an attack. **Result: A1 12/12, A0 8/12 (RT1, RT3, RT5, RT8 succeed), A2 11/12 (RT5 succeeds).**
+- **Files:** `eval/redteam.py`, `eval/env.py` (`mint`, `machine_token`), `tests/redteam/test_redteam_suite.py` (18), `eval/README.md`.
+- **Tests:** every attack blocked under A1 by the expected layer; exactly the policy-dependent attacks succeed under A0 and A2; RT2, RT4, RT6, RT7, RT9 to RT12 are blocked in every configuration (token verification, rate limiter, database conditions); the table and the exit code. Whole suite green, `ruff` clean.
+- **Decisions:** none new. Two observations differ from the design table and are recorded as they are: RT1 is stopped by G4 (a machine token lacks both `username` and `agent_tier`; the engine reports the forbid), so either G2 or G4 counts; RT5 is reported as rule S3 (the answer's code is `CONSENT_REQUIRED`). RT2 polls 25 times against the 20-an-hour limit instead of 300 (same limiter, faster). RT11: no tool has a free-text field that is stored or acted on (there is no `special_requests`), so the injection text can only be a search term or an invalid value and nothing may change.
+- **Surprises / friction:** none.
+- **Follow-ups:** RT4 through the Gateway interceptor (strip a client-supplied header) is a Phase 2 check (P2-5), scaffold only until "wire AWS".
+
+### 2026-09-30 · P1-21 · [eval] [trust-kernel] · A0 / A1 / A2 as configuration
+- **Goal:** show, with the same server code, what the trust layer and the step-up each contribute.
+- **Done:** `server/kernel/variants.py` (`OpenPep1/2` allow everything; `NoStepUpPep2` turns approval-needed into allow), `TrustKernel.open_store()` and `.without_step_up()`, `eval/configs.py` (name to kernel), the runner, the CLI (`--config A0,A1,A2`) and a comparison table in the design's layout. Result on the ten starter tasks (mock model, k = 1): **A1** all pass, 0 violations; **A0** 6 violations, 0/2 refusals and 0/2 attacks handled; **A2** 4 violations (exactly the bookings that needed the diner's approval, invariant I1), attacks still 2/2 blocked, the "diner declines" task fails because the booking happens anyway.
+- **Files:** `server/kernel/{variants,__init__}.py`, `eval/{configs,runner,report,__main__}.py`, two HAPPY tasks now state outcomes only, `tests/unit/kernel/test_variants.py` (9), `tests/integration/test_ablation.py` (9).
+- **Tests:** the claims above as assertions; A1 costs no legitimate booking (pass^k not lower than A0, false-block rate 0); a scan proves nothing under `server/` (outside the kernel package) can select a weakened kernel.
+- **Decisions:** D-027 (what A0 and A2 mean; A0 keeps the database's guards so it shows no S1/S2 violations; open for the developer whether to build a stricter A0).
+- **Surprises / friction:** none.
+- **Follow-ups:** none blocking.
+
+### 2026-09-30 · P1-20 · [eval] · Eval harness v0
+- **Goal:** measure whether the trust layer holds, with numbers that can be recomputed by hand.
+- **Done:** `eval/`: strict task YAML (`tasks.py`, unknown keys and bad values are errors), one isolated environment per trial (`env.py`: fresh DynamoDB table, seed, dev issuer, MCP server on a free port, consent page; the table is deleted afterwards), the runner (`runner.py`: the simulator's assistant and diner, up to three approval rounds), graders (`graders.py`: expected end state and refusals; safety = invariants I1-I5, counters, S1 and S2 limits read from the database), metrics (`metrics.py`: pass@1, pass^k, C_out, nearest-rank percentiles), report (`report.py`, banner says a mock run validates the harness only; nothing measured shows as "n/a", never 0) and `python -m eval`. A trial where the harness itself fails is a crash: reported, excluded, exit code 1, never a pass or a block. Ten starter tasks: HAPPY 4, NEG 2, ROB 2, ADV 2.
+- **Files:** `eval/*.py`, `eval/tasks/*.yaml`, `eval/README.md`, `pyproject.toml` (packages `simulator*`, `eval*`; extra `eval = ["pyyaml"]`), `tests/unit/eval/` (38), `tests/integration/test_eval_run.py` (5).
+- **Tests:** metrics against hand-worked values (for four trials of 4/4, 2/4, 0/4: pass@1 0.5, pass^2 7/18, pass^3 1/3, C_out 2/3); task validation; state grader; report; end to end: all 10 tasks x 2 trials pass with no violations and no table left behind; the run is reproducible; a wrong expectation fails with a reason; a harness failure is a crash; the safety grader reports a hand-made double booking as I2 (so a system that allowed one would not pass). Whole suite 671 passed, `ruff` clean.
+- **Decisions:** none new. `pyyaml` is declared as an extra (it was already installed through strands-agents); no version pins changed.
+- **Surprises / friction:** none. First real run: 10/10 on A1 at about 0.35 s per conversation.
+- **Follow-ups:** cost per booking needs token counts (real models only, P3-4); the 40-task generator is P3-1; A0 and A2 are P1-21.
+
+### 2026-09-30 · P1-19 · [web] [simulator] · Chat page and shared sign-in
+- **Goal:** the demo a judge can click: sign in, talk to the assistant, follow the approval link, come back.
+- **Done:** `/chat` (transcript, message box, "Start over", the dev inbox as Notifications). Each signed-in diner gets their own `simulator.Assistant` connected to the MCP server with their own token (`web/chat.py`; tokens stay in the web process's memory, never in the cookie or page). The same cookie serves the consent page and the owner console, so one sign-in covers all; `/` sends diners to `/chat` and owners to `/owner`. No JavaScript (works under the strict CSP); CSRF token bound to the user on both forms; only links to our own consent page become anchors; messages cut at 500 characters. `Login` now returns `SignedIn` (identity, access token, lifetime). New setting `MCP_URL`. `python -m web` builds the chat with `MODEL_PROVIDER` (mock by default).
+- **Files:** `web/{chat,app,auth,pages,__main__}.py`, `web/README.md`, `server/config.py`, `tests/integration/{test_chat_web,conftest,world,test_simulator}.py` (the `live` server fixture moved to a shared conftest).
+- **Tests:** 12 new: sign-in required, landing redirects, booking by chat, the full step-up loop in one browser session (assistant hands over the link, diner approves, assistant completes), escaping, link whitelisting, CSRF (also across users), start over, separate conversations, length cut, chat off, owner page closed to diners. Whole suite 628 passed, `ruff` clean.
+- **Decisions:** none new; the session length (1 hour) stays as is and the chat asks for a new sign-in when the token expires.
+- **Surprises / friction:** none.
+- **Follow-ups:** the Docker profile (P1-23) must set `MCP_URL` to the server's service name and run `python -m web`. The AWS profile would use Cognito's hosted login (scaffold only).
+
+### 2026-09-30 · P1-18 · [simulator] · Simulator core
+- **Goal:** a simulated Alexa+ assistant that uses the real server exactly as a real agent would, with no model account.
+- **Done:** `simulator/`: `events` (Strands messages to `UserSaid`/`Step`), `personas.decide()` (pure: book, watch, cancel; follows each tool's `next_step`; asks for approval and waits; seeded noise such as a retried hold), `request.parse_request` (a diner's sentence to a goal, for the chat page), `model.ScriptedModel` (a Strands `Model` driven by a persona) and `build_model()` (`MODEL_PROVIDER`: `mock` default; `bedrock` and `deepseek` built lazily, with clear errors when unconfigured), `assistant.Assistant` (Strands `Agent` + `MCPClient` to the server with the diner's token in `x-ft-user-token`, exactly the 8 tools), `user.SimulatedUser` (signs in and approves or declines on the consent page; the assistant cannot). Personas were also fixed twice during testing (a watch never followed up; restaurant matching now scores words and asks on a tie).
+- **Files:** `simulator/*.py`, `simulator/README.md`, `tests/unit/simulator/`, `tests/integration/test_simulator.py`, `tests/conftest.py` (signal fixture).
+- **Tests:** 36 unit + 7 integration (real HTTP, real Strands agent): booking inside the mandate in one turn; outside it, link then approval then booked; declined approval books nothing; retried hold gives one hold; a chat sentence is enough; another diner cannot approve; exactly 8 tools. Whole suite 616 passed, `ruff` clean.
+- **Decisions:** the deepseek provider has **no default base URL or model id** (they are not verified yet, D-018); it needs `DEEPSEEK_API`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` and the optional `openai` package, which I did not install. The bedrock provider needs `BEDROCK_MODEL_ID`. Neither was called.
+- **Surprises / friction:** the full suite hung once the simulator joined it (sse-starlette read a stale SIGTERM handler left by an earlier two-server test as "server shutting down"); fixed with an autouse fixture. Details in `friction-log.md`.
+- **Follow-ups:** the real-model providers are untested until a key or Bedrock access exists (P3-4).
+
+### 2026-09-30 · P1-17 · [web] · Owner console
+- **Goal:** the restaurant owner can lower the share of seats agents may book and sees what happened, so the S2 demo moment is real.
+- **Done:** `/owner` (sign-in as an owner; the owners group and a `custom:venue_id` claim from the dev issuer are both required), the agent-share form (whole number 0-100, CSRF token bound to the user and the venue), the plain-English rules the server enforces, and the last three days of audit (newest first, 40 rows). A change is one transaction: venue update plus an audit entry (`owner_console`, old and new value). Owners can only see their own restaurant; diners get 403; the next hold after a change reads the new cap (S2).
+- **Files:** `web/{app,pages,session}.py`, `server/domain/models.py` (`Identity.groups`, `venue_id`, `owned_venue`), `server/identity/verifier.py`, `devauth/{accounts,issuer}.py`, `tests/integration/test_owner_console.py`, one assertion in `test_devauth.py`.
+- **Tests:** 15 new; whole suite 573 passed, `ruff` clean. Includes the demo flow: a hold succeeds, the owner sets the share to 0, the same request is refused with `S2_agent_share_of_covers`.
+- **Decisions:** D-026.
+- **Surprises / friction:** none. `Identity` gained two optional fields; nothing in the trust kernel reads them.
+- **Follow-ups:** the AWS profile maps `cognito:groups` and a Cognito custom attribute the same way (scaffold only, D-016).
 
 ### 2026-09-29 · environment · [aws] · The new AWS account, read-only check
 - **Goal:** find out what the developer's new AWS account can do before any AWS wiring.

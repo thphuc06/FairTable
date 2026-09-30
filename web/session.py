@@ -23,6 +23,7 @@ class Session:
     sub: str
     username: str
     expires_at: int
+    owner_of: str | None = None  # venue an owner may manage; None for diners
 
 
 def _b64e(raw: bytes) -> str:
@@ -44,8 +45,10 @@ class SessionCodec:
     def _mac(self, data: str) -> str:
         return _b64e(hmac.new(self._key, data.encode("ascii"), hashlib.sha256).digest())
 
-    def issue(self, sub: str, username: str) -> str:
+    def issue(self, sub: str, username: str, owner_of: str | None = None) -> str:
         body = {"sub": sub, "usr": username, "exp": epoch_seconds(self._clock) + self.ttl_s}
+        if owner_of:
+            body["own"] = owner_of
         payload = _b64e(json.dumps(body, separators=(",", ":")).encode())
         return f"{payload}.{self._mac(payload)}"
 
@@ -58,7 +61,9 @@ class SessionCodec:
             return None
         try:
             body = json.loads(_b64d(payload))
-            session = Session(sub=str(body["sub"]), username=str(body["usr"]), expires_at=int(body["exp"]))
+            owner = body.get("own")
+            session = Session(sub=str(body["sub"]), username=str(body["usr"]), expires_at=int(body["exp"]),
+                              owner_of=str(owner) if owner else None)
         except (KeyError, ValueError, TypeError, binascii.Error):
             return None
         return session if session.expires_at > epoch_seconds(self._clock) else None

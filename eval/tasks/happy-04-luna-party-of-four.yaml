@@ -1,0 +1,6 @@
+id: happy-luna-alice-party-of-four
+category: HAPPY
+description: A party of four is the largest group Alice's standing permission allows.
+user: alice
+goal: {kind: book, restaurant: luna, day_offset: 4, time: "18:30", party_size: 4}
+expect: {reservations: 1, active_holds: 0}

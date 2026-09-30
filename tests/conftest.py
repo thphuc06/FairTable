@@ -5,6 +5,7 @@ The endpoint comes from DDB_ENDPOINT_URL (default http://localhost:8000). Tests 
 reachable; when you run ``pytest -m ddb`` on purpose, treat skips as failures.
 """
 
+import signal
 import uuid
 
 import pytest
@@ -42,3 +43,16 @@ def store(ddb_client, table_name):
 @pytest.fixture
 def clock():
     return FakeClock()
+
+
+@pytest.fixture(autouse=True)
+def restore_signal_handlers():
+    """uvicorn installs SIGINT/SIGTERM handlers while a server runs and restores what it found. Two
+    servers overlapping in one test can restore each other's handler out of order, leaving one that
+    points at a dead server; sse-starlette then thinks the process is shutting down and closes every
+    later SSE stream at once (the simulator's MCP client then hangs). Put the originals back after
+    every test."""
+    saved = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM)}
+    yield
+    for number, handler in saved.items():
+        signal.signal(number, handler)

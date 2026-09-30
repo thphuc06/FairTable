@@ -122,6 +122,8 @@ class TokenVerifier:
             agent_tier=_text(claims.get("agent_tier")),
             agent_id=_text(claims.get("agent_id")),
             scopes=_scopes(claims.get("scope")),
+            groups=_scopes(claims.get("cognito:groups")),
+            venue_id=_text(claims.get("custom:venue_id")),
         )
 
     def verify_headers(self, headers: Mapping[str, str]) -> Identity:
