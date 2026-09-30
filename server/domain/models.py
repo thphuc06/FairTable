@@ -109,3 +109,4 @@ class Mandate:
     agent_ids: frozenset[str]
     approved_at: str  # ISO timestamp
     expires_at: str  # ISO timestamp
+    revoked_at: str | None = None  # set when the diner takes it back; lets a past booking be judged by what was live then

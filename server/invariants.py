@@ -14,7 +14,7 @@ This module scans everything: for tests, graders and diagnostics, never for a re
 """
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from server.domain.booking import (
@@ -27,7 +27,13 @@ from server.domain.booking import (
 )
 from server.domain.fairdrop import DROP_ALLOCATED, ENTRY_WON, verify_audit
 from server.domain.mandate import check_mandate
-from server.domain.models import SLOT_CONFIRMED, SLOT_HELD, SLOT_OPEN
+from server.domain.models import (
+    MANDATE_ACTIVE,
+    MANDATE_REVOKED,
+    SLOT_CONFIRMED,
+    SLOT_HELD,
+    SLOT_OPEN,
+)
 from server.domain.tool_names import WRITE_TOOLS
 from server.store import Store
 from server.store.mappers import (
@@ -123,8 +129,11 @@ def check_invariants(store: Store, now_iso: str) -> list[Violation]:
         approved = approval is not None and approval.status == APPROVAL_USED and approval.sub == r.sub
         venue = venues.get(r.venue_id)
         created = datetime.fromisoformat(r.created_at)
+        held = mandates.get((r.sub, r.venue_id))
+        if held is not None and held.status == MANDATE_REVOKED and held.revoked_at and r.created_at < held.revoked_at:
+            held = replace(held, status=MANDATE_ACTIVE)  # it was live when this booking was made
         covered = venue is not None and check_mandate(
-            mandates.get((r.sub, r.venue_id)), now=created, agent_id=r.agent_id,
+            held, now=created, agent_id=r.agent_id,
             party_size=r.terms_snapshot.get("party_size", r.party_size), day=date.fromisoformat(r.date),
             time=r.time, cancel_fee_cents=venue.cancel_fee_cents,
         ).covered

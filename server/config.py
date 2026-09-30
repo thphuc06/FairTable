@@ -21,6 +21,7 @@ class Settings:
     port: int = 8000
     allowed_hosts: list[str] = field(default_factory=list)  # extra Host values (hosted profiles)
     allowed_origins: list[str] = field(default_factory=list)
+    stateless_http: bool = False  # AgentCore Runtime requires stateless Streamable HTTP (MCP_STATELESS=true)
     issuer: str = "http://localhost:9000"
     audience: str = "fairtable-mcp"
     audience_claim: str = "aud"
@@ -55,6 +56,7 @@ class Settings:
             port=int(env.get("MCP_PORT", cls.port)),
             allowed_hosts=_csv(env.get("MCP_ALLOWED_HOSTS")),
             allowed_origins=_csv(env.get("MCP_ALLOWED_ORIGINS")),
+            stateless_http=env.get("MCP_STATELESS", "").strip().lower() in ("1", "true", "yes"),
             issuer=issuer,
             audience=env.get("AUTH_AUDIENCE", cls.audience),
             audience_claim=env.get("AUTH_AUDIENCE_CLAIM", cls.audience_claim),

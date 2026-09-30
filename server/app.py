@@ -94,6 +94,7 @@ def create_app(deps: AppDeps):
     s = deps.settings
     return create_server(deps).http_app(
         host_origin_protection=True,
+        stateless_http=s.stateless_http,
         allowed_hosts=s.allowed_hosts or None,
         allowed_origins=s.allowed_origins or None,
     )

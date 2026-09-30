@@ -52,7 +52,7 @@
 `fastmcp==3.4.7`, `mcp==1.30.0` (do **not** upgrade to 2.x), `strands-agents==1.57.1`, `cedarpy==4.12.1`, plus `joserfc`, `mangum`, `boto3`, `pydantic`, `pytest`.
 
 ## Environment constraints
-- **Amazon Bedrock is currently blocked on my AWS account** (support case pending). Build and test everything **locally first**:
+- **Amazon Bedrock is currently blocked on my AWS account** (support case pending; DeepSeek flash is the real model meanwhile, D-018/D-028). The $150 credit is real (D-030) and MFA is on (D-034). Build and test everything **locally first**:
   - DynamoDB Local (Docker) – no `moto`;
   - MCP Inspector for manual testing;
   - a mock LLM for the simulator (`MODEL_PROVIDER=mock`).
@@ -101,3 +101,23 @@ tests/       unit/ integration/ redteam/ aws/
 docs/        DECISIONS, PLAN, aws-integration, friction log, devlog/ (per-phase plan + progress + entries), rules, (design, diagrams, research until replaced)
 Dockerfile, docker-compose.yml   primary run path (created in plan task P1-23)
 ```
+
+## Where things stand (updated 2026-09-30, end of session 2)
+- **Phase 1 is complete** (batches A-F plus the additions in the devlog: owner console, chat page with the tool-call steps, standing permission on the approval page D-033, OpenTelemetry spans D-032, Docker profile D-029, eval harness, A0/A1/A2 and red team). Last full suite: see `docs/devlog/phase-1.md` (about 800 tests; 5 Docker smoke tests only run with `-m docker`). **Phase 2 (AWS) has not started; no AWS resource exists.** Its plan and the verified AgentCore facts are in `docs/PLAN.md` (Phase 2 table and section 3a, "AgentCore facts" and "second pass"). Create `docs/devlog/phase-2.md` when it starts.
+- The developer's confirmation is still needed for the Phase 2 choices listed in the last devlog entry (then record them as D-035).
+
+## Commands that work here (Windows, Git Bash, conda env `fairtable`)
+- Local stack: `docker compose up -d --build --wait` (web 8080, MCP 8000, issuer 9000, DynamoDB Local **8001**); stop with `docker compose down`. `.env` (git-ignored) selects the model: `MODEL_PROVIDER=mock|deepseek`; never print it, and do not export the whole file (an empty `AWS_PROFILE=` breaks boto3): load only `DEEPSEEK_*`.
+- Tests: `DDB_ENDPOINT_URL=http://localhost:8001 python -m pytest -q` (whole suite, about 12 minutes, run it in the background and wait for it); unit tests need nothing; `-m docker` builds and drives the compose stack.
+- Evaluation: `python -m eval --k 2 --config A0,A1,A2`, `python -m eval.redteam`. Runtime package: `python infra/runtime/build_zip.py`.
+
+## Session tool quirks (cost hours once; do not repeat)
+- **Shell:** long heredocs with quotes can fail to parse, and backslash escapes are unescaped once by the tool layer (a `\1` became a control character, `\r\n` became real newlines). For files, use the Write tool (or a script written with Write and then run); build strings with backslashes using `chr(92)` in a shell command. In Git Bash `curl -d "next=/chat"` is rewritten to a Windows path: `export MSYS_NO_PATHCONV=1`. `conda run python -c` drops multi-line code.
+- **Waiting:** never `sleep` in a command; use a background command plus a Monitor with an `until` loop. A hung test run is usually the SSE/signal-handler problem (`tests/conftest.py` restores handlers).
+- **Do not run Docker tests against the developer's running stack** without saying so: `pytest -m docker` starts and then stops the `fairtable` compose project.
+- **Order of trust:** installed package source, then the AWS documentation tools (`mcp__aws-docs__*`), then the official pricing page fetched raw with curl. A summary from a web fetch is one source, not proof.
+
+## Also expected from every session (added by the developer)
+- Answer questions in plain Vietnamese, short, with a recommendation; say what is verified and what is not; show real numbers.
+- After every change: whole suite, `ruff`, a devlog entry, and the decision/verified-API/friction-log records; suggest an English commit message with the attribution lines; never commit.
+- For any AWS service: verify with the documentation, look at the price on the official page, say the cost before creating anything, tag `project=fairtable`, script the teardown, and wait for "wire X". Prefer the cheapest option that still shows the service (idle timeouts, MONITOR before ENFORCE, no natural-language policy generation).

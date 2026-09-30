@@ -21,7 +21,7 @@ form{display:inline}
 button{font-size:1rem;padding:.7rem 1.4rem;border:0;border-radius:8px;cursor:pointer;margin-right:.6rem}
 .approve{background:#1a7f37;color:#fff}.decline{background:#e5e5e5}
 input{font-size:1rem;padding:.5rem;width:100%;box-sizing:border-box;margin:.3rem 0 .8rem}
-.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.steps{margin-top:.4rem;font-size:.85rem}.steps summary{cursor:pointer;color:#555}.steps ol{margin:.4rem 0;padding-left:1.3rem}.chip{display:inline-block;padding:0 .4rem;border-radius:6px;background:#e3f1e6;color:#1a5f2c}.chip.no{background:#fbe3e3;color:#8a1c1c}.chip.wait{background:#fff1d6;color:#8a5a00}.badge{font-size:.75rem;padding:0 .35rem;border-radius:6px}.badge.ok{background:#e3f1e6;color:#1a5f2c}.badge.no{background:#fbe3e3;color:#8a1c1c}.badge.wait{background:#fff1d6;color:#8a5a00}.say{color:#333;font-style:italic}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
+.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.steps{margin-top:.4rem;font-size:.85rem}.steps summary{cursor:pointer;color:#555}.steps ol{margin:.4rem 0;padding-left:1.3rem}.chip{display:inline-block;padding:0 .4rem;border-radius:6px;background:#e3f1e6;color:#1a5f2c}.chip.no{background:#fbe3e3;color:#8a1c1c}.chip.wait{background:#fff1d6;color:#8a5a00}.badge{font-size:.75rem;padding:0 .35rem;border-radius:6px}.badge.ok{background:#e3f1e6;color:#1a5f2c}.badge.no{background:#fbe3e3;color:#8a1c1c}.badge.wait{background:#fff1d6;color:#8a5a00}.say{color:#333;font-style:italic}.grant{background:#f6f5f2;border-radius:8px;padding:.6rem .8rem;margin:.8rem 0}.grant select{width:auto;display:inline;padding:.1rem;margin:0}.tick{width:auto;margin:0 .3rem 0 0}.perms{padding-left:1.1rem}.perms form{display:inline;margin-left:.6rem}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
 """
 
 
@@ -61,21 +61,57 @@ def _rows(terms: dict[str, Any], kind: str) -> list[tuple[str, str]]:
     return rows
 
 
-def consent_page(approval: Approval, username: str, csrf: str) -> str:
+def consent_page(approval: Approval, username: str, csrf: str,
+                 offer: tuple[str, str, str] | None = None, agent_days: tuple[int, ...] = (7, 30, 90),
+                 default_days: int = 30) -> str:
+    """Approve or decline. ``offer`` (before, after, limits) adds the optional tick box that turns this approval
+    into a standing permission; the limits shown are exactly the ones that would be stored (server/domain/grant.py)."""
     action = "Cancel this booking" if approval.kind == KIND_CANCEL_FEE else "Confirm this booking"
     table = "".join(
         f"<tr><td>{escape(k)}</td><td>{escape(v)}</td></tr>" for k, v in _rows(approval.terms, approval.kind)
     )
     path = f"/consent/{escape(approval.subject_id, quote=True)}/decision"
+    grant = ""
+    if offer is not None:
+        before, after, limits = offer
+        options = "".join(
+            f"<option value='{d}'{' selected' if d == default_days else ''}>{d}</option>" for d in agent_days
+        )
+        grant = (
+            "<div class='grant'><label><input type='checkbox' name='remember' value='1' class='tick'> "
+            f"{escape(before)} <select name='days'>{options}</select> {escape(after)}</label>"
+            f"<p class='muted'>{escape(limits)}</p></div>"
+        )
     return layout(
         "Approve",
         f"<h1>{escape(action)}?</h1>"
         "<p>Your assistant is asking for your approval.</p>"
         f"<table>{table}</table>"
         f"<form method='post' action='{path}'><input type='hidden' name='csrf' value='{escape(csrf, quote=True)}'>"
+        f"{grant}"
         "<button class='approve' name='decision' value='approve' type='submit'>Approve</button>"
         "<button class='decline' name='decision' value='decline' type='submit'>Decline</button></form>"
-        f"<p class='muted'>Signed in as {escape(username)}. Nothing happens until you choose.</p>",
+        f"<p class='muted'>Signed in as {escape(username)}. Nothing happens until you choose. "
+        "<a href='/permissions'>Permissions</a></p>",
+    )
+
+
+def permissions_page(username: str, rows: list[tuple[str, str]], csrf: str, notice: str | None = None) -> str:
+    """The diner's live standing permissions, each with a Revoke button. ``rows`` are (venue_id, description)."""
+    note = f"<p class='ok'>{escape(notice)}</p>" if notice else ""
+    items = "".join(
+        f"<li>{escape(desc)}<form method='post' action='/permissions/revoke'>"
+        f"<input type='hidden' name='csrf' value='{escape(csrf, quote=True)}'>"
+        f"<input type='hidden' name='venue_id' value='{escape(venue_id, quote=True)}'>"
+        "<button class='decline' type='submit'>Revoke</button></form></li>"
+        for venue_id, desc in rows
+    ) or "<li class='muted'>None. Your assistant asks you before every booking.</li>"
+    return layout(
+        "Permissions",
+        f"<h1>Permissions</h1>{note}"
+        "<p>Places where your assistant may book without asking you each time.</p>"
+        f"<ul class='perms'>{items}</ul>"
+        f"<p class='muted'>Signed in as {escape(username)}. <a href='/chat'>Back to the chat</a></p>",
     )
 
 
@@ -248,7 +284,8 @@ def chat_page(username: str, turns: list[tuple[str, str, tuple]], inbox: list[di
     token = escape(csrf, quote=True)
     return layout(
         "Chat",
-        f"<h1>Your assistant</h1><p class='muted'>Signed in as {escape(username)}. This is a simulated voice assistant.</p>"
+        f"<h1>Your assistant</h1><p class='muted'>Signed in as {escape(username)}. This is a simulated voice assistant. "
+        "<a href='/permissions'>Permissions</a></p>"
         f"{talk}"
         "<form method='post' action='/chat'>"
         f"<input type='hidden' name='csrf' value='{token}'>"

@@ -26,6 +26,16 @@ from server.domain.booking import (
     approval_is_expired,
 )
 from server.domain.clock import Clock, iso_z
+from server.domain.grant import (
+    DEFAULT_GRANT_DAYS,
+    GRANT_DAYS,
+    build_mandate,
+    can_offer,
+    describe_mandate,
+    offer_parts,
+)
+from server.domain.mandate import is_active
+from server.domain.models import Mandate
 from server.store import Store, TransactionCancelled, TxOp, keys
 from web import pages
 from web.auth import Login
@@ -33,7 +43,7 @@ from web.chat import ChatService
 from web.session import COOKIE_NAME, Session, SessionCodec
 
 SUBJECT_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-SAFE_NEXT = re.compile(r"^(/consent/[A-Za-z0-9_-]{1,128}|/owner|/chat)$")
+SAFE_NEXT = re.compile(r"^(/consent/[A-Za-z0-9_-]{1,128}|/owner|/chat|/permissions)$")
 HEADERS = {
     "Cache-Control": "no-store",
     "X-Frame-Options": "DENY",
@@ -149,7 +159,10 @@ def create_app(deps: WebDeps) -> FastAPI:
         assert approval is not None
         if approval.status == APPROVAL_PENDING:
             csrf = deps.sessions.csrf_token(session, subject_id)
-            return HTMLResponse(pages.consent_page(approval, session.username, csrf))
+            offer = grant_offer(approval, session)
+            return HTMLResponse(pages.consent_page(
+                approval, session.username, csrf, offer=offer[1] if offer else None,
+                agent_days=GRANT_DAYS, default_days=DEFAULT_GRANT_DAYS))
         done = {
             APPROVAL_APPROVED: "You approved this. Go back to your assistant and ask it to try again.",
             APPROVAL_DECLINED: "You declined this. Nothing was booked or changed.",
@@ -157,7 +170,8 @@ def create_app(deps: WebDeps) -> FastAPI:
         return page(200, "Already answered", done)
 
     @app.post("/consent/{subject_id}/decision")
-    def decide(subject_id: str, request: Request, decision: str = Form(""), csrf: str = Form("")) -> Response:
+    def decide(subject_id: str, request: Request, decision: str = Form(""), csrf: str = Form(""),
+               remember: str = Form(""), days: str = Form("")) -> Response:
         session = session_of(request)
         if session is None:
             return to_login(f"/consent/{subject_id}" if SUBJECT_ID.match(subject_id) else "/")
@@ -169,9 +183,69 @@ def create_app(deps: WebDeps) -> FastAPI:
         assert approval is not None
         if decision not in ("approve", "decline"):
             return page(400, "Not understood", "Choose Approve or Decline.")
+        grant: Mandate | None = None
+        if decision == "approve" and remember == "1" and approval.status == APPROVAL_PENDING:
+            if not (days.isdigit() and int(days) in GRANT_DAYS):
+                return page(400, "Not understood", f"Choose {', '.join(map(str, GRANT_DAYS))} days.")
+            offer = grant_offer(approval, session)
+            if offer is not None:  # only when nothing live exists for this restaurant (never narrows one)
+                venue, _, agent_id = offer
+                grant = build_mandate(sub=session.sub, venue=venue, agent_id=agent_id, days=int(days),
+                                      now=deps.clock.now())
         if approval.status == APPROVAL_PENDING:
-            record_decision(deps, approval, session, approved=decision == "approve")
+            record_decision(deps, approval, session, approved=decision == "approve", grant=grant)
         return RedirectResponse(f"/consent/{subject_id}", status_code=303)
+
+    def grant_offer(approval: Approval, session: Session):
+        """(venue, (before, after, limits), agent id) when this approval may carry a standing permission,
+        else None: only for booking confirmations, only for a named assistant, and only when the diner has no
+        live permission at this restaurant."""
+        if approval.kind == KIND_CANCEL_FEE:
+            return None
+        hold = deps.store.get_hold(approval.subject_id)
+        venue = deps.store.get_venue(approval.venue_id)
+        if hold is None or venue is None or not hold.agent_id or hold.sub != session.sub:
+            return None
+        if not can_offer(deps.store.get_mandate(session.sub, venue.venue_id), deps.clock.now()):
+            return None
+        return venue, offer_parts(venue, hold.agent_id), hold.agent_id
+
+    @app.get("/permissions")
+    def permissions(request: Request) -> Response:
+        session = session_of(request)
+        if session is None:
+            return to_login("/permissions")
+        return render_permissions(session)
+
+    def render_permissions(session: Session, notice: str | None = None) -> Response:
+        now = deps.clock.now()
+        rows = []
+        for m in deps.store.mandates_of_user(session.sub):
+            venue = deps.store.get_venue(m.venue_id)
+            if is_active(m, now) and venue is not None:
+                rows.append((m.venue_id, describe_mandate(m, venue.name)))
+        csrf = deps.sessions.csrf_token(session, "permissions")
+        return HTMLResponse(pages.permissions_page(session.username, rows, csrf, notice))
+
+    @app.post("/permissions/revoke")
+    def revoke(request: Request, venue_id: str = Form(""), csrf: str = Form("")) -> Response:
+        session = session_of(request)
+        if session is None:
+            return to_login("/permissions")
+        if not deps.sessions.csrf_ok(session, "permissions", csrf):
+            return page(403, "Not allowed", "This form is out of date. Open the page again.")
+        if not SUBJECT_ID.match(venue_id):
+            return page(400, "Not understood", "Unknown restaurant.")
+        now_iso = iso_z(deps.clock.now())
+        entry = AuditEntry(
+            venue_id=venue_id, timestamp=now_iso, request_id=deps.new_id(), sub=session.sub, agent_id=None,
+            tool="permissions", decision="revoked", rule_ids=(), detail={},
+        )
+        try:  # the diner's own record only: the key is built from the signed-in user, not from the form
+            deps.store.transact([deps.store.mandate_revoke_op(session.sub, venue_id, now_iso), deps.store.audit_op(entry)])
+        except TransactionCancelled:
+            return render_permissions(session, "That permission was already gone.")
+        return RedirectResponse("/permissions", status_code=303)
 
     def owner_session(request: Request) -> tuple[Session | None, Response | None]:
         session = session_of(request)
@@ -282,9 +356,11 @@ def change_agent_share(deps: WebDeps, session: Session, pct: int) -> None:
     deps.store.transact([op, deps.store.audit_op(entry)])
 
 
-def record_decision(deps: WebDeps, approval: Approval, session: Session, *, approved: bool) -> None:
-    """Pending -> approved/declined, exactly once, and audited in the same transaction.
-    A double click or a race finds the approval already answered and changes nothing."""
+def record_decision(deps: WebDeps, approval: Approval, session: Session, *, approved: bool,
+                    grant: Mandate | None = None) -> None:
+    """Pending -> approved/declined, exactly once, and audited in the same transaction. With ``grant`` (only
+    when approving), the standing permission is stored in that same transaction. A double click or a race
+    finds the approval already answered and changes nothing (so it cannot create a second permission)."""
     now_iso = iso_z(deps.clock.now())
     status = APPROVAL_APPROVED if approved else APPROVAL_DECLINED
     key = keys.approval(approval.subject_id)
@@ -298,9 +374,18 @@ def record_decision(deps: WebDeps, approval: Approval, session: Session, *, appr
     entry = AuditEntry(
         venue_id=approval.venue_id, timestamp=now_iso, request_id=deps.new_id(), sub=session.sub,
         agent_id=None, tool="consent_page", decision=status, rule_ids=(),
-        detail={"subject_id": approval.subject_id, "kind": approval.kind},
+        detail={"subject_id": approval.subject_id, "kind": approval.kind,
+                **({"granted_days": grant.days_ahead_max} if grant is not None and approved else {})},
     )
+    ops = [op, deps.store.audit_op(entry)]
+    if grant is not None and approved:
+        ops.append(deps.store.mandate_grant_op(grant, now_iso))
     try:
-        deps.store.transact([op, deps.store.audit_op(entry)])
+        deps.store.transact(ops)
     except TransactionCancelled:
-        pass  # answered or expired in the meantime: the page shows the current state
+        if len(ops) == 3:  # the permission was refused (a live one appeared): still record the answer
+            try:
+                deps.store.transact(ops[:2])
+            except TransactionCancelled:
+                pass
+        # otherwise answered or expired in the meantime: the page shows the current state

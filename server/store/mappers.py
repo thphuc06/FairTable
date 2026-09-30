@@ -119,6 +119,7 @@ def mandate_to_item(m: Mandate) -> dict[str, Any]:
         "agent_ids": sorted(m.agent_ids),
         "approved_at": m.approved_at,
         "expires_at": m.expires_at,
+        **({"revoked_at": m.revoked_at} if m.revoked_at else {}),
     }
 
 
@@ -139,6 +140,7 @@ def item_to_mandate(item: dict[str, Any]) -> Mandate:
         agent_ids=frozenset(item["agent_ids"]),
         approved_at=item["approved_at"],
         expires_at=item["expires_at"],
+        revoked_at=item.get("revoked_at"),
     )
 
 

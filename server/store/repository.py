@@ -19,7 +19,7 @@ from server.domain.audit import AuditEntry
 from server.domain.booking import Approval, Hold, Reservation
 from server.domain.fairdrop import Drop, DropEntry
 from server.domain.idempotency import IdempotencyRecord
-from server.domain.models import Mandate, Slot, Venue
+from server.domain.models import MANDATE_ACTIVE, MANDATE_REVOKED, Mandate, Slot, Venue
 from server.domain.waitlist import Watch
 from server.store import keys
 from server.store.mappers import (
@@ -266,6 +266,31 @@ class Store:
     def get_slot(self, venue_id: str, date: str, time_: str, table_group: str) -> Slot | None:
         item = self.get_item(keys.slot(venue_id, date, time_, table_group))
         return item_to_slot(item) if item else None
+
+    def mandates_of_user(self, sub: str) -> list[Mandate]:
+        """Every standing permission the user ever gave (active, revoked or expired)."""
+        items = self.query(keys.mandate(sub, "x").pk, sk_prefix="MANDATE#", consistent=True)
+        return [item_to_mandate(i) for i in items]
+
+    @staticmethod
+    def mandate_grant_op(mandate: Mandate, now_iso: str) -> TxOp:
+        """Store a new permission, but never over a live one (an active, unexpired mandate is kept)."""
+        return TxOp(
+            "Put", item=mandate_to_item(mandate),
+            condition="attribute_not_exists(PK) OR #st <> :active OR expires_at <= :now",
+            names={"#st": "status"}, values={":active": MANDATE_ACTIVE, ":now": now_iso},
+        )
+
+    @staticmethod
+    def mandate_revoke_op(sub: str, venue_id: str, now_iso: str) -> TxOp:
+        """Revoke a live permission (the version goes up by one). Fails if it is not active."""
+        k = keys.mandate(sub, venue_id)
+        return TxOp(
+            "Update", key={"PK": k.pk, "SK": k.sk}, update="SET #st = :revoked, revoked_at = :now ADD #ver :one",
+            condition="#st = :active AND expires_at > :now",
+            names={"#st": "status", "#ver": "version"},
+            values={":revoked": MANDATE_REVOKED, ":active": MANDATE_ACTIVE, ":one": 1, ":now": now_iso},
+        )
 
     def put_mandate(self, mandate: Mandate) -> None:
         self.put_item(mandate_to_item(mandate))

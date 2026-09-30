@@ -85,6 +85,24 @@ Open design points to settle inside the batch that owns them:
 
 ## Entries (newest first)
 
+### 2026-09-30 · P2-3 (local preparation) · [aws] [docker] · Runtime package built and proven on arm64, nothing created on AWS
+- **Goal:** turn the recommendations for Phase 2 into evidence before asking the developer to approve them.
+- **Done:** read the primary AWS documentation for each claim (list in `PLAN.md` section 3a, "second pass"); added `MCP_STATELESS` (stateless Streamable HTTP, the Runtime contract; the local default is unchanged), `runtime_entry.py`, `infra/runtime/{build_zip.py,requirements.txt,README.md}`; built `dist/fairtable-runtime.zip` (5,743 files, 38.5 MB zipped, 93.7 MB unpacked, deterministic, modes 644/755, no bytecode) and ran it unpacked to `/var/task` in an **arm64** Python 3.12 container against DynamoDB Local and the dev issuer: 8 tools listed with a platform-style session id, search, hold, confirm, cancel, the missing-token refusal and the party-of-12 refusal (G3) all behaved as on the host; prices confirmed on the raw pricing page.
+- **Files:** `server/{config,app}.py`, `runtime_entry.py`, `infra/runtime/*`, `tests/integration/test_server_stateless.py` (8), `tests/unit/infra/test_build_zip.py` (10), `docs/{PLAN,friction-log}.md`.
+- **Tests:** stateless server (no handshake, platform session id accepted, default server still wants a session, host protection intact, client library works); package (modes, determinism, limits, wheels unpacked, arm64-only download, pins equal `pyproject.toml`). Whole suite: 829 passed, 5 skipped (Docker smoke, by design).
+- **Decisions:** none recorded yet; the recommendations wait for the developer's confirmation (then D-035; D-034 is the MFA note).
+- **Surprises / friction:** two entries in the friction log (sample repository on Windows and inconsistencies; pip markers on another platform).
+- **Follow-ups:** the items listed as "not verified" in `PLAN.md` need the account (header allowlists end to end, Host header, `-32042` through the Gateway, gateway IAM action, boto3 credentials under V2 snapshots).
+
+### 2026-09-30 · P1-11 · [web] [trust-kernel] · Change: a standing permission can be granted on the approval page
+- **Goal:** let a diner turn "yes, this once" into a bounded "yes, at this restaurant for N days", and take it back, so the demo shows the whole life of a permission.
+- **Done:** a tick box on the approval page (N = 7, 30 or 90 days) that stores a mandate in the same transaction as the approval; fixed limits always shown (up to 4 people, any time, fee up to the restaurant's current fee, only the asking assistant); not offered when a live permission exists or for a cancellation-fee approval; Decline never grants; `/permissions` lists live permissions with Revoke (CSRF, own record only, audited); `revoked_at` on the mandate and invariant I1 judging a booking by what was live when it was made. Decisions and reasons: D-033.
+- **Files:** `server/domain/{grant,models}.py`, `server/store/{repository,mappers}.py`, `server/invariants.py`, `web/{app,pages}.py`, `tests/unit/domain/test_grant.py` (16), `tests/integration/test_standing_permission.py` (27), README, docs.
+- **Tests:** the grant is exactly what the page shows (also with a fee and for other lengths), outside it the diner is still asked (party 5, another restaurant, a higher fee, after the days, revoked); box offered to Bob, not to Alice (live permission) nor on a fee approval; grant, no-tick, decline-with-tick, bad days (7 cases), double submit, a permission appearing meanwhile, audit, expiry, Permissions page, revoke (own only, CSRF, bad id), revoking a seeded permission, and the chat: the second booking needs no approval; I1 both ways after a revoke.
+- **Decisions:** D-033.
+- **Surprises / friction:** revoking made the invariant checker report an earlier, valid booking as unauthorised (it used today's state of the mandate); found by a test written for it, fixed with `revoked_at`.
+- **Follow-ups:** creating or editing a permission without a booking is not built (still a Should).
+
 ### 2026-09-30 · P2-9 (server part, built early) · [observability] · Tool-call spans with policy decisions
 - **Goal:** make every tool call traceable (which rule allowed, refused or asked for approval) so problems can be found in CloudWatch later, and build it now because it needs no AWS.
 - **Done:** `server/telemetry.py`: `TelemetryMiddleware` (one span per tool call, outermost), an allow-list of attributes (`annotate` refuses any other name), annotations at the identity check, PEP-1, PEP-2 and the final result, join to the caller's trace through `_meta`, error status only for bugs (class name, no message). No exporter or provider is configured by the server; without an SDK it is a no-op.
