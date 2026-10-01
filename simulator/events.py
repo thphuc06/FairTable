@@ -49,8 +49,15 @@ def _payload(tool_result: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def transcript(messages: list[dict[str, Any]]) -> list[Event]:
-    """Strands messages -> events, in order. A tool call whose result has not arrived yet is skipped."""
+def _bare(name: str, prefix: str) -> str:
+    return name[len(prefix):] if prefix and name.startswith(prefix) else name
+
+
+def transcript(messages: list[dict[str, Any]], prefix: str = "") -> list[Event]:
+    """Strands messages -> events, in order. A tool call whose result has not arrived yet is skipped.
+
+    ``prefix`` is the Gateway's ``<target>___``: it is removed from tool names, so personas, graders and the
+    steps list always see the server's own names."""
     calls: dict[str, tuple[str, dict[str, Any], str]] = {}
     events: list[Event] = []
     for message in messages:
@@ -58,7 +65,7 @@ def transcript(messages: list[dict[str, Any]]) -> list[Event]:
             if "toolUse" in block:
                 use = block["toolUse"]
                 said = " ".join(b["text"] for b in message.get("content", []) if "text" in b).strip()
-                calls[use["toolUseId"]] = (use["name"], dict(use.get("input") or {}), said if message.get("role") == "assistant" else "")
+                calls[use["toolUseId"]] = (_bare(use["name"], prefix), dict(use.get("input") or {}), said if message.get("role") == "assistant" else "")
             elif "toolResult" in block:
                 result = block["toolResult"]
                 name, args, note = calls.get(result["toolUseId"], ("?", {}, ""))

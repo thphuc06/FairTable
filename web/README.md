@@ -13,3 +13,16 @@ Run: `python -m web` (`WEB_HOST`, `WEB_PORT` default `127.0.0.1:8080`; settings 
 - Security: HMAC-signed HttpOnly SameSite cookie, `X-Frame-Options: DENY`, strict CSP, `Cache-Control: no-store`, redirects only to `/consent/...`, `/owner` and `/chat`, every value HTML-escaped.
 
 `app.py` routes, `pages.py` HTML, `session.py` cookie + CSRF, `auth.py` login, `chat.py` one assistant per signed-in diner.
+
+## Signing in through Cognito and chatting through the AgentCore Gateway (AWS profile)
+
+```bash
+AUTH_PROVIDER=cognito COGNITO_CLIENT_ID=<app client alexa-plus-sim> COGNITO_CLIENT_SECRET=<its secret> \
+AUTH_ISSUER=<pool issuer> AUTH_AUDIENCE=<client ids, comma separated> AUTH_AUDIENCE_CLAIM=client_id AUTH_TOKEN_USE=access \
+MCP_URL=<gateway url> MCP_VIA_GATEWAY=true TABLE_NAME=fairtable AWS_REGION=us-east-1 python -m web
+```
+
+The pages sign people in with Cognito's `InitiateAuth` (no AWS credentials needed for that) and read the real table
+(needs credentials). With `MCP_VIA_GATEWAY=true` the assistant sends the bearer token to the Gateway, whose interceptor
+hands it to the server in `x-ft-user-token`; tool names carry the Gateway's `ft___` prefix, which the steps list hides.
+The client secret is read from the environment only. See `docs/DECISIONS.md` D-047.

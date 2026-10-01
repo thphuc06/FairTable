@@ -37,6 +37,11 @@ class Settings:
     web_session_secret: str = DEV_SESSION_SECRET
     token_url: str = ""  # where the web pages sign diners in; empty = AUTH_ISSUER + /token (docker: the issuer's service name)
     mcp_url: str = "http://127.0.0.1:8000/mcp"  # where the chat page's assistant reaches the MCP server
+    mcp_via_gateway: bool = False  # MCP_URL is an AgentCore Gateway: bearer token in, tools named <target>___<tool>
+    mcp_tool_prefix: str = ""  # "ft___" via the gateway, otherwise empty
+    auth_provider: str = "dev"  # how the web pages sign people in: "dev" (the dev issuer) or "cognito"
+    cognito_client_id: str = ""  # the app client the pages sign in with (its secret is read from the environment, not kept here)
+    cognito_region: str = ""
     store: StoreConfig = field(default_factory=lambda: StoreConfig("fairtable-dev"))
 
     def __post_init__(self) -> None:
@@ -46,11 +51,16 @@ class Settings:
             raise ValueError("SLOT_TOKEN_SECRET must be set to a real secret in the aws profile")
         if self.profile == "aws" and self.web_session_secret == DEV_SESSION_SECRET:
             raise ValueError("WEB_SESSION_SECRET must be set to a real secret in the aws profile")
+        if self.auth_provider not in ("dev", "cognito"):
+            raise ValueError("AUTH_PROVIDER must be 'dev' or 'cognito'")
+        if self.auth_provider == "cognito" and not self.cognito_client_id:
+            raise ValueError("AUTH_PROVIDER=cognito needs COGNITO_CLIENT_ID")
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
         env = dict(os.environ) if env is None else env
         issuer = env.get("AUTH_ISSUER", cls.issuer)
+        via_gateway = env.get("MCP_VIA_GATEWAY", "").strip().lower() in ("1", "true", "yes")
         return cls(
             profile=env.get("APP_PROFILE", "local"),
             host=env.get("MCP_HOST", cls.host),
@@ -73,5 +83,10 @@ class Settings:
             web_session_secret=env.get("WEB_SESSION_SECRET", DEV_SESSION_SECRET),
             token_url=env.get("AUTH_TOKEN_URL") or issuer.rstrip("/") + "/token",
             mcp_url=env.get("MCP_URL", cls.mcp_url),
+            mcp_via_gateway=via_gateway,
+            mcp_tool_prefix=(env.get("MCP_TOOL_PREFIX") or "ft___") if via_gateway else "",
+            auth_provider=env.get("AUTH_PROVIDER", cls.auth_provider),
+            cognito_client_id=env.get("COGNITO_CLIENT_ID", ""),
+            cognito_region=env.get("COGNITO_REGION") or env.get("AWS_REGION", ""),
             store=StoreConfig.from_env(env),
         )

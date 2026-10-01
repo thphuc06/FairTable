@@ -40,10 +40,12 @@ class ScriptedModel(Model):
     """A model that is really a persona. With a fixed ``goal`` (eval tasks) it always pursues it; without
     one it reads the goal from what the diner typed (the chat page)."""
 
-    def __init__(self, goal: Goal | None = None, noise: Noise = NO_NOISE, today: date | None = None) -> None:
+    def __init__(self, goal: Goal | None = None, noise: Noise = NO_NOISE, today: date | None = None,
+                 tool_prefix: str = "") -> None:
         self._goal = goal
         self._noise = noise
         self._today = today
+        self._tool_prefix = tool_prefix  # the Gateway names tools "<target>___<tool>"
         self.config: dict[str, Any] = {"model_id": "scripted-persona"}
 
     def update_config(self, **model_config: Any) -> None:
@@ -71,19 +73,19 @@ class ScriptedModel(Model):
         return None, events
 
     async def stream(self, messages, tool_specs=None, system_prompt=None, **kwargs: Any) -> AsyncIterable[dict]:
-        events = transcript(list(messages))
+        events = transcript(list(messages), self._tool_prefix)
         goal, events = self._goal_from(events)
         action = decide(goal, events, self._noise) if goal is not None else Say(HELP)
         n_calls = sum(1 for m in messages for b in m.get("content", []) if "toolUse" in b)
-        async for event in _emit(action, f"sim-call-{n_calls + 1}"):
+        async for event in _emit(action, f"sim-call-{n_calls + 1}", self._tool_prefix):
             yield event
 
 
-async def _emit(action: Call | Say, tool_use_id: str) -> AsyncGenerator[dict, None]:
+async def _emit(action: Call | Say, tool_use_id: str, tool_prefix: str = "") -> AsyncGenerator[dict, None]:
     yield {"messageStart": {"role": "assistant"}}
     if isinstance(action, Call):
         yield {"contentBlockStart": {"contentBlockIndex": 0,
-                                     "start": {"toolUse": {"toolUseId": tool_use_id, "name": action.tool}}}}
+                                     "start": {"toolUse": {"toolUseId": tool_use_id, "name": tool_prefix + action.tool}}}}
         yield {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"toolUse": {"input": json.dumps(action.args)}}}}
         yield {"contentBlockStop": {"contentBlockIndex": 0}}
         yield {"messageStop": {"stopReason": "tool_use"}}
@@ -97,12 +99,12 @@ async def _emit(action: Call | Say, tool_use_id: str) -> AsyncGenerator[dict, No
 
 def build_model(
     provider: str | None = None, *, env: Mapping[str, str] | None = None, goal: Goal | None = None,
-    noise: Noise = NO_NOISE, today: date | None = None,
+    noise: Noise = NO_NOISE, today: date | None = None, tool_prefix: str = "",
 ) -> Model:
     env = os.environ if env is None else env
     provider = (provider or env.get("MODEL_PROVIDER") or "mock").lower()
     if provider == "mock":
-        return ScriptedModel(goal, noise, today)
+        return ScriptedModel(goal, noise, today, tool_prefix)
     if provider == "bedrock":
         model_id = env.get("BEDROCK_MODEL_ID")
         if not model_id:

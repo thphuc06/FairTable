@@ -30,6 +30,15 @@ Read-only account check at the start, 2026-09-30 (us-east-1): budgets `My Zero-S
 
 ## Entries (newest first)
 
+### 2026-10-01 · P2-10 · [aws] [web] [simulator] · Cognito sign-in for the web pages and the assistant through the Gateway
+- **Goal:** make the AWS demo path complete: a person signs in with Cognito, chats, and the assistant reaches the server through the Gateway.
+- **Done:** `CognitoLogin` and `cognito_client` (unsigned), settings for the provider and the gateway route, the tool-name prefix handled in `transcript`, `ScriptedModel`, `build_model`, `Assistant` (bearer token via the Gateway, bare names in steps) and `ChatService`; `python -m web` picks the login and the route from the environment. Tests written first (red), then the code: 38 new unit tests (login against a fake Cognito, prefix, settings). Real account: `tests/aws/test_demo_flow.py` 4 of 4 on the first run (Cognito sign-in, chat booking through the Gateway, step-up with the consent page, owner console); the test cleans up after itself.
+- **Files:** `web/{auth,chat,__main__}.py`, `simulator/{assistant,events,model}.py`, `server/config.py`, `tests/unit/{web/test_cognito_login,simulator/test_gateway_mode,test_gateway_settings}.py`, `tests/aws/test_demo_flow.py`, docs.
+- **Tests:** unit 40 new (login against a fake Cognito, prefix, settings, chat route), real AWS 4 new (29 in all); whole local suite 1008 passed, 34 skipped (5 Docker, 29 AWS), 15:49; `ruff` clean. The first full run found 3 failures: a fake assistant in `tests/unit/web/test_chat_service.py` had the old signature; fixed in the test double.
+- **Decisions:** D-047.
+- **Surprises / friction:** none; it worked first time.
+- **Follow-ups:** P2-7 (`-32042` through the Gateway), P2-6 (Policy), P2-9 (observability); a real model (DeepSeek) through the Gateway has not been tried (the mock was used); the web pages still run on the developer's PC against the real table (about a second per call, D-038).
+
 ### 2026-10-01 · P2-5 · [aws] [gateway] · Change: the Gateway is deployed and verified (second account); 25 of 25 real-AWS tests pass
 - **Goal:** put the Gateway in front of the Runtime and prove the token travels and a forged header does not.
 - **Done:** `cdk diff` (7 resources), deploy. First try failed: the Runtime stack had not exported the runtime id yet (`--exclusively`); CloudFormation rolled back, nothing was left; `cdk deploy FairTableGateway` without `--exclusively` updated the Runtime stack (28 s, only new exports) and created the Gateway (56 s). Gateway and target `READY`, tools synchronised. `tests/aws/test_gateway.py` 9 of 9 on the first run, all real-AWS tests 25 of 25. The interceptor's CloudWatch log (49 invocations) contains no token.

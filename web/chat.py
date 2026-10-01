@@ -44,7 +44,10 @@ class _Conversation:
 
 
 class ChatService:
-    def __init__(self, mcp_url: str, make_model: Callable[[], Model], clock: Clock) -> None:
+    def __init__(self, mcp_url: str, make_model: Callable[[], Model], clock: Clock, *,
+                 via_gateway: bool = False, tool_prefix: str = "") -> None:
+        self._via_gateway = via_gateway
+        self._tool_prefix = tool_prefix
         self._mcp_url = mcp_url
         self._make_model = make_model
         self._clock = clock
@@ -106,7 +109,8 @@ class ChatService:
                 return
             try:
                 if c.assistant is None:
-                    assistant = Assistant(self._mcp_url, c.token, self._make_model(), self.system_prompt())
+                    assistant = Assistant(self._mcp_url, c.token, self._make_model(), self.system_prompt(),
+                                          via_gateway=self._via_gateway, tool_prefix=self._tool_prefix)
                     await asyncio.to_thread(assistant.__enter__)  # blocks while it connects
                     c.assistant = assistant
                 reply = await c.assistant.say(text)

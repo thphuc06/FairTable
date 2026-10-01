@@ -15,9 +15,11 @@ class SlowAssistant:
     """Stands in for simulator.Assistant: answers after a short delay and counts the questions it got."""
 
     asked: ClassVar[list[str]] = []
+    built: ClassVar[list[dict]] = []
 
-    def __init__(self, url, token, model, system_prompt):
+    def __init__(self, url, token, model, system_prompt, via_gateway=False, tool_prefix=""):
         self.system_prompt = system_prompt
+        SlowAssistant.built.append({"url": url, "token": token, "via_gateway": via_gateway, "tool_prefix": tool_prefix})
 
     def __enter__(self):
         return self
@@ -34,6 +36,7 @@ class SlowAssistant:
 @pytest.fixture
 def service(monkeypatch):
     SlowAssistant.asked = []
+    SlowAssistant.built = []
     monkeypatch.setattr(chat, "Assistant", SlowAssistant)
     s = chat.ChatService("http://unused/mcp", lambda: None, FakeClock())
     s.remember("alice", "token", 3600)
@@ -62,3 +65,17 @@ async def test_two_diners_are_answered_at_the_same_time(service):
 
 async def test_the_prompt_carries_the_date(service):
     assert "Today is" in service.system_prompt()
+
+
+async def test_the_route_through_the_gateway_reaches_the_assistant(monkeypatch):
+    SlowAssistant.asked, SlowAssistant.built = [], []
+    monkeypatch.setattr(chat, "Assistant", SlowAssistant)
+    gateway = chat.ChatService("https://gw.example/mcp", lambda: None, FakeClock(), via_gateway=True, tool_prefix="ft___")
+    gateway.remember("alice", "tok", 3600)
+    await gateway.send("alice", "hi")
+    assert SlowAssistant.built == [{"url": "https://gw.example/mcp", "token": "tok", "via_gateway": True, "tool_prefix": "ft___"}]
+
+
+async def test_the_default_route_is_direct(service):
+    await service.send("alice", "hi")
+    assert SlowAssistant.built[0]["via_gateway"] is False and SlowAssistant.built[0]["tool_prefix"] == ""
