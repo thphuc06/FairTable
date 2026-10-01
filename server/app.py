@@ -4,6 +4,7 @@ Secure defaults (docs/PLAN.md section 3a): Origin/Host validation on, unexpected
 structured errors and -32042 handled by ``ErrorMappingMiddleware``. No LLM is called in any tool.
 """
 
+import logging
 from collections.abc import Mapping
 
 from fastmcp import FastMCP
@@ -51,7 +52,7 @@ def build_deps(
     clock = clock or SystemClock()
     store = store or Store(make_client(settings.store), settings.store.table_name)
     verifier = TokenVerifier(
-        VerifierConfig(settings.issuer, settings.audience, settings.audience_claim),
+        VerifierConfig(settings.issuer, settings.audience, settings.audience_claim, token_use=settings.token_use),
         jwks or HttpJwks(settings.jwks_url, clock),
         clock,
     )
@@ -88,10 +89,47 @@ def create_server(deps: AppDeps) -> FastMCP:
     return mcp
 
 
+http_log = logging.getLogger("fairtable.http")
+
+
+def printable_host(value: str) -> str:
+    """A Host header made safe to put in a log line (quoted, control characters escaped, bounded)."""
+    return repr(value[:200])
+
+
+class LogRefusedHost:
+    """ASGI wrapper: when the Host/Origin protection answers 421, say which Host it refused. A hosted
+    platform decides what Host it forwards (AgentCore Runtime does not document it), and the operator
+    needs the value to put into ``MCP_ALLOWED_HOSTS``. The Host header is not a secret."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    def __getattr__(self, name):  # the wrapped Starlette app's attributes (state, router, ...) stay reachable
+        return getattr(self.app, name)
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        host = dict(scope["headers"]).get(b"host", b"").decode("latin-1")
+
+        async def watch(message) -> None:
+            if message["type"] == "http.response.start" and message["status"] == 421:
+                http_log.warning("421 refused: Host header %s is not in MCP_ALLOWED_HOSTS", printable_host(host))
+            await send(message)
+
+        await self.app(scope, receive, watch)
+
+
 def create_app(deps: AppDeps):
     """ASGI app for uvicorn. Host/Origin protection is ON; hosted profiles list their hostnames
     in ``MCP_ALLOWED_HOSTS`` / ``MCP_ALLOWED_ORIGINS``."""
     s = deps.settings
+    return LogRefusedHost(_http_app(deps, s))
+
+
+def _http_app(deps: AppDeps, s):
     return create_server(deps).http_app(
         host_origin_protection=True,
         stateless_http=s.stateless_http,

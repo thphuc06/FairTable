@@ -35,11 +35,17 @@ MAX_TOKEN_CHARS = 8192
 @dataclass(frozen=True)
 class VerifierConfig:
     issuer: str
-    audience: str
+    audience: str | tuple[str, ...]  # one value, or every app client that may call us (Cognito has one per agent)
     # Cognito access tokens carry `client_id` instead of `aud`; set "client_id" for those (Phase 2).
     audience_claim: str = "aud"
     algorithms: tuple[str, ...] = ("RS256",)
     leeway_s: int = 30
+    # Cognito marks tokens `access` or `id`. Set "access" so that an ID token never works as an access token.
+    token_use: str | None = None
+
+    @property
+    def allowed_audiences(self) -> tuple[str, ...]:
+        return (self.audience,) if isinstance(self.audience, str) else tuple(self.audience)
 
 
 def _unauthenticated(reason: str) -> FairTableError:
@@ -107,12 +113,14 @@ class TokenVerifier:
                 iss={"essential": True, "value": cfg.issuer},
                 sub={"essential": True},
                 exp={"essential": True},
-                **{cfg.audience_claim: {"essential": True, "value": cfg.audience}},
+                **{cfg.audience_claim: {"essential": True, "values": list(cfg.allowed_audiences)}},
             )
             registry.validate(decoded.claims)
         except JoseError as e:
             raise _unauthenticated(_reason_of(e)) from None
         claims = decoded.claims
+        if cfg.token_use is not None and claims.get("token_use") != cfg.token_use:
+            raise _unauthenticated("invalid_claim:token_use")
         sub = _text(claims.get("sub"))
         if sub is None:
             raise _unauthenticated("invalid_claim:sub")

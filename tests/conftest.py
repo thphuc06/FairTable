@@ -105,10 +105,16 @@ def restore_signal_handlers():
 
 
 def pytest_collection_modifyitems(config, items):
-    """Tests marked ``docker`` build images and bind fixed ports: run them only when asked for (``-m docker``)."""
-    if "docker" in (config.getoption("-m") or ""):
-        return
-    skip = pytest.mark.skip(reason="builds and starts the docker compose stack; run with: pytest -m docker")
-    for item in items:
-        if "docker" in item.keywords:
-            item.add_marker(skip)
+    """Opt-in groups: ``docker`` builds images and binds fixed ports; ``aws`` needs deployed AWS resources
+    and credentials. Each runs only when asked for with ``-m``."""
+    selected = config.getoption("-m") or ""
+    for marker, reason in (
+        ("docker", "builds and starts the docker compose stack; run with: pytest -m docker"),
+        ("aws", "needs deployed AWS resources and credentials; run with: pytest -m aws"),
+    ):
+        if marker in selected:
+            continue
+        skip = pytest.mark.skip(reason=reason)
+        for item in items:
+            if marker in item.keywords:
+                item.add_marker(skip)

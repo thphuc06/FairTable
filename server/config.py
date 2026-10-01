@@ -23,8 +23,9 @@ class Settings:
     allowed_origins: list[str] = field(default_factory=list)
     stateless_http: bool = False  # AgentCore Runtime requires stateless Streamable HTTP (MCP_STATELESS=true)
     issuer: str = "http://localhost:9000"
-    audience: str = "fairtable-mcp"
+    audience: str | tuple[str, ...] = ("fairtable-mcp",)  # AUTH_AUDIENCE may list several, comma separated
     audience_claim: str = "aud"
+    token_use: str | None = None  # AUTH_TOKEN_USE=access on Cognito
     jwks_url: str = "http://localhost:9000/.well-known/jwks.json"
     slot_token_secret: str = DEV_SLOT_SECRET
     slot_token_ttl_s: int = 900
@@ -58,7 +59,8 @@ class Settings:
             allowed_origins=_csv(env.get("MCP_ALLOWED_ORIGINS")),
             stateless_http=env.get("MCP_STATELESS", "").strip().lower() in ("1", "true", "yes"),
             issuer=issuer,
-            audience=env.get("AUTH_AUDIENCE", cls.audience),
+            audience=tuple(_csv(env.get("AUTH_AUDIENCE"))) or cls.audience,
+            token_use=env.get("AUTH_TOKEN_USE") or None,
             audience_claim=env.get("AUTH_AUDIENCE_CLAIM", cls.audience_claim),
             jwks_url=env.get("AUTH_JWKS_URL", issuer.rstrip("/") + "/.well-known/jwks.json"),
             slot_token_secret=env.get("SLOT_TOKEN_SECRET", DEV_SLOT_SECRET),

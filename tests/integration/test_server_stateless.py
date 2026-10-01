@@ -123,6 +123,35 @@ async def test_host_protection_still_applies_when_stateless(running):
     assert r.status_code == 421
 
 
+async def test_a_refused_host_is_named_in_the_log_so_an_operator_can_allow_it(running, caplog):
+    """On AgentCore Runtime the Host the platform forwards is not documented; the log must say which one was refused."""
+    url = await running()
+    with caplog.at_level("WARNING", logger="fairtable.http"):
+        async with httpx.AsyncClient() as http:
+            r = await http.post(url, headers={**HEADERS, "Host": "evil.example"}, json=INIT)
+    assert r.status_code == 421
+    assert any("evil.example" in m and "MCP_ALLOWED_HOSTS" in m for m in caplog.messages)
+
+
+async def test_an_allowed_host_is_not_logged_as_refused(running, caplog):
+    url = await running()
+    with caplog.at_level("WARNING", logger="fairtable.http"):
+        async with httpx.AsyncClient() as http:
+            r = await http.post(url, headers=HEADERS, json=INIT)
+    assert r.status_code == 200
+    assert not caplog.messages
+
+
+def test_a_hostile_host_header_cannot_forge_log_lines():
+    from server.app import printable_host
+
+    forged = "evil.example" + chr(13) + chr(10) + "INFO forged line"
+    logged = printable_host(forged)
+    assert chr(10) not in logged and chr(13) not in logged  # one line, however hostile the header
+    assert "evil.example" in logged
+    assert len(printable_host("a" * 1000)) <= 205
+
+
 def test_the_aws_profile_still_refuses_the_built_in_secrets():
     with pytest.raises(ValueError, match="SLOT_TOKEN_SECRET"):
         Settings.from_env({"APP_PROFILE": "aws", "WEB_SESSION_SECRET": "x" * 32})

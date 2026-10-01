@@ -21,7 +21,7 @@ if __name__ == "__main__":
     settings = Settings.from_env()
     clock = SystemClock()
     verifier = TokenVerifier(
-        VerifierConfig(settings.issuer, settings.audience, settings.audience_claim),
+        VerifierConfig(settings.issuer, settings.audience, settings.audience_claim, token_use=settings.token_use),
         HttpJwks(settings.jwks_url, clock), clock,
     )
     deps = WebDeps(

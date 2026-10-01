@@ -61,6 +61,34 @@ def test_audience_claim_can_be_client_id_for_cognito_style_tokens(jwks, clock, m
     assert rejected(v, mint(aud=AUDIENCE, client_id=None)).reason.startswith("missing_claim")
 
 
+def test_several_app_clients_may_be_allowed_and_any_other_is_refused(jwks, clock, mint):
+    """Cognito has one app client per agent, and access tokens carry `client_id` instead of `aud`."""
+    cfg = VerifierConfig(issuer=ISSUER, audience=("client-a", "client-b"), audience_claim="client_id")
+    v = TokenVerifier(cfg, jwks, clock)
+    assert v.verify(mint(aud=None, client_id="client-a")).sub == "user-1"
+    assert v.verify(mint(aud=None, client_id="client-b")).sub == "user-1"
+    assert rejected(v, mint(aud=None, client_id="client-c")).reason.startswith("invalid_claim")
+
+
+def test_a_single_audience_string_still_works(jwks, clock, mint):
+    v = TokenVerifier(VerifierConfig(issuer=ISSUER, audience="only-one", audience_claim="client_id"), jwks, clock)
+    assert v.verify(mint(aud=None, client_id="only-one")).sub == "user-1"
+    assert rejected(v, mint(aud=None, client_id="someone-else")).reason.startswith("invalid_claim")
+
+
+def test_token_use_access_is_required_when_configured(jwks, clock, mint):
+    """An ID token must never work as an access token (Cognito marks them `token_use`)."""
+    cfg = VerifierConfig(issuer=ISSUER, audience=AUDIENCE, token_use="access")
+    v = TokenVerifier(cfg, jwks, clock)
+    assert v.verify(mint(token_use="access")).sub == "user-1"
+    assert rejected(v, mint(token_use="id")).reason == "invalid_claim:token_use"
+    assert rejected(v, mint()).reason == "invalid_claim:token_use"  # missing
+
+
+def test_token_use_is_not_checked_by_default(verifier, mint):
+    assert verifier.verify(mint(token_use="id")).sub == "user-1"
+
+
 def test_whitespace_around_the_token_is_ignored(verifier, mint):
     assert verifier.verify(f"  {mint()}\n").sub == "user-1"
 

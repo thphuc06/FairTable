@@ -8,6 +8,7 @@ hard-codes an account, ARN or region.
 """
 
 import argparse
+import os
 import sys
 import time
 
@@ -18,11 +19,22 @@ from server.domain.clock import SystemClock
 from server.store import Store, StoreConfig, delete_table, ensure_table, make_client
 from server.store.seeding import seed_store
 
-SUBS = {
-    "alice": USERS_BY_NAME["diner-alice"].sub,
-    "bob": USERS_BY_NAME["diner-bob"].sub,
-    "carol": USERS_BY_NAME["diner-carol"].sub,
-}
+DINERS = {"alice": "diner-alice", "bob": "diner-bob", "carol": "diner-carol"}
+SUBS = {who: USERS_BY_NAME[name].sub for who, name in DINERS.items()}
+
+
+def subs_for_env(env=None) -> dict[str, str]:
+    """The dev issuer's fixed subs, or, with COGNITO_USER_POOL_ID set, the ones Cognito generated."""
+    env = os.environ if env is None else env
+    pool_id = env.get("COGNITO_USER_POOL_ID")
+    if not pool_id:
+        return SUBS
+    import boto3
+
+    from cognito_users import resolve_subs  # next to this file (python scripts/seed.py puts scripts/ on the path)
+
+    by_name = resolve_subs(boto3.client("cognito-idp"), pool_id, list(DINERS.values()))
+    return {who: by_name[name] for who, name in DINERS.items()}
 
 
 def wait_for_database(client, seconds: int) -> None:
@@ -51,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.reset:
         delete_table(client, config.table_name)
     created = ensure_table(client, config.table_name)
-    data = seed_store(Store(client, config.table_name), SystemClock(), SUBS)
+    data = seed_store(Store(client, config.table_name), SystemClock(), subs_for_env())
     print(
         f"{'created' if created else 'reused'} table {config.table_name}: "
         f"{len(data.venues)} venues, {len(data.slots)} slots, {len(data.mandates)} mandates, {len(data.drops)} drops"
