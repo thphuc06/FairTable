@@ -30,6 +30,24 @@ Read-only account check at the start, 2026-09-30 (us-east-1): budgets `My Zero-S
 
 ## Entries (newest first)
 
+### 2026-10-01 · P2-5 · [aws] [gateway] · Change: the Gateway is deployed and verified (second account); 25 of 25 real-AWS tests pass
+- **Goal:** put the Gateway in front of the Runtime and prove the token travels and a forged header does not.
+- **Done:** `cdk diff` (7 resources), deploy. First try failed: the Runtime stack had not exported the runtime id yet (`--exclusively`); CloudFormation rolled back, nothing was left; `cdk deploy FairTableGateway` without `--exclusively` updated the Runtime stack (28 s, only new exports) and created the Gateway (56 s). Gateway and target `READY`, tools synchronised. `tests/aws/test_gateway.py` 9 of 9 on the first run, all real-AWS tests 25 of 25. The interceptor's CloudWatch log (49 invocations) contains no token.
+- **Files:** `docs/{PLAN,friction-log,aws-integration}.md`, this file.
+- **Tests:** real service 25 of 25 (8 tokens, 8 Runtime, 9 Gateway); whole local suite 960 passed, 30 skipped (5 Docker, 25 AWS), 14:36; `ruff` clean.
+- **Decisions:** D-046 stands as built.
+- **Surprises / friction:** the export order of cross-stack references (friction log).
+- **Follow-ups:** P2-10 (Cognito sign-in for the web pages and the simulator through the Gateway, including the `ft___` prefix), P2-7 (does `-32042` pass through), P2-6 (Policy), P2-9 (observability); clean up per D-044 when the batch is stable.
+
+### 2026-10-01 · P2-5 (built, not deployed) · [aws] [gateway] · Gateway stack, interceptor and tests; waiting for "wire Gateway"
+- **Goal:** put the AgentCore Gateway in front of the Runtime, with the token handed to the server in `x-ft-user-token`.
+- **Done:** read the Gateway, target, interceptor, header-propagation, inbound and outbound authorization and permissions documentation and the IAM service reference (facts in `PLAN.md` 3a-bis, friction log row); interceptor `infra/gateway/interceptor/handler.py` (25 unit tests: token copied, forged header replaced, 401 and nothing forwarded without a bearer token, never logs a token, one header name in three places); `FairTableGateway` stack (Gateway, target `ft`, role, interceptor Lambda) with 9 template tests; `aws_ctl.py` knows the gateway (destroy order, inventory, `up --runtime`); real-AWS tests written (`tests/aws/test_gateway.py`, 9, skipped until deployed).
+- **Files:** `infra/gateway/interceptor/handler.py`, `infra/cdk/{app.py,stacks/gateway_stack.py}`, `infra/aws_ctl.py`, `tests/unit/infra/{test_gateway_interceptor,test_cdk_table,test_aws_ctl}.py`, `tests/aws/test_gateway.py`, docs.
+- **Tests:** infra unit tests pass; whole suite at the end of the batch.
+- **Decisions:** D-046.
+- **Surprises / friction:** the documentation never names the IAM action that lets the gateway call a Runtime (friction log).
+- **Follow-ups:** the developer's "wire Gateway" (cost stated first); then `tests/aws/test_gateway.py` and the check of header and token passing through the Gateway; P2-10 handles the `ft___` prefix in the simulator.
+
 ### 2026-10-01 · P2-3 · [aws] [runtime] · Change: the MCP server runs on AgentCore Runtime (second account); 16 of 16 real-AWS tests pass
 - **Goal:** put the server on Runtime in the account that can, and settle what could not be known without it.
 - **Done:** bootstrap, then `up --runtime` in the second account (Data, Identity, Runtime, Budget $5, four demo users; 7 min 24 s), seed (588 slots, 2 mandates, 2 drops), smoke tests. First run 8 failures (421). Cause found with a new log line for refused Hosts: the platform forwards `<uuid>.lambda-microvm.us-east-1.on.aws`; fixed with `MCP_ALLOWED_HOSTS=*.lambda-microvm.*.on.aws`. Two test mistakes fixed (a write needs a real slot token before the rules can refuse it). Result: tokens 8 of 8, Runtime smoke 8 of 8, including a hold, confirm and cancel from the zip against DynamoDB.

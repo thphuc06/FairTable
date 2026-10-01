@@ -37,11 +37,12 @@ def test_only_our_log_groups_are_ours(name, ours):
 
 # ---------------------------------------------------------------------------------------- planning
 def test_stacks_are_destroyed_dependents_first_and_the_budget_and_bootstrap_only_when_asked():
-    every = {"FairTableData", "FairTableIdentity", "FairTableRuntime", "FairTableBudget", "CDKToolkit", "Other"}
+    every = {"FairTableData", "FairTableIdentity", "FairTableRuntime", "FairTableGateway", "FairTableBudget",
+             "CDKToolkit", "Other"}
     assert ctl.stack_order(every, include_budget=False, include_bootstrap=False) == [
-        "FairTableRuntime", "FairTableIdentity", "FairTableData"]
+        "FairTableGateway", "FairTableRuntime", "FairTableIdentity", "FairTableData"]
     assert ctl.stack_order(every, include_budget=True, include_bootstrap=True) == [
-        "FairTableRuntime", "FairTableIdentity", "FairTableData", "FairTableBudget", "CDKToolkit"]
+        "FairTableGateway", "FairTableRuntime", "FairTableIdentity", "FairTableData", "FairTableBudget", "CDKToolkit"]
     assert ctl.stack_order({"FairTableData"}, include_budget=False, include_bootstrap=False) == ["FairTableData"]
 
 
@@ -123,9 +124,13 @@ def test_the_inventory_lists_ours_and_ignores_everything_else():
         secretsmanager=FakeClient(list_secrets=[{"SecretList": [
             {"Name": "FairTableRuntime-SlotTokenSecret-1"}, {"Name": "prod/db"},
             {"Name": "FairTableRuntime-SlotTokenSecret-old", "DeletedDate": "2026-09-30"}]}]),
-        **{"bedrock-agentcore-control": FakeClient(list_agent_runtimes=[{"agentRuntimes": [
-            {"agentRuntimeName": "fairtable_mcp", "agentRuntimeId": "fairtable_mcp-x1"},
-            {"agentRuntimeName": "another_agent", "agentRuntimeId": "another_agent-y2"}]}])},
+        **{"bedrock-agentcore-control": FakeClient(
+            list_agent_runtimes=[{"agentRuntimes": [
+                {"agentRuntimeName": "fairtable_mcp", "agentRuntimeId": "fairtable_mcp-x1"},
+                {"agentRuntimeName": "another_agent", "agentRuntimeId": "another_agent-y2"}]}],
+            list_gateways=[{"items": [
+                {"name": "fairtable-gw", "gatewayId": "fairtable-gw-abc"},
+                {"name": "someone-elses-gateway", "gatewayId": "someone-elses-gateway-zzz"}]}])},
         logs=FakeClient(describe_log_groups=[{"logGroups": [{"logGroupName": "/aws/lambda/FairTableIdentity-PreToken-1"}]}]),
         budgets=FakeClient(describe_budgets=[{"Budgets": [{"BudgetName": "fairtable-cap-150usd"},
                                                           {"BudgetName": "fairtable-5usd"}]}]),
@@ -138,7 +143,8 @@ def test_the_inventory_lists_ours_and_ignores_everything_else():
     assert "fairtable-5usd" not in names  # the developer's own alarm is never ours to touch
     assert {"FairTableData", "CDKToolkit", "fairtable", "ft-test-1", "us-east-1_abc (fairtable-users)",
             "FairTableIdentity-PreToken-1", "FairTableRuntime-SlotTokenSecret-1",
-            "fairtable_mcp fairtable_mcp-x1", "fairtable-cap-150usd"} <= set(names)
+            "fairtable_mcp fairtable_mcp-x1", "fairtable-gw fairtable-gw-abc", "fairtable-cap-150usd"} <= set(names)
+    assert "someone-elses-gateway someone-elses-gateway-zzz" not in names
 
 
 # ---------------------------------------------------------------------------------------- down

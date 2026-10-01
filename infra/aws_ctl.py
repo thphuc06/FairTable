@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CDK_DIR = ROOT / "infra" / "cdk"
 
 # Destroy order: what depends on another stack goes first.
-STACKS = ("FairTableRuntime", "FairTableIdentity", "FairTableData")
+STACKS = ("FairTableGateway", "FairTableRuntime", "FairTableIdentity", "FairTableData")
 BUDGET_STACK = "FairTableBudget"
 BOOTSTRAP_STACK = "CDKToolkit"
 
@@ -36,6 +36,7 @@ OWNED = {
     "pool_name": "fairtable-users",
     "function_prefix": "FairTable",
     "runtime_prefix": "fairtable_mcp",
+    "gateway_prefix": "fairtable-gw",
     "log_prefixes": ("/aws/bedrock-agentcore/runtimes/fairtable_mcp-", "/aws/lambda/FairTable"),
     "secret_marker": "SlotTokenSecret",
     "budget_prefix": "fairtable-cap-",  # the stack names its budget like this; the developer's own budgets differ
@@ -143,6 +144,9 @@ class Account:
         for page in self.ac.get_paginator("list_agent_runtimes").paginate():
             items += [Item("runtime", r["agentRuntimeName"] + " " + r["agentRuntimeId"], True, "stack:FairTableRuntime")
                       for r in page["agentRuntimes"] if r["agentRuntimeName"].startswith(OWNED["runtime_prefix"])]
+        for page in self.ac.get_paginator("list_gateways").paginate():
+            items += [Item("gateway", g["name"] + " " + g["gatewayId"], True, "stack:FairTableGateway")
+                      for g in page["items"] if g["name"].startswith(OWNED["gateway_prefix"])]
         for prefix in OWNED["log_prefixes"]:
             for page in self.logs.get_paginator("describe_log_groups").paginate(logGroupNamePrefix=prefix):
                 items += [Item("log-group", g["logGroupName"], True, "direct") for g in page["logGroups"]]
@@ -204,7 +208,7 @@ def cmd_up(account: Account, with_runtime: bool) -> int:
         rc = subprocess.run([sys.executable, str(ROOT / "infra" / "runtime" / "build_zip.py")], check=False).returncode
         if rc:
             return rc
-    stacks = ["FairTableData", "FairTableIdentity"] + (["FairTableRuntime"] if with_runtime else [])
+    stacks = ["FairTableData", "FairTableIdentity"] + (["FairTableRuntime", "FairTableGateway"] if with_runtime else [])
     if os.environ.get("BUDGET_EMAIL"):
         stacks.append(BUDGET_STACK)
     rc = cdk(["deploy", *stacks, "--require-approval", "never"])

@@ -13,6 +13,7 @@ import aws_cdk as cdk
 
 from stacks.budget_stack import BudgetStack
 from stacks.data_stack import DataStack
+from stacks.gateway_stack import GatewayStack
 from stacks.identity_stack import IdentityStack
 from stacks.runtime_stack import RuntimeStack
 
@@ -29,15 +30,24 @@ identity = IdentityStack(app, "FairTableIdentity", domain_prefix=os.environ.get(
 # The runtime package is built first: python infra/runtime/build_zip.py (see infra/runtime/README.md).
 package = Path(os.environ.get("RUNTIME_ZIP") or Path(__file__).resolve().parents[2] / "dist" / "fairtable-runtime.zip")
 if package.exists():
-    RuntimeStack(
+    client_ids = [c.user_pool_client_id for c in identity.clients.values()]
+    runtime = RuntimeStack(
         app,
         "FairTableRuntime",
         table=data.table,
         issuer=identity.pool.user_pool_provider_url,
-        client_ids=[c.user_pool_client_id for c in identity.clients.values()],
+        client_ids=client_ids,
         package_path=package,
         consent_base_url=os.environ.get("CONSENT_BASE_URL", "http://localhost:8080"),
         allowed_hosts=os.environ.get("MCP_ALLOWED_HOSTS"),
+        env=env,
+    )
+    GatewayStack(
+        app,
+        "FairTableGateway",
+        runtime=runtime.runtime,
+        issuer=identity.pool.user_pool_provider_url,
+        client_ids=client_ids,
         env=env,
     )
 

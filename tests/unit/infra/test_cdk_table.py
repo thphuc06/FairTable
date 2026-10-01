@@ -51,7 +51,7 @@ def templates(tmp_path_factory):
     subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, check=True, capture_output=True, timeout=180)
     return {
         name: json.loads((out / f"{name}.template.json").read_text())
-        for name in ("FairTableData", "FairTableBudget", "FairTableIdentity", "FairTableRuntime")
+        for name in ("FairTableData", "FairTableBudget", "FairTableIdentity", "FairTableRuntime", "FairTableGateway")
     }
 
 
@@ -251,3 +251,93 @@ def test_a_small_account_can_set_a_five_dollar_budget(tmp_path):
 def test_alerts_that_do_not_fit_the_limit_are_refused(tmp_path, alerts):
     run = synth_budget(tmp_path, BUDGET_LIMIT_USD="5", BUDGET_ALERTS=alerts)
     assert run.returncode != 0 and "alerts" in run.stderr
+
+
+# ---------------------------------------------------------------------------------------------- Gateway (P2-5)
+def gateway_of(templates):
+    (gateway,) = resources(templates["FairTableGateway"], "AWS::BedrockAgentCore::Gateway")
+    return gateway["Properties"]
+
+
+def target_of(templates):
+    (target,) = resources(templates["FairTableGateway"], "AWS::BedrockAgentCore::GatewayTarget")
+    return target["Properties"]
+
+
+def test_the_gateway_checks_cognito_access_tokens_by_client_and_never_by_audience(templates):
+    props = gateway_of(templates)
+    assert props["AuthorizerType"] == "CUSTOM_JWT"
+    jwt = props["AuthorizerConfiguration"]["CustomJWTAuthorizer"]
+    assert json.dumps(jwt["DiscoveryUrl"]).count("/.well-known/openid-configuration") == 1
+    assert len(jwt["AllowedClients"]) == len(CLIENTS_BY_ID)  # every app client of the pool
+    assert "AllowedAudience" not in jwt  # Cognito access tokens carry no `aud` claim
+    assert "ExceptionLevel" not in props  # DEBUG would put internals into error answers
+
+
+def test_the_gateway_speaks_mcp_2025_11_25_and_runs_the_request_interceptor_with_headers(templates):
+    props = gateway_of(templates)
+    assert props["ProtocolType"] == "MCP"
+    assert props["ProtocolConfiguration"]["Mcp"]["SupportedVersions"] == ["2025-11-25"]
+    (interceptor,) = props["InterceptorConfigurations"]
+    assert interceptor["InterceptionPoints"] == ["REQUEST"]
+    assert interceptor["InputConfiguration"]["PassRequestHeaders"] is True  # it needs `Authorization`
+
+
+def test_the_gateway_and_target_names_fit_the_documented_patterns(templates):
+    import re
+
+    assert re.fullmatch(r"([0-9a-zA-Z][-]?){1,48}", gateway_of(templates)["Name"])
+    assert re.fullmatch(r"([0-9a-zA-Z][-]?){1,100}", target_of(templates)["Name"])
+
+
+def test_the_target_is_the_runtime_with_sigv4_and_passes_only_the_user_token_header(templates):
+    props = target_of(templates)
+    mcp = props["TargetConfiguration"]["Mcp"]["McpServer"]
+    endpoint = json.dumps(mcp["Endpoint"])
+    assert "/invocations?qualifier=DEFAULT" in endpoint and "bedrock-agentcore" in endpoint
+    assert "runtimes/arn%3A" in endpoint and "runtimes/arn:" not in endpoint  # the ARN is URL-encoded
+    (provider,) = props["CredentialProviderConfigurations"]
+    assert provider["CredentialProviderType"] == "GATEWAY_IAM_ROLE"
+    assert provider["CredentialProvider"]["IamCredentialProvider"]["Service"] == "bedrock-agentcore"
+    assert props["MetadataConfiguration"]["AllowedRequestHeaders"] == ["x-ft-user-token"]
+
+
+def test_the_same_header_name_is_used_by_the_interceptor_the_gateway_target_and_the_runtime(templates):
+    import importlib.util
+
+    path = CDK_DIR.parent / "gateway" / "interceptor" / "handler.py"
+    spec = importlib.util.spec_from_file_location("gw_handler_for_header_check", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    target_headers = target_of(templates)["MetadataConfiguration"]["AllowedRequestHeaders"]
+    runtime_headers = runtime_of(templates)["RequestHeaderConfiguration"]["RequestHeaderAllowlist"]
+    assert [module.USER_TOKEN_HEADER] == target_headers == runtime_headers
+
+
+def test_the_gateway_role_is_assumed_only_by_agentcore_for_this_gateway(templates):
+    roles = {r["Properties"]["AssumeRolePolicyDocument"]["Statement"][0]["Principal"]["Service"]: r
+             for r in resources(templates["FairTableGateway"], "AWS::IAM::Role")}
+    role = roles["bedrock-agentcore.amazonaws.com"]
+    (statement,) = role["Properties"]["AssumeRolePolicyDocument"]["Statement"]
+    assert set(statement["Condition"]) == {"StringEquals", "ArnLike"}
+    assert "gateway/fairtable-gw-*" in json.dumps(statement["Condition"]["ArnLike"])
+
+
+def test_the_gateway_role_may_only_call_the_runtime_this_gateway_and_the_interceptor(templates):
+    statements = [s for p in resources(templates["FairTableGateway"], "AWS::IAM::Policy")
+                  for s in p["Properties"]["PolicyDocument"]["Statement"]
+                  if "bedrock-agentcore" in json.dumps(s["Action"]) or "lambda:InvokeFunction" in json.dumps(s["Action"])]
+    by_action = {s["Action"]: s["Resource"] for s in statements}
+    assert set(by_action) == {"bedrock-agentcore:InvokeAgentRuntime", "bedrock-agentcore:InvokeGateway", "lambda:InvokeFunction"}
+    runtime_resources = json.dumps(by_action["bedrock-agentcore:InvokeAgentRuntime"])
+    assert "runtime-endpoint/*" in runtime_resources  # the DEFAULT endpoint is what the URL names
+    assert "gateway/fairtable-gw-*" in json.dumps(by_action["bedrock-agentcore:InvokeGateway"])
+    assert "Interceptor" in json.dumps(by_action["lambda:InvokeFunction"])  # that one function only
+    assert not [a for a in by_action if a.endswith("*")]
+
+
+def test_the_interceptor_function_is_small_python_on_arm(templates):
+    (fn,) = resources(templates["FairTableGateway"], "AWS::Lambda::Function")
+    props = fn["Properties"]
+    assert (props["Runtime"], props["Handler"], props["Architectures"]) == ("python3.12", "handler.lambda_handler", ["arm64"])
+    assert props["Timeout"] <= 10 and props["MemorySize"] <= 256

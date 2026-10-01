@@ -72,7 +72,15 @@ Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local pro
 - *Onboarding:* the MCP contract page is short and clear; the CloudFormation reference is the most useful page for CDK.
 - *Build again:* yes.
 
-**Amazon Bedrock AgentCore Gateway / Policy / Observability:** to be written when they exist.
+**Amazon Bedrock AgentCore Gateway** (verified, second account)
+- *Used for:* the front door: callers present a Cognito access token only (no AWS credentials); the Gateway validates it (`CUSTOM_JWT`), a Lambda REQUEST interceptor hands the token to the server in `x-ft-user-token`, and the Gateway calls the Runtime with SigV4 using its own role.
+- *Worked well:* the MCP server target to a Runtime with the gateway role needed no OAuth provider and no AgentCore Identity; target creation synchronised the tools at once; the interceptor contract (input with headers, output with headers and body, or an immediate 401) behaved as documented; a forged header was replaced reliably; the whole stack came up in under a minute.
+- *Needs work:* the Gateway pages never name the IAM action for calling a Runtime (`InvokeAgentRuntime`, found in the service reference); an interceptor's `Authorization` is forwarded to the target and would clash with SigV4 (we avoid it); tool names always get a `<target>___` prefix with no way to turn it off; no documented way to see why a request was refused (401 versus 403).
+- *Onboarding:* the CloudFormation reference plus the interceptor and header-propagation pages were enough; the permissions page is the weakest.
+- *Build again:* yes.
+
+**Amazon Bedrock AgentCore Policy / Observability:** to be written when they exist.
+
 
 ## Deploy and tear down
 
