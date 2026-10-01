@@ -17,7 +17,7 @@ Status as of 2026-09-30: the local profile calls no AWS service; the DynamoDB ta
 |---|---|---|---|---|
 | **Amazon Bedrock AgentCore Runtime** | Hosts the MCP server (Streamable HTTP) | The same server code as the local profile, as a zip (direct code deployment, no Docker) on Runtime V2; IAM (SigV4) callers only; the diner's token travels in the allowlisted header `x-ft-user-token` | `docker compose` server container | **verified** (second account; D-045) |
 | **Amazon Bedrock AgentCore Gateway** | Front door for agents: JWT check, request interceptor, Policy | `CUSTOM_JWT` authorizer with Cognito JWKS; MCP target pointing at the Runtime; REQUEST interceptor copies the verified user token to `x-ft-user-token` and strips any client-supplied value | Server verifies the token itself; no gateway | planned |
-| **AgentCore Gateway Policy** | Defense in depth for G1–G4 (stateless rules) | Cedar policies G1–G4 at the Gateway; the same rules also run inside the server with `cedarpy` | `policies/g*.cedar` evaluated in the server | planned |
+| **AgentCore Gateway Policy** | Defense in depth for G1–G4 (stateless rules) | Cedar policies G1–G4 at the Gateway; the same rules also run inside the server with `cedarpy` | `policies/g*.cedar` evaluated in the server | built, opt-in (`GATEWAY_POLICY`: `LOG_ONLY` or `ENFORCE`), deployed and measured on the second account (D-049) |
 | **AgentCore Identity** | Outbound OAuth from Gateway to the Runtime target | Gateway calls the Runtime with its own OAuth credentials | – | planned |
 | **Amazon Cognito** (Essentials tier) | User pool, sign-in (`USER_PASSWORD_AUTH`, demo only), machine tokens (client credentials), token claims | One pre-token-generation trigger, version **V3_0** (user and machine tokens), adds `agent_tier`, `agent_id`, the scope `fairtable/book` and `custom:venue_id`; three app clients named like the dev issuer's | `devauth/` dev JWT issuer | built (CDK stack and tests), not deployed |
 | **AWS Lambda** | Pre-token trigger; Gateway interceptor; optional workers later | Small Python functions; workers reuse the same pure functions as the lazy in-server paths. The pre-token function (`infra/cognito/pre_token`) is built and unit-tested | Same logic runs in-process | pre-token function built (not deployed); rest planned |
@@ -79,7 +79,14 @@ Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local pro
 - *Onboarding:* the CloudFormation reference plus the interceptor and header-propagation pages were enough; the permissions page is the weakest.
 - *Build again:* yes.
 
-**Amazon Bedrock AgentCore Policy / Observability:** to be written when they exist.
+**Amazon Bedrock AgentCore Policy (P2-6, D-049):**
+- *Used for:* G1 to G4 repeated at the Gateway as defence in depth: one policy engine, six Cedar policies (reads for any signed-in caller; writes need a signed-in user with the booking scope; a party above 10 refused on the three tools that take one; writes only from a verified agent). The server still evaluates the same rules first.
+- *Worked well:* the policies are plain Cedar files in the repo, checked locally with `cedarpy` against the same scenario table as the server's own rules; the service accepted all six on the first try; `LOG_ONLY` then `ENFORCE` is one parameter; a refusal names the policy that matched, and `tools/list` hides the tools a caller may not use.
+- *Needs work:* the generated Cedar schema cannot be read, so a statement can only be tested by creating it; `CreatePolicy` returns before validation and CloudFormation does not wait for it, so a `forbid` created next to its `permit` can be refused as "overly restrictive" and the stack then hangs (two deploys avoid it); a refusal is a JSON-RPC error without our `next_step`.
+- *Onboarding:* the Policy permissions page (three actions on the Gateway role, `InvokeGateway` for the creator) was what mattered; the rest was in the CloudFormation reference.
+- *Build again:* yes, with the two-deploy order.
+
+**Amazon Bedrock AgentCore Observability:** to be written when it exists.
 
 
 ## Deploy and tear down

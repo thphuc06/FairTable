@@ -9,6 +9,7 @@ pages run in-process here (in a browser they are ``python -m web`` with the same
 the Gateway, the Runtime and DynamoDB is real. Bookings made here are cancelled again.
 """
 
+import random
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -90,6 +91,12 @@ def day(offset: int) -> str:
     return (datetime.now(UTC).date() + timedelta(days=offset)).isoformat()
 
 
+def fresh_day() -> str:
+    """A day not used by an earlier run: the assistant's idempotency key names the day, and a repeat of the
+    same request on the same day carries a new slot token, which the server rightly calls a conflict."""
+    return day(random.randint(5, 13))  # the seed has slots for the next 14 days
+
+
 def sub_of(cognito, who: str) -> str:  # noqa: F811
     import base64
     import json
@@ -113,8 +120,9 @@ async def test_a_diner_signs_in_with_cognito_and_books_by_chatting_through_the_g
     client = browser(web)
     try:
         sign_in(client, "diner-alice")
-        html = say(client, f"Book a table at Luna Trattoria for 2 on {day(9)} at 7pm")
-        assert "Assistant:" in html and "booked" in html.lower()
+        html = say(client, f"Book a table at Luna Trattoria for 2 on {fresh_day()} at 7pm")
+        reply = html[html.find("Book a table"):][:1500]
+        assert "Assistant:" in html and "booked" in html.lower(), reply
         assert "restaurant_search" in html and "ft___" not in html  # the steps list shows the server's own names
         assert len(web["store"].reservations_of_user(sub_of(cognito, "diner-alice"))) >= 1
     finally:
@@ -126,9 +134,9 @@ async def test_a_booking_outside_the_permission_is_approved_on_the_consent_page_
     client = browser(web)
     try:
         sign_in(client, "diner-bob")
-        html = say(client, f"Book a table at Luna Trattoria for 2 on {day(10)} at 7pm")
+        html = say(client, f"Book a table at Luna Trattoria for 2 on {fresh_day()} at 7pm")
         link = re.search(r"href='(http://localhost:8080(/consent/[A-Za-z0-9_-]+))'", html)
-        assert link, "the assistant should hand over an approval link (step-up through the Gateway)"
+        assert link, f"the assistant should hand over an approval link (step-up through the Gateway); it said: {html[html.find("Book a table"):][:1800]}"
         page = client.get(link.group(2))
         assert page.status_code == 200 and "Approve" in page.text
         decision = client.post(f"{link.group(2)}/decision", data={"decision": "approve", "csrf": csrf_of(page.text)})

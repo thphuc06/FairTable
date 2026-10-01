@@ -37,6 +37,7 @@ OWNED = {
     "function_prefix": "FairTable",
     "runtime_prefix": "fairtable_mcp",
     "gateway_prefix": "fairtable-gw",
+    "policy_engine_prefix": "fairtable_engine",
     "log_prefixes": ("/aws/bedrock-agentcore/runtimes/fairtable_mcp-", "/aws/lambda/FairTable"),
     "secret_marker": "SlotTokenSecret",
     "budget_prefix": "fairtable-cap-",  # the stack names its budget like this; the developer's own budgets differ
@@ -45,7 +46,7 @@ OWNED = {
 
 @dataclass(frozen=True)
 class Item:
-    kind: str  # stack | table | pool | function | secret | runtime | gateway | log-group | budget | bootstrap
+    kind: str  # stack | table | pool | function | secret | runtime | gateway | policy-engine | log-group | budget | bootstrap
     name: str
     billable: bool  # costs money (or could) while it exists
     by: str  # what removes it: "stack:<name>" or "direct"
@@ -147,6 +148,9 @@ class Account:
         for page in self.ac.get_paginator("list_gateways").paginate():
             items += [Item("gateway", g["name"] + " " + g["gatewayId"], True, "stack:FairTableGateway")
                       for g in page["items"] if g["name"].startswith(OWNED["gateway_prefix"])]
+        for page in self.ac.get_paginator("list_policy_engines").paginate():
+            items += [Item("policy-engine", e["name"] + " " + e["policyEngineId"], True, "stack:FairTableGateway")
+                      for e in page["policyEngines"] if e["name"].startswith(OWNED["policy_engine_prefix"])]
         for prefix in OWNED["log_prefixes"]:
             for page in self.logs.get_paginator("describe_log_groups").paginate(logGroupNamePrefix=prefix):
                 items += [Item("log-group", g["logGroupName"], True, "direct") for g in page["logGroups"]]
@@ -211,6 +215,11 @@ def cmd_up(account: Account, with_runtime: bool) -> int:
     stacks = ["FairTableData", "FairTableIdentity"] + (["FairTableRuntime", "FairTableGateway"] if with_runtime else [])
     if os.environ.get("BUDGET_EMAIL"):
         stacks.append(BUDGET_STACK)
+    if with_runtime and os.environ.get("GATEWAY_POLICY"):
+        # Two deploys (D-049): the permits first, so each forbid is validated against permits that are active.
+        rc = cdk(["deploy", *stacks, "--require-approval", "never"], {"GATEWAY_POLICY_STAGE": "permits"})
+        if rc:
+            return rc
     rc = cdk(["deploy", *stacks, "--require-approval", "never"])
     if rc:
         return rc

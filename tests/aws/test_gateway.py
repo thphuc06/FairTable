@@ -16,6 +16,7 @@ import httpx
 import pytest
 from botocore.exceptions import ClientError
 from fastmcp import Client
+from mcp.shared.exceptions import McpError
 from fastmcp.client.transports import StreamableHttpTransport
 from test_runtime_smoke import cognito  # noqa: F401  (a fixture: the pool, its clients and their secrets)
 
@@ -106,6 +107,17 @@ async def test_an_id_token_is_refused_by_the_gateway(gateway, cognito):  # noqa:
     assert r.status_code in (401, 403)
 
 
+async def refused_write(gateway, token, slot, key):
+    """A write the caller may not make is refused at the Gateway when its policy engine enforces G2 and G4
+    (a JSON-RPC error naming the policy, D-049) and by the server's own PEP-1 when it does not (POLICY_DENIED)."""
+    try:
+        result = await call(gateway, token, "reservation_hold", slot_token=slot, idempotency_key=key)
+    except McpError as e:
+        assert "Tool Execution Denied" in str(e) and "policy" in str(e).lower()
+        return True
+    return bool(result.isError and result.structuredContent["error"] == "POLICY_DENIED")
+
+
 async def a_slot_token(gateway, token):
     day = (datetime.now(UTC).date() + timedelta(days=6)).isoformat()
     result = await call(gateway, token, "availability_check", restaurant_id="luna-trattoria", date=day,
@@ -118,16 +130,14 @@ async def a_slot_token(gateway, token):
 async def test_the_bot_client_can_read_but_not_write(gateway, cognito):  # noqa: F811
     token = tokens.machine_token(cognito, "bot-m2m")
     slot = await a_slot_token(gateway, token)
-    result = await call(gateway, token, "reservation_hold", slot_token=slot, idempotency_key="gw-bot-0000001")
-    assert result.isError and result.structuredContent["error"] == "POLICY_DENIED"
+    assert await refused_write(gateway, token, slot, "gw-bot-0000001")
 
 
 @pytest.mark.asyncio
 async def test_the_unverified_agent_cannot_write(gateway, cognito):  # noqa: F811
     token = tokens.sign_in(cognito, "shady-agent", "diner-bob")
     slot = await a_slot_token(gateway, token)
-    result = await call(gateway, token, "reservation_hold", slot_token=slot, idempotency_key="gw-shady-000001")
-    assert result.isError and result.structuredContent["error"] == "POLICY_DENIED"
+    assert await refused_write(gateway, token, slot, "gw-shady-000001")
 
 
 @pytest.mark.asyncio

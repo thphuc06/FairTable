@@ -369,3 +369,76 @@ def test_the_experiment_switches_make_the_runtime_stateful_and_give_the_gateway_
     mcp = gateway["Properties"]["ProtocolConfiguration"]["Mcp"]
     assert mcp["SessionConfiguration"] == {"SessionTimeoutInSeconds": 900}
     assert mcp["StreamingConfiguration"] == {"EnableResponseStreaming": True}
+
+
+# ------------------------------------------------------------------ opt-in policy engine (P2-6, D-049)
+POLICY_NAMES = {
+    "ft_g1_reads_any_valid_jwt", "ft_g2_writes_need_user_and_scope", "ft_g3_party_size_availability_check",
+    "ft_g3_party_size_restaurant_search", "ft_g3_party_size_waitlist_watch", "ft_g4_verified_agent_only",
+}
+
+
+def test_by_default_the_gateway_has_no_policy_engine(templates):
+    template = templates["FairTableGateway"]
+    assert not resources(template, "AWS::BedrockAgentCore::PolicyEngine")
+    assert not resources(template, "AWS::BedrockAgentCore::Policy")
+    assert "PolicyEngineConfiguration" not in gateway_of(templates)
+    assert "AuthorizeAction" not in json.dumps(template)
+
+
+@pytest.mark.parametrize("mode", ["LOG_ONLY", "ENFORCE"])
+def test_the_policy_switch_adds_one_engine_six_policies_and_attaches_the_engine_in_that_mode(tmp_path, mode):
+    template = synth_stacks(tmp_path, GATEWAY_POLICY=mode)["FairTableGateway"]
+    (engine,) = resources(template, "AWS::BedrockAgentCore::PolicyEngine")
+    assert engine["Properties"]["Name"] == "fairtable_engine"
+    (gateway,) = resources(template, "AWS::BedrockAgentCore::Gateway")
+    config = gateway["Properties"]["PolicyEngineConfiguration"]
+    assert config["Mode"] == mode
+    assert "PolicyEngineArn" in json.dumps(config)  # the engine's own ARN, not a typed-in one
+    policies = resources(template, "AWS::BedrockAgentCore::Policy")
+    assert {p["Properties"]["Name"] for p in policies} == POLICY_NAMES
+    for p in policies:
+        props = p["Properties"]
+        assert props["ValidationMode"] == "FAIL_ON_ANY_FINDINGS"  # a statement the schema refuses fails the stack
+        assert props["EnforcementMode"] == "ACTIVE"
+        assert "Gateway" in json.dumps(props["Definition"]["Cedar"]["Statement"])  # the gateway's ARN is filled in
+        assert "__GATEWAY_ARN__" not in json.dumps(props)
+
+
+def test_every_policy_waits_for_the_target_and_the_policies_are_created_one_at_a_time(tmp_path):
+    template = synth_stacks(tmp_path, GATEWAY_POLICY="LOG_ONLY")["FairTableGateway"]
+    policies = {k: v for k, v in template["Resources"].items() if v["Type"] == "AWS::BedrockAgentCore::Policy"}
+    target = next(k for k, v in template["Resources"].items() if v["Type"] == "AWS::BedrockAgentCore::GatewayTarget")
+    waits_for = {k: set(v.get("DependsOn", [])) for k, v in policies.items()}
+    assert sum(target in d for d in waits_for.values()) == 1  # the first one waits for the target ...
+    assert sum(any(o in policies for o in d) for d in waits_for.values()) == len(policies) - 1  # ... each other for one before
+
+
+def test_the_gateway_role_may_only_authorize_against_its_engine_and_gateway_when_the_engine_exists(tmp_path):
+    template = synth_stacks(tmp_path, GATEWAY_POLICY="ENFORCE")["FairTableGateway"]
+    (policy,) = [r for r in resources(template, "AWS::IAM::Policy") if "GatewayRole" in json.dumps(r["Properties"]["Roles"])]
+    (statement,) = [
+        s for s in policy["Properties"]["PolicyDocument"]["Statement"]
+        if "bedrock-agentcore:AuthorizeAction" in s["Action"]
+    ]
+    assert sorted(statement["Action"]) == [
+        "bedrock-agentcore:AuthorizeAction", "bedrock-agentcore:GetPolicyEngine", "bedrock-agentcore:PartiallyAuthorizeActions",
+    ]
+    assert len(statement["Resource"]) == 2 and "*" not in json.dumps(statement["Resource"]).replace("gateway/fairtable-gw-*", "")
+
+
+def test_a_wrong_policy_mode_is_refused(tmp_path):
+    package = tmp_path / "p.zip"
+    with zipfile.ZipFile(package, "w") as z:
+        z.writestr("runtime_entry.py", "x")
+    env = {**os.environ, "CDK_OUTDIR": str(tmp_path / "out"), "CDK_DEFAULT_ACCOUNT": "123456789012",
+           "AWS_REGION": "us-east-1", "RUNTIME_ZIP": str(package), "GATEWAY_POLICY": "MONITOR"}
+    run = subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, capture_output=True, timeout=180, text=True)
+    assert run.returncode != 0 and "policy_mode" in run.stderr
+
+
+def test_the_first_of_two_deploys_creates_only_the_permit_policies(tmp_path):
+    template = synth_stacks(tmp_path, GATEWAY_POLICY="LOG_ONLY", GATEWAY_POLICY_STAGE="permits")["FairTableGateway"]
+    names = {p["Properties"]["Name"] for p in resources(template, "AWS::BedrockAgentCore::Policy")}
+    assert names == {"ft_g1_reads_any_valid_jwt", "ft_g2_writes_need_user_and_scope"}
+    assert resources(template, "AWS::BedrockAgentCore::PolicyEngine")  # the engine is attached from the start

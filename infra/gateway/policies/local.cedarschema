@@ -1,0 +1,39 @@
+// An approximation of the schema AgentCore Gateway generates from the tools of the gateway (the service offers no
+// way to read the real one; it only shows through validation errors). Used only by the local checks in
+// tests/unit/infra/test_gateway_policies.py. Principal: the OAuth user with every claim as a string tag.
+namespace AgentCore {
+  entity OAuthUser tags String;
+  entity Gateway;
+  action "ft___restaurant_search" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { query?: String, date?: String, party_size?: Long, response_format?: String } }
+  };
+  action "ft___availability_check" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { restaurant_id: String, date: String, time_window?: String, party_size?: Long } }
+  };
+  action "ft___mandate_status" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { restaurant_id: String } }
+  };
+  action "ft___waitlist_status" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { watch_id: String, action?: String } }
+  };
+  action "ft___reservation_hold" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { slot_token: String, idempotency_key: String } }
+  };
+  action "ft___reservation_confirm" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { hold_id: String, idempotency_key: String } }
+  };
+  action "ft___reservation_manage" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { action: String, reservation_id: String, idempotency_key?: String, new_party_size?: Long } }
+  };
+  action "ft___waitlist_watch" appliesTo {
+    principal: [OAuthUser], resource: [Gateway],
+    context: { input: { restaurant_id?: String, date?: String, time_window?: String, party_size?: Long, drop_id?: String, idempotency_key: String } }
+  };
+}

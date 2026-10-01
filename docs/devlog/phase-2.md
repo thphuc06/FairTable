@@ -1,6 +1,6 @@
 # Phase 2 – AWS Builder path (10-14 → 10-17, started early 2026-09-30)
 
-Status: **P2-1 to P2-5, P2-7, P2-8, P2-10 done; the AWS profile runs in the developer's second account (D-045); next P2-6 Policy, P2-9 observability** (decisions D-016, D-030, D-031, D-034, D-035)
+Status: **P2-1 to P2-5, P2-7, P2-8, P2-10 done; P2-6 done; the AWS profile runs in the developer's second account (D-045); next P2-9 observability** (decisions D-016, D-030, D-031, D-034, D-035)
 
 ## Plan
 Goal: run the same server on AWS (DynamoDB, Cognito, AgentCore Runtime, Gateway, Policy, Observability) so the demo shows the AWS path once, then tear everything down. Task list and acceptance criteria: `docs/PLAN.md` §3, Phase 2. Choices: D-035.
@@ -13,6 +13,11 @@ Rules for this phase: wire only the part the developer names ("wire X"); before 
 | B – Gateway | P2-4, P2-5, P2-6, P2-7 | verifier on Cognito, Gateway identity, Gateway Policy, `-32042` through the Gateway |
 | C – observability and teardown | P2-9, P2-8 | traces on AWS, deploy/destroy scripts, `aws-integration.md` |
 
+Batch C plan (2026-10-01; resources only after "wire X", D-016, D-044):
+1. **P2-6 Gateway Policy (G1-G4 as defence in depth), research done:** engine `fairtable_engine`, six policies in `infra/gateway/policies/*.cedar` (G1 reads for any OAuth user, G2 writes need `username` and the `fairtable/book` scope, G3 one `forbid` per tool that takes `party_size` (availability_check, restaurant_search, waitlist_watch: the other write tools carry a slot token or hold id, so G3 stays server-side for them), G4 writes need `agent_tier == verified` with `hasTag` guards). Facts that shaped it: principal `AgentCore::OAuthUser` with every claim a **string tag** (`like` for `scope`); action `AgentCore::Action::"ft___<tool>"`; a policy naming actions needs `resource == AgentCore::Gateway::"<gateway arn>"`; optional parameters need `has`; deny by default and forbid wins; the gateway's `tools/list` shows a caller only the tools it may call; attach modes are **`LOG_ONLY` then `ENFORCE`** (the earlier plan said MONITOR: wrong) and each policy also has `enforcementMode` `ACTIVE | LOG_ONLY`; decisions show in traces and in CloudWatch metrics (`LogOnlyMatches`, `LogOnlyDecisionFlips`). There is no API that returns the generated Cedar schema; it shows only through validation (`CREATE_FAILED` with reasons), so: (a) check the policies locally with cedarpy against an approximate schema and the shared scenario table of `tests/unit/kernel/pep1_scenarios.py` (D5), (b) let the service validate (`FAIL_ON_ANY_FINDINGS`), (c) deploy in `LOG_ONLY`, read the decisions, then `ENFORCE`. Opt-in in CDK (`GATEWAY_POLICY=LOG_ONLY|ENFORCE`, off by default).
+2. **P2-9 observability** (price first): CloudWatch Transaction Search, spans from the Gateway and Runtime, ADOT for the simulator, the policy decisions above; one booking trace for the video.
+3. Clean up per D-044 when the batch is stable.
+
 Read-only account check at the start, 2026-09-30 (us-east-1): budgets `My Zero-Spend Budget` ($1) and `fairtable-5usd` ($5) exist; no DynamoDB table; no CloudFormation stack. P2-1 must not recreate the $5 alarm; the planned $50/$100/$140 alerts are additional and need the developer's yes.
 
 ## Progress
@@ -23,21 +28,30 @@ Read-only account check at the start, 2026-09-30 (us-east-1): budgets `My Zero-S
 | P2-3 Server on Runtime | A | done | 2026-10-01 | runs on Runtime V2 in the second account; 16 of 16 real-AWS tests pass (the first account stays blocked, D-041) |
 | P2-4 Verifier with Cognito JWKS | B | done | 2026-09-30 | several client ids, token_use; real Cognito tokens pass with configuration only |
 | P2-5 Gateway + interceptor | B | todo | | |
-| P2-6 Gateway Policy G1-G4 | B | todo | | |
+| P2-6 Gateway Policy G1-G4 | B | done | 2026-10-02 | deployed in `LOG_ONLY` then `ENFORCE` on the second account; two deploys needed (D-049) |
 | P2-7 -32042 through the Gateway | B | done | 2026-10-01 | measured: lost through the Gateway; plain result with the link works; D-048 |
 | P2-9 Observability (AWS part) | C | todo | | server part done (D-032) |
 | P2-8 Teardown + aws-integration.md | C | in progress | 2026-09-30 | started while P2-3 waits for the quota |
 
 ## Entries (newest first)
 
+### 2026-10-02 · P2-6 · [aws] [gateway] [policy] · Gateway Policy G1-G4 deployed (second account), LOG_ONLY then ENFORCE, measured
+- **Goal:** repeat G1-G4 at the Gateway as defence in depth and see it work on the real service ("wire Policy" given 2026-10-02).
+- **Done:** six Cedar policies and an approximate schema in `infra/gateway/policies/` (checked locally with cedarpy and the shared scenario table); `GatewayStack(policy_mode, permits_only)` adds the engine, the policies (after the target, `FAIL_ON_ANY_FINDINGS`), the engine on the gateway and the three authorisation actions on the gateway role; `GATEWAY_POLICY=LOG_ONLY|ENFORCE` and `GATEWAY_POLICY_STAGE=permits` in `app.py`, off by default; `aws_ctl.py` knows the engine and `up` does the two deploys. **Real account (1905):** the first deploy created five of six policies, the sixth (`ft_g3_party_size_waitlist_watch`) was refused as "Overly Restrictive" because it was validated before its `permit` was active, and CloudFormation then hung for 19 minutes; cancelled, clean rollback, nothing left. The same statement created by hand was `ACTIVE`, so the cause is the order, not the Cedar. Fix: two deploys (permits, then forbids). Then `LOG_ONLY` (policy test: the verified user still sees all 8 tools) and `ENFORCE` (5 of 5 policy tests): refusals are a JSON-RPC error naming the policy, the bot and the unverified agent see only the four reads, a party of 11 is refused by its G3 policy.
+- **Files:** `infra/gateway/policies/*`, `infra/cdk/{app.py,stacks/gateway_stack.py,stacks/gateway_policies.py}`, `infra/aws_ctl.py`, `tests/unit/infra/{test_gateway_policies,test_cdk_table,test_aws_ctl}.py`, `tests/aws/{test_gateway_policy,test_gateway,test_demo_flow}.py`, docs.
+- **Tests:** whole local suite 1048 passed, 40 skipped (before the two-deploy change; infra tests rerun after it: 63 policy and ctl tests passed, `ruff` clean); real AWS under `ENFORCE`: 35 of 35 on the third full run. The two runs before it each had failures that I could not reproduce: one `502 Bad Gateway` from the Runtime on a direct call (no Gateway, no policy; nothing in the server log), and Bob's step-up test once ending at `reservation_confirm` with an empty error (it passed alone 4 of 4 times). I treat both as transient service errors, but the cause of the second is not established.
+- **Decisions:** D-049.
+- **Surprises / friction:** the validation race and the hung stack (friction log); a refusal at the Gateway has no `next_step`; `tests/aws/test_gateway.py` bot and shady-agent tests now accept the Gateway's refusal as well as the server's `POLICY_DENIED`; `test_demo_flow.py` now picks a random day (the assistant's idempotency key names the day, and a repeat of the same request carries a new slot token, so a fixed day made the second run of the day fail).
+- **Follow-ups:** P2-9 (observability), clean up per D-044 (the engine stays attached in `ENFORCE` until the teardown).
+
 ### 2026-10-01 · P2-7 · [aws] [gateway] [stepup] · `-32042` through the Gateway measured; real model through the Gateway tried
 - **Goal:** answer the P2-7 question and try a real model through the Gateway.
 - **Done:** (1) probes with a URL-capable client: stateless Runtime gives the plain `CONSENT_REQUIRED` result with the link, through the Gateway and directly; with a stateful Runtime and a sessions-enabled Gateway (then with streaming too) the Runtime returns the real `-32042` but the Gateway turns it into a plain error and the link is lost (D-048, friction log). The experiment was reverted (Runtime env change 267 s, Gateway 36 s); 17 of 17 Gateway and Runtime tests pass again. (2) DeepSeek through the Gateway: `tests/aws/test_real_model.py` (skipped without `DEEPSEEK_API`; only `DEEPSEEK_*` lines are read from `.env`, nothing printed): booked every time in 5 runs; an instruction about unique `idempotency_key`s was added to the assistant's prompt. (3) CDK switches `RUNTIME_STATELESS`, `GATEWAY_SESSIONS`, `GATEWAY_STREAMING` (off by default) with template tests.
 - **Files:** `infra/cdk/{app.py,stacks/runtime_stack.py,stacks/gateway_stack.py}`, `simulator/assistant.py`, `tests/aws/test_real_model.py`, `tests/unit/infra/test_cdk_table.py`, docs.
-- **Tests:** CDK template tests 35 passed; real AWS: Gateway and Runtime 17 of 17 after the revert, real model 1 of 1 (five runs); unit tests see the batch report.
+- **Tests:** CDK template tests 35 passed; real AWS: Gateway and Runtime 17 of 17 after the revert, real model 1 of 1 (five runs); whole local suite 1010 passed, 35 skipped (5 Docker, 30 AWS), 16:20; `ruff` clean.
 - **Decisions:** D-048.
 - **Surprises / friction:** the Gateway drops the elicitation URL (friction log).
-- **Follow-ups:** P2-6 (Policy G1-G4), P2-9 (observability), then clean up per D-044; the whole local suite still has to be run once more after the prompt sentence and the CDK switches.
+- **Follow-ups:** P2-6 (Policy G1-G4), P2-9 (observability), then clean up per D-044; the whole local suite was run after the prompt sentence and the CDK switches (see Tests).
 
 ### 2026-10-01 · P2-10 · [aws] [web] [simulator] · Cognito sign-in for the web pages and the assistant through the Gateway
 - **Goal:** make the AWS demo path complete: a person signs in with Cognito, chats, and the assistant reaches the server through the Gateway.

@@ -130,7 +130,10 @@ def test_the_inventory_lists_ours_and_ignores_everything_else():
                 {"agentRuntimeName": "another_agent", "agentRuntimeId": "another_agent-y2"}]}],
             list_gateways=[{"items": [
                 {"name": "fairtable-gw", "gatewayId": "fairtable-gw-abc"},
-                {"name": "someone-elses-gateway", "gatewayId": "someone-elses-gateway-zzz"}]}])},
+                {"name": "someone-elses-gateway", "gatewayId": "someone-elses-gateway-zzz"}]}],
+            list_policy_engines=[{"policyEngines": [
+                {"name": "fairtable_engine", "policyEngineId": "fairtable_engine-p1"},
+                {"name": "other_engine", "policyEngineId": "other_engine-q2"}]}])},
         logs=FakeClient(describe_log_groups=[{"logGroups": [{"logGroupName": "/aws/lambda/FairTableIdentity-PreToken-1"}]}]),
         budgets=FakeClient(describe_budgets=[{"Budgets": [{"BudgetName": "fairtable-cap-150usd"},
                                                           {"BudgetName": "fairtable-5usd"}]}]),
@@ -143,7 +146,9 @@ def test_the_inventory_lists_ours_and_ignores_everything_else():
     assert "fairtable-5usd" not in names  # the developer's own alarm is never ours to touch
     assert {"FairTableData", "CDKToolkit", "fairtable", "ft-test-1", "us-east-1_abc (fairtable-users)",
             "FairTableIdentity-PreToken-1", "FairTableRuntime-SlotTokenSecret-1",
-            "fairtable_mcp fairtable_mcp-x1", "fairtable-gw fairtable-gw-abc", "fairtable-cap-150usd"} <= set(names)
+            "fairtable_mcp fairtable_mcp-x1", "fairtable-gw fairtable-gw-abc", "fairtable-cap-150usd",
+            "fairtable_engine fairtable_engine-p1"} <= set(names)
+    assert "other_engine other_engine-q2" not in names
     assert "someone-elses-gateway someone-elses-gateway-zzz" not in names
 
 

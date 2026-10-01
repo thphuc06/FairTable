@@ -51,6 +51,8 @@ if package.exists():
         client_ids=client_ids,
         sessions=os.environ.get("GATEWAY_SESSIONS", "false").lower() == "true",
         streaming=os.environ.get("GATEWAY_STREAMING", "false").lower() == "true",
+        policy_mode=os.environ.get("GATEWAY_POLICY") or None,  # LOG_ONLY | ENFORCE; unset = no policy engine
+        permits_only=os.environ.get("GATEWAY_POLICY_STAGE") == "permits",  # first of two deploys (D-049)
         env=env,
     )
 
