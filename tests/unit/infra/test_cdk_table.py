@@ -341,3 +341,31 @@ def test_the_interceptor_function_is_small_python_on_arm(templates):
     props = fn["Properties"]
     assert (props["Runtime"], props["Handler"], props["Architectures"]) == ("python3.12", "handler.lambda_handler", ["arm64"])
     assert props["Timeout"] <= 10 and props["MemorySize"] <= 256
+
+
+# ------------------------------------------------------------------ opt-in session options (D-048)
+def synth_stacks(tmp_path, **extra):
+    package = tmp_path / "fairtable-runtime.zip"
+    with zipfile.ZipFile(package, "w") as z:
+        z.writestr("runtime_entry.py", "print('stand-in')")
+    env = {**os.environ, "CDK_OUTDIR": str(tmp_path / "out"), "CDK_DEFAULT_ACCOUNT": "123456789012",
+           "AWS_REGION": "us-east-1", "RUNTIME_ZIP": str(package), **extra}
+    run = subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, capture_output=True, timeout=180, text=True)
+    assert run.returncode == 0, run.stderr[-500:]
+    return {n: json.loads((tmp_path / "out" / f"{n}.template.json").read_text()) for n in ("FairTableRuntime", "FairTableGateway")}
+
+
+def test_by_default_the_runtime_is_stateless_and_the_gateway_has_no_sessions(templates):
+    assert "MCP_STATELESS" not in runtime_of(templates)["EnvironmentVariables"]  # the entry point defaults to stateless
+    mcp = gateway_of(templates)["ProtocolConfiguration"]["Mcp"]
+    assert "SessionConfiguration" not in mcp and "StreamingConfiguration" not in mcp
+
+
+def test_the_experiment_switches_make_the_runtime_stateful_and_give_the_gateway_sessions_and_streaming(tmp_path):
+    stacks = synth_stacks(tmp_path, RUNTIME_STATELESS="false", GATEWAY_SESSIONS="true", GATEWAY_STREAMING="true")
+    (runtime,) = resources(stacks["FairTableRuntime"], "AWS::BedrockAgentCore::Runtime")
+    assert runtime["Properties"]["EnvironmentVariables"]["MCP_STATELESS"] == "false"
+    (gateway,) = resources(stacks["FairTableGateway"], "AWS::BedrockAgentCore::Gateway")
+    mcp = gateway["Properties"]["ProtocolConfiguration"]["Mcp"]
+    assert mcp["SessionConfiguration"] == {"SessionTimeoutInSeconds": 900}
+    assert mcp["StreamingConfiguration"] == {"EnableResponseStreaming": True}

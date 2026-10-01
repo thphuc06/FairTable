@@ -40,6 +40,7 @@ if package.exists():
         package_path=package,
         consent_base_url=os.environ.get("CONSENT_BASE_URL", "http://localhost:8080"),
         allowed_hosts=os.environ.get("MCP_ALLOWED_HOSTS"),
+        stateless=os.environ.get("RUNTIME_STATELESS", "true").lower() != "false",
         env=env,
     )
     GatewayStack(
@@ -48,6 +49,8 @@ if package.exists():
         runtime=runtime.runtime,
         issuer=identity.pool.user_pool_provider_url,
         client_ids=client_ids,
+        sessions=os.environ.get("GATEWAY_SESSIONS", "false").lower() == "true",
+        streaming=os.environ.get("GATEWAY_STREAMING", "false").lower() == "true",
         env=env,
     )
 

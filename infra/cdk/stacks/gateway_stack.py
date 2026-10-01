@@ -37,6 +37,8 @@ class GatewayStack(Stack):
         runtime: agentcore.CfnRuntime,
         issuer: str,
         client_ids: list[str],
+        sessions: bool = False,
+        streaming: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -92,7 +94,19 @@ class GatewayStack(Stack):
             ),
             protocol_type="MCP",
             protocol_configuration=agentcore.CfnGateway.GatewayProtocolConfigurationProperty(
-                mcp=agentcore.CfnGateway.MCPGatewayConfigurationProperty(supported_versions=MCP_VERSIONS)
+                mcp=agentcore.CfnGateway.MCPGatewayConfigurationProperty(
+                    supported_versions=MCP_VERSIONS,
+                    # Sessions and response streaming are what URL elicitation through the Gateway needs
+                    # ("Use elicitation with your AgentCore gateway"); off unless asked (D-048).
+                    session_configuration=(
+                        agentcore.CfnGateway.SessionConfigurationProperty(session_timeout_in_seconds=900)
+                        if sessions else None
+                    ),
+                    streaming_configuration=(
+                        agentcore.CfnGateway.StreamingConfigurationProperty(enable_response_streaming=True)
+                        if streaming else None
+                    ),
+                )
             ),
             interceptor_configurations=[
                 agentcore.CfnGateway.GatewayInterceptorConfigurationProperty(

@@ -1,6 +1,6 @@
 # Phase 2 – AWS Builder path (10-14 → 10-17, started early 2026-09-30)
 
-Status: **P2-1 to P2-4 and P2-8 done; the AWS profile runs in the developer's second account (D-045); next P2-5 Gateway, P2-6 Policy, P2-7 `-32042`, P2-9 observability** (decisions D-016, D-030, D-031, D-034, D-035)
+Status: **P2-1 to P2-5, P2-7, P2-8, P2-10 done; the AWS profile runs in the developer's second account (D-045); next P2-6 Policy, P2-9 observability** (decisions D-016, D-030, D-031, D-034, D-035)
 
 ## Plan
 Goal: run the same server on AWS (DynamoDB, Cognito, AgentCore Runtime, Gateway, Policy, Observability) so the demo shows the AWS path once, then tear everything down. Task list and acceptance criteria: `docs/PLAN.md` §3, Phase 2. Choices: D-035.
@@ -24,11 +24,20 @@ Read-only account check at the start, 2026-09-30 (us-east-1): budgets `My Zero-S
 | P2-4 Verifier with Cognito JWKS | B | done | 2026-09-30 | several client ids, token_use; real Cognito tokens pass with configuration only |
 | P2-5 Gateway + interceptor | B | todo | | |
 | P2-6 Gateway Policy G1-G4 | B | todo | | |
-| P2-7 -32042 through the Gateway | B | todo | | |
+| P2-7 -32042 through the Gateway | B | done | 2026-10-01 | measured: lost through the Gateway; plain result with the link works; D-048 |
 | P2-9 Observability (AWS part) | C | todo | | server part done (D-032) |
 | P2-8 Teardown + aws-integration.md | C | in progress | 2026-09-30 | started while P2-3 waits for the quota |
 
 ## Entries (newest first)
+
+### 2026-10-01 · P2-7 · [aws] [gateway] [stepup] · `-32042` through the Gateway measured; real model through the Gateway tried
+- **Goal:** answer the P2-7 question and try a real model through the Gateway.
+- **Done:** (1) probes with a URL-capable client: stateless Runtime gives the plain `CONSENT_REQUIRED` result with the link, through the Gateway and directly; with a stateful Runtime and a sessions-enabled Gateway (then with streaming too) the Runtime returns the real `-32042` but the Gateway turns it into a plain error and the link is lost (D-048, friction log). The experiment was reverted (Runtime env change 267 s, Gateway 36 s); 17 of 17 Gateway and Runtime tests pass again. (2) DeepSeek through the Gateway: `tests/aws/test_real_model.py` (skipped without `DEEPSEEK_API`; only `DEEPSEEK_*` lines are read from `.env`, nothing printed): booked every time in 5 runs; an instruction about unique `idempotency_key`s was added to the assistant's prompt. (3) CDK switches `RUNTIME_STATELESS`, `GATEWAY_SESSIONS`, `GATEWAY_STREAMING` (off by default) with template tests.
+- **Files:** `infra/cdk/{app.py,stacks/runtime_stack.py,stacks/gateway_stack.py}`, `simulator/assistant.py`, `tests/aws/test_real_model.py`, `tests/unit/infra/test_cdk_table.py`, docs.
+- **Tests:** CDK template tests 35 passed; real AWS: Gateway and Runtime 17 of 17 after the revert, real model 1 of 1 (five runs); unit tests see the batch report.
+- **Decisions:** D-048.
+- **Surprises / friction:** the Gateway drops the elicitation URL (friction log).
+- **Follow-ups:** P2-6 (Policy G1-G4), P2-9 (observability), then clean up per D-044; the whole local suite still has to be run once more after the prompt sentence and the CDK switches.
 
 ### 2026-10-01 · P2-10 · [aws] [web] [simulator] · Cognito sign-in for the web pages and the assistant through the Gateway
 - **Goal:** make the AWS demo path complete: a person signs in with Cognito, chats, and the assistant reaches the server through the Gateway.

@@ -38,6 +38,7 @@ class RuntimeStack(Stack):
         package_path: Path,
         consent_base_url: str,
         allowed_hosts: str | None = None,
+        stateless: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -98,6 +99,9 @@ class RuntimeStack(Stack):
         }
         if allowed_hosts:
             environment["MCP_ALLOWED_HOSTS"] = allowed_hosts
+        if not stateless:
+            # Only for the -32042 experiment (D-048): the entry point defaults to stateless, as Runtime recommends.
+            environment["MCP_STATELESS"] = "false"
 
         runtime = agentcore.CfnRuntime(
             self,
