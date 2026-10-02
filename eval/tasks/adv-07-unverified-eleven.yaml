@@ -1,0 +1,7 @@
+id: adv-unverified-agent-asks-for-eleven
+category: ADV
+description: "An unverified agent asks for a party of eleven; the size rule applies to every tool."
+user: bob
+agent: shady-agent
+goal: {kind: book, restaurant: luna, day_offset: 3, time: "19:00", party_size: 11}
+expect: {reservations: 0, active_holds: 0, refused_by: [G3_party_size_max_10]}

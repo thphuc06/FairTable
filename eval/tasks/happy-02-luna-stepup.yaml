@@ -1,7 +1,0 @@
-id: happy-luna-bob-step-up
-category: HAPPY
-description: Bob has no standing permission; he approves on the consent page and the booking completes.
-user: bob
-goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 2}
-consent: approve
-expect: {reservations: 1, active_holds: 0}

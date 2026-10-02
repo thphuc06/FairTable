@@ -52,7 +52,7 @@ def only(spans: InMemorySpanExporter, tool: str, nth: int = -1):
 async def token_for(world: World, venue: str, date: str, time: str, party: int = 2) -> str:
     r = await call(world, "availability_check", restaurant_id=venue, date=date, time_window=f"{time}-{time}",
                    party_size=party)
-    return r.structuredContent["slots"][0]["slot_token"]
+    return r.structuredContent["slots"][0]["offer_id"]
 
 
 async def test_a_read_call_is_one_span_with_the_caller_and_the_rule_that_allowed_it(world, spans):
@@ -68,7 +68,7 @@ async def test_a_read_call_is_one_span_with_the_caller_and_the_rule_that_allowed
 async def test_a_refusal_names_the_rule_and_is_not_marked_as_a_failure_of_the_server(world, spans):
     world.as_("alice")
     slot = await token_for(world, "sakura-counter", day(world, 1), "20:00")  # the Fair Drop seat
-    r = await call(world, "reservation_hold", slot_token=slot, idempotency_key="span-rt8-direct")
+    r = await call(world, "reservation_hold", offer_id=slot, idempotency_key="span-rt8-direct")
     assert r.isError
     s = only(spans, "reservation_hold")
     a = dict(s.attributes)
@@ -81,27 +81,29 @@ async def test_a_refusal_names_the_rule_and_is_not_marked_as_a_failure_of_the_se
 async def test_pep1_denials_are_visible_for_a_machine_client(world, spans):
     world.as_("bot")
     slot = await token_for(world, "luna-trattoria", day(world), "19:00")
-    await call(world, "reservation_hold", slot_token=slot, idempotency_key="span-rt1-bot-hold")
+    await call(world, "reservation_hold", offer_id=slot, idempotency_key="span-rt1-bot-hold")
     a = dict(only(spans, "reservation_hold").attributes)
     assert a["fairtable.caller.kind"] == "machine" and a["fairtable.pep1.decision"] == "deny"
     assert a["fairtable.outcome"] == "refused" and "fairtable.pep2.decision" not in a  # stopped before PEP-2
 
 
-async def test_a_step_up_is_recorded_as_an_approval_request(world, spans):
+async def test_a_confirm_without_the_diners_answer_is_recorded_as_waiting_for_the_yes(world, spans):
     world.as_("bob")
     slot = await token_for(world, "luna-trattoria", day(world), "19:00")
-    hold = await call(world, "reservation_hold", slot_token=slot, idempotency_key="span-bob-hold")
-    await call(world, "reservation_confirm", hold_id=hold.structuredContent["hold_id"], idempotency_key="span-bob-conf")
+    hold = await call(world, "reservation_hold", offer_id=slot, idempotency_key="span-bob-hold")
+    await call(world, "reservation_confirm", hold_id=hold.structuredContent["hold_id"], idempotency_key="span-bob-conf",
+               read_back_token=hold.structuredContent["read_back_token"], user_confirmed=True)  # in the same breath
     a = dict(only(spans, "reservation_confirm").attributes)
-    assert a["fairtable.outcome"] == "step_up" and a["fairtable.error_code"] == "CONSENT_REQUIRED"
-    assert a["fairtable.pep2.decision"] == "step_up" and list(a["fairtable.pep2.rule_ids"]) == ["S3_confirm_needs_mandate"]
+    assert a["fairtable.outcome"] == "read_back" and a["fairtable.error_code"] == "CONFIRMATION_REQUIRED"
+    assert a["fairtable.pep2.decision"] == "deny"
+    assert list(a["fairtable.pep2.rule_ids"]) == ["S5b_confirm_needs_the_diners_answer"]
 
 
 async def test_an_idempotent_replay_is_marked(world, spans):
     world.as_("alice")
     slot = await token_for(world, "luna-trattoria", day(world), "19:00")
-    await call(world, "reservation_hold", slot_token=slot, idempotency_key="span-replay-key")
-    await call(world, "reservation_hold", slot_token=slot, idempotency_key="span-replay-key")
+    await call(world, "reservation_hold", offer_id=slot, idempotency_key="span-replay-key")
+    await call(world, "reservation_hold", offer_id=slot, idempotency_key="span-replay-key")
     first, second = (dict(s.attributes) for s in spans.get_finished_spans() if s.attributes["fairtable.tool"] == "reservation_hold")
     assert first["fairtable.outcome"] == "ok" and first.get("fairtable.idempotent_replay") is False
     assert second["fairtable.outcome"] == "ok" and second["fairtable.idempotent_replay"] is True
@@ -117,9 +119,9 @@ async def test_a_missing_token_is_a_refusal_with_no_caller(world, spans):
 async def test_a_bug_is_an_error_span_with_the_exception_class_only(world, spans):
     world.as_("alice")
     world.deps.store.get_venue = lambda _id: 1 / 0  # a bug inside a tool
-    r = await call(world, "mandate_status", restaurant_id="luna-trattoria")
+    r = await call(world, "availability_check", restaurant_id="luna-trattoria", date=day(world), party_size=2)
     assert r.isError
-    s = only(spans, "mandate_status")
+    s = only(spans, "availability_check")
     a = dict(s.attributes)
     assert s.status.status_code is StatusCode.ERROR and a["fairtable.outcome"] == "error"
     assert a["fairtable.exception.type"] == "ToolError" or a["fairtable.exception.type"] == "ZeroDivisionError"
@@ -142,15 +144,19 @@ async def test_a_call_without_trace_context_starts_its_own_trace(world, spans):
 
 
 async def test_no_span_of_a_whole_booking_carries_a_secret(world, spans):
-    """Token, slot token, user id, username, idempotency keys, approval id and link: none may appear."""
+    """Token, slot token, read-back token, user id, username, idempotency keys and ids: none may appear."""
     secrets = {world.token("bob"), "dev-bob", "diner-bob", "span-secret-hold", "span-secret-conf", "eyJ"}
     world.as_("bob")
     slot = await token_for(world, "luna-trattoria", day(world), "19:00")
     secrets.add(slot)
-    hold = await call(world, "reservation_hold", slot_token=slot, idempotency_key="span-secret-hold")
-    secrets.add(hold.structuredContent["hold_id"])
-    r = await call(world, "reservation_confirm", hold_id=hold.structuredContent["hold_id"], idempotency_key="span-secret-conf")
-    secrets.update({r.structuredContent["consent_url"], r.structuredContent["consent_url"].rsplit("/", 1)[1]})
+    hold = await call(world, "reservation_hold", offer_id=slot, idempotency_key="span-secret-hold")
+    secrets.update({hold.structuredContent["hold_id"], hold.structuredContent["read_back_token"]})
+    world.clock.advance(8)
+    r = await call(world, "reservation_confirm", hold_id=hold.structuredContent["hold_id"],
+                   idempotency_key="span-secret-conf", read_back_token=hold.structuredContent["read_back_token"],
+                   user_confirmed=True)
+    assert not r.isError, r.structuredContent
+    secrets.add(r.structuredContent["reservation_id"])
     finished = spans.get_finished_spans()
     assert len(finished) >= 3
     for s in finished:

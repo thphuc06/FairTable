@@ -114,7 +114,7 @@ def compare_markdown(summaries: list[Summary]) -> str:
         return f"{ok}/{total}"
 
     lines = [
-        "# Ablation: A0 (open store) vs A1 (FairTable) vs A2 (no step-up)",
+        "# Ablation: A0 (open store) vs A1 (FairTable) vs A2 (no voice guards)",
         "",
         head, rule,
         row("pass@1 (HAPPY + ROB)", [_f(s.pass_at_1) for s in summaries]),
@@ -132,7 +132,9 @@ def compare_markdown(summaries: list[Summary]) -> str:
         lines[2:2] = [
             ("> **Model: `mock`.** A script drives the assistant: this validates the harness and the rules, "
              "not a real model. A0 keeps the database's atomic guards (see `eval/configs.py`), so it "
-             "does not show S1 or S2 violations."),
+             "does not show S1 or S2 violations. The mock repeats itself: trials of one task differ only through "
+             "its seeded noise (the duplicate-hold tasks), so pass^k equals pass@1 for the other tasks and "
+             "repeating them says little; k above 1 starts to mean something with a real model (plan task P3-4)."),
             "",
         ]
     return "\n".join(lines)

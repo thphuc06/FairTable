@@ -69,7 +69,8 @@ def register(mcp: FastMCP, deps: AppDeps) -> None:
         window = parse_window(time_window)
         venue = deps.store.get_venue(restaurant_id)
         if venue is None:
-            raise FairTableError(ErrorCode.NOT_FOUND, "No restaurant with that restaurant_id.")
+            raise FairTableError(ErrorCode.NOT_FOUND, "I could not find that restaurant.",
+                             hint="Use a restaurant_id from the search results.")
         free = offered_slots(deps.store.get_slots(venue.venue_id, day.isoformat(), consistent=True),
                              party_size=people, window=window, now=now)
         if any(not s.drop_controlled for s in free):

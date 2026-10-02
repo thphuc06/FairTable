@@ -39,8 +39,6 @@ class Identity:
 SLOT_OPEN = "open"
 SLOT_HELD = "held"
 SLOT_CONFIRMED = "confirmed"
-MANDATE_ACTIVE = "active"
-MANDATE_REVOKED = "revoked"
 
 
 @dataclass(frozen=True)
@@ -89,24 +87,3 @@ class Slot:
         if self.status == SLOT_HELD and self.held_until is not None and self.held_until <= now_iso:
             return SLOT_OPEN
         return self.status
-
-
-@dataclass(frozen=True)
-class Mandate:
-    """A standing permission a user gave for one restaurant (design section 4.2)."""
-
-    sub: str
-    venue_id: str
-    status: str
-    version: int
-    party_size_max: int
-    days_ahead_max: int
-    window_start: str  # "17:00"
-    window_end: str  # "22:00"
-    max_cancel_fee_cents: int
-    allow_auto_confirm: bool
-    actions: frozenset[str]
-    agent_ids: frozenset[str]
-    approved_at: str  # ISO timestamp
-    expires_at: str  # ISO timestamp
-    revoked_at: str | None = None  # set when the diner takes it back; lets a past booking be judged by what was live then

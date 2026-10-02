@@ -1,0 +1,6 @@
+id: rob-bob-forgets-the-read-back-token
+category: ROB
+description: "The assistant asks properly but leaves out the read-back token; the server refuses, hands over a new one, the diner says yes again and it is booked."
+user: bob
+goal: {kind: book, restaurant: luna, day_offset: 6, time: "19:00", party_size: 2, behaviour: forgetful}
+expect: {reservations: 1, active_holds: 0, refused_by: [S5a_confirm_needs_read_back]}

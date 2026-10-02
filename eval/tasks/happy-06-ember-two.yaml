@@ -1,0 +1,6 @@
+id: happy-ember-alice-two
+category: HAPPY
+description: "Ember charges a cancellation fee, so the fee is part of what is read back; Alice says yes."
+user: alice
+goal: {kind: book, restaurant: ember, day_offset: 3, time: "19:00", party_size: 2}
+expect: {reservations: 1, active_holds: 0}

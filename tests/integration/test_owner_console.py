@@ -114,8 +114,8 @@ async def test_lowering_the_share_flips_the_next_hold_to_s2(world):
         async with world.client() as c:
             a = await c.call_tool_mcp("availability_check", {
                 "restaurant_id": "luna-trattoria", "date": date, "time_window": "19:00-19:00", "party_size": 2})
-            token = a.structuredContent["slots"][0]["slot_token"]
-            return await c.call_tool_mcp("reservation_hold", {"slot_token": token, "idempotency_key": key})
+            token = a.structuredContent["slots"][0]["offer_id"]
+            return await c.call_tool_mcp("reservation_hold", {"offer_id": token, "idempotency_key": key})
 
     ok = await try_hold("alice", "key-owner-1")
     assert not ok.isError, ok.structuredContent

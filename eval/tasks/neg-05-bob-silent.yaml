@@ -1,0 +1,7 @@
+id: neg-luna-bob-says-nothing
+category: NEG
+description: "Bob never answers; a table is not booked without a yes."
+user: bob
+goal: {kind: book, restaurant: luna, day_offset: 3, time: "19:30", party_size: 2}
+consent: ignore
+expect: {reservations: 0, active_holds: 1}

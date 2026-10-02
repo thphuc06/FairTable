@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 from ddb_env import ENDPOINT
-from flows import book, call, hold_table, set_approval
+from flows import ANSWER_AFTER_S, book, call, hold_table
 from world import World
 
 from server.domain.booking import Hold, Reservation
@@ -41,25 +41,25 @@ async def test_a_fresh_table_and_a_normal_history_are_clean(world):
     assert kept["code"]
 
 
-async def test_an_approved_booking_outside_the_mandate_is_fine_but_an_unapproved_one_is_not(world):
-    approved = await book(world, "bob", "luna-trattoria", "19:00", tag="1")  # Bob has no mandate; approval used
+async def test_a_booking_made_after_a_read_back_is_fine_but_one_written_without_it_is_not(world):
+    read_back = await book(world, "bob", "luna-trattoria", "19:00", tag="1")
     assert problems(world) == []
 
-    # A reservation that skipped consent entirely (written straight into the table) is flagged.
+    # A reservation that skipped the read-back entirely (written straight into the table) is flagged (I1).
     hold = world.store.get_hold((await hold_table(world, "bob", "luna-trattoria", "19:30", key="key-hold-bob2"))["hold_id"])
     sneaky = Reservation("res-sneaky", "LUN-0000", hold.hold_id, "dev-bob", "alexa-plus-sim", "luna-trattoria",
                          hold.date, hold.time, hold.table_group, 2, "confirmed", hold.terms, iso_z(world.clock.now()))
     world.store.put_item(reservation_to_item(sneaky))
     world.store.put_item(hold_to_item(replace(hold, status="confirmed")))
     assert "I1" in codes(world)
-    assert approved["reservation_id"]
+    assert read_back["reservation_id"]
 
 
 async def test_a_double_booked_table_is_flagged(world):
     h = await hold_table(world, "alice", "luna-trattoria", "19:00")
     original = world.store.get_hold(h["hold_id"])
     twin = Hold("hold-twin", "dev-bob", "alexa-plus-sim", original.venue_id, original.date, original.time,
-                original.table_group, 2, "held", original.held_until, original.created_at, False, original.terms)
+                original.table_group, 2, "held", original.held_until, original.created_at, original.terms)
     world.store.put_item(hold_to_item(twin))
     assert "I2" in codes(world)
 
@@ -81,16 +81,20 @@ async def test_a_slot_that_disagrees_with_its_owner_is_flagged(world):
     assert "SLOT" in codes(world)  # open slot with a confirmed reservation on it
 
 
-async def test_a_fee_without_the_users_approval_is_flagged(world):
+async def test_a_fee_that_was_not_read_back_is_flagged(world):
     booking = await book(world, "bob", "ember-grill", "18:00", offset=1)
     rid = booking["reservation_id"]
     out = await call(world.as_("bob"), "reservation_manage", action="cancel", reservation_id=rid,
                      idempotency_key="key-cancel-01")
-    assert out.structuredContent["error"] == "FEE_APPLIES"
-    set_approval(world, rid)
-    done = await call(world, "reservation_manage", action="cancel", reservation_id=rid, idempotency_key="key-cancel-01")
+    assert out.structuredContent["error"] == "CONFIRMATION_REQUIRED"
+    token = out.structuredContent["details"]["read_back_token"]
+    world.clock.advance(ANSWER_AFTER_S)
+    done = await call(world, "reservation_manage", action="cancel", reservation_id=rid, idempotency_key="key-cancel-01",
+                      read_back_token=token, user_confirmed=True)
     assert not done.isError and problems(world) == []
-    world.store.replace_approval(replace(world.store.get_approval(rid), status="pending"))  # tamper: fee was never accepted
+    item = world.store.get_item(keys.reservation(rid))
+    item.pop("cancel_read_back_at")  # tamper: the fee was charged but never read back
+    world.store.put_item(item)
     assert "I3" in codes(world)
 
 

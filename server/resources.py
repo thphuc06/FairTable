@@ -33,10 +33,11 @@ These rules are enforced by the FairTable server, not by the assistant. An assis
   {venue.seats_per_day} seats); the rest is kept for phone and walk-in guests (S2).
 - **Hot tables** are released only through a Fair Drop lottery, never by direct booking (S4). The draw
   is committed in advance and can be verified by anyone.
-- **Confirming** a booking needs the diner's standing permission; anything outside it is approved by the
-  diner on their phone first (S3). The approval is for that exact booking and can be used once.
+- **Confirming** a booking needs the diner's spoken yes: the assistant reads the details back, waits for the
+  answer and confirms with the read-back token the server handed out for exactly those terms (S5a-c). The
+  server cannot hear the diner; it checks the terms, the pause and the assistant's statement.
 - **Cancelling** {venue.free_cancel_hours} hours or less before the booking {fee}. If a fee applies the
-  diner must approve it first; a booking is never cancelled silently with a fee (S3b).
+  fee is read back and needs the diner's yes first; a booking is never cancelled silently with a fee (S5a-c).
 """
 
 

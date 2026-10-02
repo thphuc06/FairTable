@@ -10,8 +10,9 @@ a task that checks nothing.
     agent: alexa-plus-sim      # the OAuth client the assistant uses (shady-agent = unverified)
     goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 2}
     noise: {duplicate_hold: 0.0}
-    consent: approve           # what the diner does with an approval link: approve | decline | ignore
-    expect: {reservations: 1, active_holds: 0, refused_by: [S2_agent_share_of_covers], errors: [SLOT_TAKEN]}
+    consent: approve           # what the diner says when asked: approve (yes) | decline (no) | ignore (nothing)
+    expect: {reservations: 1, active_holds: 0, refused_by: [S2_agent_share_of_covers], errors: [SLOT_TAKEN],
+             succeeded: [waitlist_watch]}
 """
 
 from dataclasses import dataclass, field
@@ -21,10 +22,10 @@ from typing import Any
 
 import yaml
 
-from simulator.personas import Goal, Noise
+from simulator.personas import BEHAVIOURS, Goal, Noise
 
 CATEGORIES = ("HAPPY", "NEG", "ROB", "ADV")
-CONSENT = ("approve", "decline", "ignore")
+CONSENT = ("approve", "decline", "ignore")  # the diner says yes, says no, or says nothing
 USERS = ("alice", "bob", "carol")
 AGENTS = ("alexa-plus-sim", "shady-agent")
 LEGIT = ("HAPPY", "ROB")  # tasks a careful system must complete (used for pass^k and false blocks)
@@ -40,6 +41,7 @@ class Expect:
     active_holds: int | None = None  # holds of the diner still alive at the end
     refused_by: tuple[str, ...] = ()  # rule ids that must have refused something during the run
     errors: tuple[str, ...] = ()  # error codes that must have been returned during the run
+    succeeded: tuple[str, ...] = ()  # tools that must have answered without an error at least once
 
 
 @dataclass(frozen=True)
@@ -101,7 +103,7 @@ def parse_task(data: Any, where: str = "task") -> Task:
     _only(g, {"kind", "restaurant", "day_offset", "time", "party_size", "behaviour"}, f"{where}.goal")
     goal = TaskGoal(**g)
     _need(goal.kind in ("book", "watch"), where, "goal.kind must be book or watch")
-    _need(goal.behaviour in ("polite", "hot_direct"), where, "goal.behaviour must be polite or hot_direct")
+    _need(goal.behaviour in BEHAVIOURS, where, f"goal.behaviour must be one of {BEHAVIOURS}")
     _need(isinstance(goal.party_size, int) and goal.party_size > 0, where, "goal.party_size must be a positive integer")
     _need(isinstance(goal.time, str) and len(goal.time) == 5, where, "goal.time must be a quoted 'HH:MM'")
 
@@ -109,11 +111,11 @@ def parse_task(data: Any, where: str = "task") -> Task:
     _only(n, {"duplicate_hold"}, f"{where}.noise")
     e = data["expect"]
     _need(isinstance(e, dict), where, "expect must be a mapping")
-    _only(e, {"reservations", "active_holds", "refused_by", "errors"}, f"{where}.expect")
+    _only(e, {"reservations", "active_holds", "refused_by", "errors", "succeeded"}, f"{where}.expect")
     expect = Expect(e.get("reservations"), e.get("active_holds"), tuple(e.get("refused_by", ())),
-                    tuple(e.get("errors", ())))
-    _need(any([expect.reservations is not None, expect.active_holds is not None, expect.refused_by, expect.errors]),
-          where, "expect must check something")
+                    tuple(e.get("errors", ())), tuple(e.get("succeeded", ())))
+    _need(any([expect.reservations is not None, expect.active_holds is not None, expect.refused_by, expect.errors,
+               expect.succeeded]), where, "expect must check something")
     return Task(
         id=str(data["id"]), category=data["category"], description=str(data.get("description", "")),
         user=data["user"], agent=agent, goal=goal, noise=Noise(seed=0, duplicate_hold=float(n.get("duplicate_hold", 0))),

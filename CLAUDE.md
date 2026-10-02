@@ -10,22 +10,22 @@
 ## Source of truth (read in this order)
 1. `docs/DECISIONS.md` – decisions made after the design; **wins over the design doc** where they differ.
 2. `docs/PLAN.md` – phased plan, tasks, acceptance criteria, risks.
-3. `docs/fairtable-solution-design.md` (v2, Vietnamese, temporary) – **authoritative design** until `docs/ARCHITECTURE.md` (English) replaces it (plan task P0-5). If code and design disagree, ask me.
+3. `docs/ARCHITECTURE.md` (English) – the as-built design; it replaced the Vietnamese design document (D-060). If code and design disagree, ask me.
 4. `docs/hackathon-rules.md` – submission requirements and FAQ clarifications.
-5. `docs/*.drawio` – diagrams (XML). The design doc already contains Mermaid equivalents; open these only if needed.
-6. `docs/research-alexa-plus-round3-2026-09.md` – background/evidence only. Do not implement from it.
+5. `docs/*.drawio` – the developer's own diagrams (XML, edited in place to match the build, D-060). Keep their style; do not regenerate them.
+6. `docs/alexa-plus-addon-notes.md` – Amazon's add-on requirements as they apply here. The Vietnamese design, the research note and the raw rule texts live outside the repo in `C:\AWS_BUILD\FairTable-private-docs\` (D-060).
 
 ## Hard requirements (hackathon rules)
 - MCP server on spec **2025-11-25** with **Streamable HTTP**; the repo must actually import and run it (not just mention it).
 - Public repo, Apache-2.0 license, README with run instructions (working from a fresh clone) and the list of AWS services used. README lists the dev test logins.
-- **The local profile is what judges run:** `docker compose up` starts everything with no AWS account (server, DynamoDB Local, consent page + owner console, dev JWT issuer in `devauth/`, simulator with `MODEL_PROVIDER=mock`). A real provider is opt-in via env.
+- **The local profile is what judges run:** `docker compose up` starts everything with no AWS account (server, DynamoDB Local, chat page + owner console, dev JWT issuer in `devauth/`, simulator with `MODEL_PROVIDER=mock`). A real provider is opt-in via env.
 - Rules digest: `docs/hackathon-rules.md` (dates, submission form fields, testing clause, judging). The raw rule text is not kept in the repo; do not re-fetch it, and update the digest if the rules change.
 - Demo video (< 3 min) shows the server working **and the AWS-deployed path at least once** (AWS Builder). Targeting AWS Builder only; the Open Source mini challenge is out of scope.
 - `docs/aws-integration.md` describes each AWS service used and how.
 
 ## Architecture decisions – do not change without asking
 - **No LLM inside MCP tools.** Tools are deterministic. LLMs appear only in the simulator, the eval harness, and (later) owner rule extraction.
-- **8 tools:** `restaurant_search`, `availability_check`, `mandate_status`, `reservation_hold`, `reservation_confirm`, `reservation_manage`, `waitlist_watch`, `waitlist_status`.
+- **7 tools (`mandate_status` was removed, D-053):** `restaurant_search`, `availability_check`, `reservation_hold`, `reservation_confirm`, `reservation_manage`, `waitlist_watch`, `waitlist_status`.
 - **Two policy enforcement points, same language (Cedar), both run in the server with `cedarpy`:**
   - PEP-1 (stateless): G1–G4, including the `has`-guard on G4. Evaluated first.
   - PEP-2 (stateful): P0 + S1–S4 in `policies/*.cedar` (see design §6.2). Map cedarpy's `policyN` reasons to the `@id` / `@on_deny` annotations via `policies_to_json_str`. Priority: deny > step_up > allow; no matching permit → POLICY_DENIED.
@@ -38,21 +38,21 @@
   - waitlist matching runs inside the cancel / hold-expiry code paths;
   - Fair Drop allocation is triggered by the first request after the drop time.
   - Keep this logic in pure functions so Lambdas (sweeper, allocator, watch matcher) can reuse it later.
-- **Step-up consent:** JSON-RPC error **-32042** (URLElicitationRequiredError) with a consent URL.
+- **Confirmation is 100 % voice (D-051, built in P3-10; the phone step-up is gone):** a booking outside the standing permission or with a fee is confirmed by a spoken yes that the assistant relays. The server guards it: `reservation_hold` returns the terms, a read-back sentence and a signed `read_back_token`; `reservation_confirm` must carry the token and `user_confirmed`, and arrive after a minimum pause (3 s, 6 s with a fee); each booking stores `confirmation = spoken` and when the read-back was handed over. No `-32042`, no consent link, no e-mail. The server cannot hear the diner: say so wherever the guarantee is described. 
 - **Tool outputs:** structured errors (`isError: true`) with `next_step`; every successful output includes a short `spoken_summary`.
 - **Waitlists and MCP Tasks:** DynamoDB is the source of truth for watches and drop entries; `waitlist_status` is the primary path. MCP Tasks (FastMCP `task=True`, `pydocket`) are an **optional view** behind a flag, default off; `memory://` is only for testing/local demo. Every feature must work with Tasks disabled. **No Redis / ElastiCache.**
 - **Identity:**
   - Local profile: a **dev JWT issuer** (`devauth/`) stands in for Cognito, with seeded test users and an M2M bot client (no `username`, no `agent_tier`). Tokens go in `x-ft-user-token`.
   - AWS profile: Cognito + Gateway REQUEST interceptor copies the user token to `x-ft-user-token` (the interceptor must strip any client-supplied value).
   - Both profiles: the server re-verifies the token with `joserfc`, same code; only issuer, JWKS URL and audience change.
-- **Minimal scope for supporting apps:** simulator = one Strands agent + a simple chat page; owner data seeded by a Python script first; consent page = one HTML page with Approve / Decline; owner console = change the agent-share cap and view audit.
+- **Minimal scope for supporting apps:** simulator = one Strands agent + a simple chat page; owner data seeded by a Python script first; consent page retired from the booking flow (D-051); owner console = change the agent-share cap and view audit.
 - **`MODEL_PROVIDER` is configurable** (`mock` default; `bedrock` and others opt-in). No LLM provider is required to run the repo.
 
 ## Pinned versions
 `fastmcp==3.4.7`, `mcp==1.30.0` (do **not** upgrade to 2.x), `strands-agents==1.57.1`, `cedarpy==4.12.1`, plus `joserfc`, `mangum`, `boto3`, `pydantic`, `pytest`.
 
 ## Environment constraints
-- **Amazon Bedrock is currently blocked on my AWS account** (support case pending; DeepSeek flash is the real model meanwhile, D-018/D-028). The $150 credit is real (D-030) and MFA is on (D-034). Build and test everything **locally first**:
+- **Amazon Bedrock is currently blocked on my first AWS account** (the second account can call it, D-043; support case pending; DeepSeek flash is the real model meanwhile, D-018/D-028). The $150 credit is real (D-030) and MFA is on (D-034). Build and test everything **locally first**:
   - DynamoDB Local (Docker) – no `moto`;
   - MCP Inspector for manual testing;
   - a mock LLM for the simulator (`MODEL_PROVIDER=mock`).
@@ -88,11 +88,11 @@ Work is organised in **phases** (`docs/PLAN.md`) and, inside a phase, **batches*
 
 ## Target repo layout
 ```
-server/      FastMCP server, 8 tools, Trust Kernel (cedarpy: PEP-1 + PEP-2)
+server/      FastMCP server, 7 tools, Trust Kernel (cedarpy: PEP-1 + PEP-2)
 policies/    *.cedar, flat: g1–g4 (PEP-1), p0 + s1–s4 (PEP-2)
 devauth/     dev JWT issuer standing in for Cognito (compose service)
 workers/     (later) Lambda sweeper, allocator, watch matcher
-web/         FastAPI: consent page + owner console
+web/         FastAPI: sign-in, chat page + owner console
 simulator/   Alexa+ simulator (Strands, mock model default)
 eval/        task YAML, harness, pass^k reports
 infra/       CDK / agentcore config (AWS profile only)
@@ -102,10 +102,15 @@ docs/        DECISIONS, PLAN, aws-integration, friction log, devlog/ (per-phase 
 Dockerfile, docker-compose.yml   primary run path (created in plan task P1-23)
 ```
 
-## Where things stand (updated 2026-09-30, end of session 2)
-- **Phase 1 is complete** (batches A-F plus the additions in the devlog: owner console, chat page with the tool-call steps, standing permission on the approval page D-033, OpenTelemetry spans D-032, Docker profile D-029, eval harness, A0/A1/A2 and red team). Last full suite: see `docs/devlog/phase-1.md` (about 800 tests; 5 Docker smoke tests only run with `-m docker`). **Phase 2 (AWS) has not started; no AWS resource exists.** Its plan and the verified AgentCore facts are in `docs/PLAN.md` (Phase 2 table and section 3a, "AgentCore facts" and "second pass"). Create `docs/devlog/phase-2.md` when it starts.
-- The developer's confirmation is still needed for the Phase 2 choices listed in the last devlog entry (then record them as D-035).
-- **Phase 2 status (2026-10-01):** D-035 confirmed. `docs/devlog/phase-2.md` is the live file. Done: P2-1 (DynamoDB, budget), P2-2 (Cognito + V3_0 trigger), P2-3 (Runtime V2, zip), P2-4 (verifier), P2-5 (Gateway `fairtable-gw` + REQUEST interceptor, tools are named `ft___<tool>`; 25/25 real-AWS tests), P2-8 (`python infra/aws_ctl.py status|up|seed|down`). The first AWS account is blocked for Bedrock and Runtime (zero quotas, support case open, D-041/D-042); **the AWS profile runs in the second account** (profile `fairtable2-admin`, IAM user with MFA, budget $5, D-043/D-044/D-045). Credentials: `aws login` sessions cannot be read by boto3 here (no `awscrt`): use `scripts/aws_credential_process.py` with `FAIRTABLE_SOURCE_PROFILE=<profile>`; `down --yes` needs `--account <last4>`. Real-AWS tests: `pytest -m aws tests/aws`. P2-10 (Cognito sign-in for the web pages, the assistant through the Gateway; `AUTH_PROVIDER=cognito`, `MCP_VIA_GATEWAY=true`, see web/README.md) is done too. P2-7 is done: `-32042` does NOT survive the Gateway (D-048), so AWS stays stateless and the step-up is the plain `CONSENT_REQUIRED` result with the link. P2-6 is done too (2026-10-02, D-049): Gateway Policy G1-G4 deployed on the second account, engine `fairtable_engine` attached in `ENFORCE` (set `GATEWAY_POLICY=LOG_ONLY|ENFORCE`; the first deploy needs `GATEWAY_POLICY_STAGE=permits`, `aws_ctl.py up` does both). Next: P2-9 (observability), clean up per D-044, then Phase 3.
+## Where things stand (updated 2026-10-02, session 3)
+- **Phases 1 and 2 are complete** (local profile, then the AWS profile in the second account; see `docs/devlog/phase-1.md` and `phase-2.md`). **Phase 3** (`docs/devlog/phase-3.md`) is the live file: eval numbers, voice confirmation, voice demo, SNS, English docs, freeze. Verified AgentCore facts are in `docs/PLAN.md` section 3a. AWS resources exist in the second account until the developer says the footage is recorded (D-044).
+- **Session 3 (2026-10-02, voice works):** SNS is live (the developer received the test e-mail); the voice page `/voice` (Nova 2 Sonic, `VOICE_ENABLED=true`, extra `voice`) books a table by voice through the Gateway after D-059: `offer_id` (8 characters, stored in DynamoDB) replaces the long `slot_token`, the read-back code is 11 characters, a reused idempotency key no longer replays a dead hold. Real-AWS tests: all of `tests/aws` pass (37), voice booking 4 of 4; local suite 1106 passed (+ the CDK synthesis file alone 49 passed; do not run it while a `cdk deploy` uses the same folders). Not done yet: the developer's own listening test, the `-m docker` smoke run, a final whole-suite run, the frozen eval numbers (P3-8), English `ARCHITECTURE.md`, diagrams, Vietnamese docs out, version pins.
+- **Session 3 (2026-10-02, AWS wired):** the seven-tool server (voice confirmation, HTTP 401) runs on the second account (1905): Runtime redeployed, Gateway re-synced and read policy updated, data re-seeded, `pytest -m aws tests/aws` 35 passed, 1 skipped; a real model (DeepSeek) booked through the Gateway. Not deployed: SNS (needs the address in `NOTIFY_EMAIL` and "wire SNS"), Bedrock voice (P3-11, the developer chose the browser page with a microphone, form B). Deploy with `MCP_ALLOWED_HOSTS='*.lambda-microvm.*.on.aws' GATEWAY_POLICY=ENFORCE OBSERVABILITY=true OBSERVABILITY_RUNTIME=true` so that the other stacks keep what they have. Nothing is cleaned up until the developer says the footage is recorded.
+- **Session 3 (2026-10-02, newest):** P3-2 and P3-3 done (D-057): `python -m eval --merge ...`, `python -m eval.gate`, `python -m eval.charts`, whole suite 1089 passed, 41 skipped; committed run `eval/reports/mock-k4-2026-10-02.*` (mock, k = 4: A1 clean, A0 28 violations, A2 28). P3-12 local part done: `SnsNotifier` behind `NOTIFY_TOPIC_ARN`, CDK stack `FairTableNotify` (needs `NOTIFY_EMAIL` at deploy), not deployed. The developer will record the video only after every feature, voice included, is built and wired once on AWS; AWS stays up until then (D-044 cleanup waits for their word). Next: P3-11 research (Nova 2 Sonic), then the single wire (Runtime 7 tools, SNS, Bedrock).
+- **Session 3 (2026-10-02, latest):** P3-9 done (D-056): spoken parts free of codes and names, five options at most, HTTP 401 for a tool call without a valid token (`server/http_auth.py`), plain argument errors; whole suite 1056 passed, 40 skipped; the notes list what was left alone (duplicate bookings, `modify` of day or time, `Authorization: Bearer`, well-known document). Next: one DeepSeek check of the voice flow, then P3-2/P3-3.
+- **Session 3 (2026-10-02, later):** P3-10 is built locally: confirmation is a spoken yes guarded by a signed read-back token, a pause and an explicit yes (rules S5a-c); no mandate, no approval page, no `-32042`, seven tools, stateless by default (D-051, D-053, D-054, D-055; whole suite 1034 passed, 40 skipped). Still to do for it: the AWS redeploy (plan step 8, needs the developer's go) and the `-m docker` smoke run. Next: P3-9, P3-2 (report with k > 1), the voice demo (P3-11), SNS (P3-12), docs and freeze.
+- **Session 3 (2026-10-02, earlier):** Phase 2 is closed (P2-9 observability done: Transaction Search plus Gateway, Policy and Runtime spans, D-050; last full suite 1060 passed, 40 skipped). Phase 3 started (`docs/devlog/phase-3.md`): the 40-task set and its generator exist (`eval/generate.py`, `python -m eval.generate --check`; all 40 pass under A1 with the mock model; the ten starter tasks moved to `tests/fixtures/eval_starter/` because tests pin their numbers). Decisions D-051 (100 % voice confirmation, Alexa+ client facts) and D-052 (voice demo with a speech model) change the plan: P3-10 builds the voice confirmation before the numbers are measured, P3-11 the voice demo, P3-9 checks the Alexa+ add-on requirements. AWS stays up in the second account until the developer says the footage is recorded (D-044).
+- **Phase 2 status (2026-10-01):** D-035 confirmed. `docs/devlog/phase-2.md` is the live file. Done: P2-1 (DynamoDB, budget), P2-2 (Cognito + V3_0 trigger), P2-3 (Runtime V2, zip), P2-4 (verifier), P2-5 (Gateway `fairtable-gw` + REQUEST interceptor, tools are named `ft___<tool>`; 25/25 real-AWS tests), P2-8 (`python infra/aws_ctl.py status|up|seed|down`). The first AWS account is blocked for Bedrock and Runtime (zero quotas, support case open, D-041/D-042); **the AWS profile runs in the second account** (profile `fairtable2-admin`, IAM user with MFA, budget $5, D-043/D-044/D-045). Credentials: `aws login` sessions cannot be read by boto3 here (no `awscrt`): use `scripts/aws_credential_process.py` with `FAIRTABLE_SOURCE_PROFILE=<profile>`; `down --yes` needs `--account <last4>`. Real-AWS tests: `pytest -m aws tests/aws`. P2-10 (Cognito sign-in for the web pages, the assistant through the Gateway; `AUTH_PROVIDER=cognito`, `MCP_VIA_GATEWAY=true`, see web/README.md) is done too. P2-7 is done: `-32042` does NOT survive the Gateway (D-048), so AWS stays stateless and the step-up is the plain `CONSENT_REQUIRED` result with the link. P2-6 is done too (2026-10-02, D-049): Gateway Policy G1-G4 deployed on the second account, engine `fairtable_engine` attached in `ENFORCE` (set `GATEWAY_POLICY=LOG_ONLY|ENFORCE`; the first deploy needs `GATEWAY_POLICY_STAGE=permits`, `aws_ctl.py up` does both). P2-9 is done too; what comes next is in the Session 3 line above. Clean up per D-044 only when the developer says the footage is recorded.
 
 ## Commands that work here (Windows, Git Bash, conda env `fairtable`)
 - Local stack: `docker compose up -d --build --wait` (web 8080, MCP 8000, issuer 9000, DynamoDB Local **8001**); stop with `docker compose down`. `.env` (git-ignored) selects the model: `MODEL_PROVIDER=mock|deepseek`; never print it, and do not export the whole file (an empty `AWS_PROFILE=` breaks boto3): load only `DEEPSEEK_*`.

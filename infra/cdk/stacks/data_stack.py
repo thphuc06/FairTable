@@ -27,6 +27,8 @@ class DataStack(Stack):
             # Demo table, recreated from the seed script: destroyed with the stack (D-004).
             removal_policy=RemovalPolicy.DESTROY,
             deletion_protection=False,
+            # Offers (D-059) carry a `ttl`: DynamoDB removes the old ones. The expiry is also checked on every read.
+            time_to_live_attribute="ttl",
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
                 point_in_time_recovery_enabled=False
             ),

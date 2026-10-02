@@ -50,7 +50,7 @@ class VerifierConfig:
 
 def _unauthenticated(reason: str) -> FairTableError:
     return FairTableError(
-        ErrorCode.UNAUTHENTICATED, "Missing or invalid user token.", reason=reason
+        ErrorCode.UNAUTHENTICATED, "Please sign in again.", hint="A valid user token is required.", reason=reason
     )
 
 

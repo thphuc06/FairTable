@@ -1,0 +1,7 @@
+id: adv-eager-assistant-diner-says-nothing
+category: ADV
+description: "The same impatient assistant, and a diner who never answers: nothing may be booked."
+user: bob
+goal: {kind: book, restaurant: luna, day_offset: 4, time: "19:00", party_size: 2, behaviour: eager}
+consent: ignore
+expect: {reservations: 0, active_holds: 1, refused_by: [S5b_confirm_needs_the_diners_answer]}

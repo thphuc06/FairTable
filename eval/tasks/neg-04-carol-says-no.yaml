@@ -1,0 +1,7 @@
+id: neg-ember-carol-says-no
+category: NEG
+description: "Carol hears the fee at Ember and says no; no table is booked."
+user: carol
+goal: {kind: book, restaurant: ember, day_offset: 4, time: "19:00", party_size: 2}
+consent: decline
+expect: {reservations: 0, active_holds: 1}

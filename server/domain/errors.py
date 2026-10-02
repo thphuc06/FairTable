@@ -10,8 +10,8 @@ from server.domain.tool_names import ToolName
 class ErrorCode(StrEnum):
     INVALID_INPUT = "INVALID_INPUT"
     UNAUTHENTICATED = "UNAUTHENTICATED"
-    INVALID_SLOT_TOKEN = "INVALID_SLOT_TOKEN"
-    SLOT_TOKEN_EXPIRED = "SLOT_TOKEN_EXPIRED"
+    INVALID_OFFER = "INVALID_OFFER"
+    OFFER_EXPIRED = "OFFER_EXPIRED"
     RATE_LIMITED = "RATE_LIMITED"
     NOT_FOUND = "NOT_FOUND"
     SLOT_TAKEN = "SLOT_TAKEN"
@@ -19,9 +19,7 @@ class ErrorCode(StrEnum):
     DROP_CONTROLLED = "DROP_CONTROLLED"
     IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
     HOLD_EXPIRED = "HOLD_EXPIRED"
-    FEE_APPLIES = "FEE_APPLIES"
-    CONSENT_REQUIRED = "CONSENT_REQUIRED"
-    CONSENT_DECLINED = "CONSENT_DECLINED"
+    CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
     ALREADY_ENTERED = "ALREADY_ENTERED"
     DROP_CLOSED = "DROP_CLOSED"
     TEMPORARILY_BUSY = "TEMPORARILY_BUSY"
@@ -43,11 +41,11 @@ DEFAULT_NEXT_STEP: dict[ErrorCode, NextStep] = {
     ErrorCode.UNAUTHENTICATED: NextStep(
         "The user must sign in again. Do not retry with the same token."
     ),
-    ErrorCode.INVALID_SLOT_TOKEN: NextStep(
-        "Fetch fresh slots and use the new slot_token.", ToolName.AVAILABILITY_CHECK
+    ErrorCode.INVALID_OFFER: NextStep(
+        "Fetch fresh slots and use the new offer_id.", ToolName.AVAILABILITY_CHECK
     ),
-    ErrorCode.SLOT_TOKEN_EXPIRED: NextStep(
-        "Fetch fresh slots and use the new slot_token.", ToolName.AVAILABILITY_CHECK
+    ErrorCode.OFFER_EXPIRED: NextStep(
+        "Fetch fresh slots and use the new offer_id.", ToolName.AVAILABILITY_CHECK
     ),
     ErrorCode.RATE_LIMITED: NextStep(
         "Register once; you will be notified when a table opens.", ToolName.WAITLIST_WATCH
@@ -60,7 +58,7 @@ DEFAULT_NEXT_STEP: dict[ErrorCode, NextStep] = {
         "Suggest calling the restaurant or joining the waitlist.", ToolName.WAITLIST_WATCH
     ),
     ErrorCode.DROP_CONTROLLED: NextStep(
-        "This slot is released through a Fair Drop; enter it with waitlist_watch.",
+        "This slot is released through a Fair Drop; enter the draw instead of booking directly.",
         ToolName.WAITLIST_WATCH,
     ),
     ErrorCode.IDEMPOTENCY_CONFLICT: NextStep(
@@ -69,15 +67,10 @@ DEFAULT_NEXT_STEP: dict[ErrorCode, NextStep] = {
     ErrorCode.HOLD_EXPIRED: NextStep(
         "The hold expired. Start again with fresh slots.", ToolName.AVAILABILITY_CHECK
     ),
-    ErrorCode.FEE_APPLIES: NextStep(
-        "Ask the user to approve the fee, then repeat with the same idempotency_key.",
-        ToolName.RESERVATION_MANAGE,
+    ErrorCode.CONFIRMATION_REQUIRED: NextStep(
+        "Read the details back to the user, wait for their answer, then repeat with the read_back_token "
+        "and user_confirmed set to true."
     ),
-    ErrorCode.CONSENT_REQUIRED: NextStep(
-        "Tell the user to approve on their phone (consent_url), then repeat this call with the same "
-        "idempotency_key."
-    ),
-    ErrorCode.CONSENT_DECLINED: NextStep("The user declined. Do not retry; offer alternatives."),
     ErrorCode.ALREADY_ENTERED: NextStep("Check the status.", ToolName.WAITLIST_STATUS),
     ErrorCode.DROP_CLOSED: NextStep("Look for other slots.", ToolName.AVAILABILITY_CHECK),
     ErrorCode.TEMPORARILY_BUSY: NextStep(
@@ -98,7 +91,6 @@ class FairTableError(Exception):
         rule_id: str | None = None,
         retry_after_s: int | None = None,
         next_step: NextStep | None = None,
-        consent_url: str | None = None,
         details: dict[str, Any] | None = None,
         reason: str | None = None,
     ) -> None:
@@ -109,7 +101,6 @@ class FairTableError(Exception):
         self.rule_id = rule_id
         self.retry_after_s = retry_after_s
         self.next_step = next_step or DEFAULT_NEXT_STEP[code]
-        self.consent_url = consent_url
         self.details = details
         # Server-side only (logs, audit). Never sent to the agent: it could help an attacker.
         self.reason = reason
@@ -126,8 +117,6 @@ class FairTableError(Exception):
             payload["rule_id"] = self.rule_id
         if self.retry_after_s is not None:
             payload["retry_after_s"] = self.retry_after_s
-        if self.consent_url:
-            payload["consent_url"] = self.consent_url
         if self.details:
             payload["details"] = self.details
         return payload

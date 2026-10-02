@@ -6,7 +6,6 @@ permit (
   action in [
     AgentCore::Action::"ft___restaurant_search",
     AgentCore::Action::"ft___availability_check",
-    AgentCore::Action::"ft___mandate_status",
     AgentCore::Action::"ft___waitlist_status"
   ],
   resource == AgentCore::Gateway::"__GATEWAY_ARN__"

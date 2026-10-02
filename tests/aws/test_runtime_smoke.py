@@ -25,7 +25,7 @@ import test_tokens as tokens
 pytestmark = pytest.mark.aws
 STACK = "FairTableRuntime"
 EXPECTED_TOOLS = {
-    "restaurant_search", "availability_check", "mandate_status", "reservation_hold",
+    "restaurant_search", "availability_check", "reservation_hold",
     "reservation_confirm", "reservation_manage", "waitlist_watch", "waitlist_status",
 }
 TOKEN_HEADER = "x-ft-user-token"
@@ -88,8 +88,21 @@ async def call(runtime, token, tool, **args):
         return await c.call_tool_mcp(tool, args)
 
 
+async def refused(runtime, token, tool="restaurant_search") -> str:
+    """How a call without a valid token ends: HTTP 401 from the server (P3-9, so that Alexa+ starts account linking).
+    What the Runtime passes on to the caller is measured at the first deploy of this version: an HTTP error that
+    names 401 or 403, or (if the Runtime wraps it) the tool-level UNAUTHENTICATED. Returns which of the two."""
+    try:
+        result = await call(runtime, token, tool)
+    except Exception as e:  # noqa: BLE001 - the transport raises its own error types
+        assert "401" in str(e) or "403" in str(e) or "nauthorized" in str(e), e
+        return "http"
+    assert result.isError and result.structuredContent["error"] == "UNAUTHENTICATED", result.structuredContent
+    return "tool"
+
+
 @pytest.mark.asyncio
-async def test_the_runtime_lists_the_eight_tools(runtime):
+async def test_the_runtime_lists_the_seven_tools(runtime):
     async with client_for(runtime) as c:
         names = {t.name for t in await c.list_tools()}
     assert names == EXPECTED_TOOLS
@@ -105,24 +118,21 @@ async def test_a_diner_token_in_the_header_reaches_the_server_and_dynamodb(runti
 
 @pytest.mark.asyncio
 async def test_a_call_without_the_header_is_unauthenticated(runtime):
-    result = await call(runtime, None, "restaurant_search")
-    assert result.isError and result.structuredContent["error"] == "UNAUTHENTICATED"
+    print("without the header:", await refused(runtime, None))
 
 
 @pytest.mark.asyncio
 async def test_a_token_that_is_not_ours_is_unauthenticated(runtime):
-    result = await call(runtime, "not.a.jwt", "restaurant_search")
-    assert result.isError and result.structuredContent["error"] == "UNAUTHENTICATED"
+    print("not a jwt:", await refused(runtime, "not.a.jwt"))
 
 
 @pytest.mark.asyncio
 async def test_an_id_token_is_unauthenticated(runtime, cognito):
     id_token = tokens.sign_in(cognito, "alexa-plus-sim", "diner-alice", key="IdToken")
-    result = await call(runtime, id_token, "restaurant_search")
-    assert result.isError and result.structuredContent["error"] == "UNAUTHENTICATED"
+    print("id token:", await refused(runtime, id_token))
 
 
-async def a_real_slot_token(runtime, token):
+async def a_real_offer_id(runtime, token):
     """Reads are open to any valid token (G1), so even a bot can get a real slot token; the write is what is refused."""
     from datetime import UTC, datetime, timedelta
 
@@ -130,27 +140,27 @@ async def a_real_slot_token(runtime, token):
     result = await call(runtime, token, "availability_check", restaurant_id="luna-trattoria", date=day,
                         time_window="19:00-19:00", party_size=2)
     assert not result.isError, result.structuredContent
-    return result.structuredContent["slots"][0]["slot_token"]
+    return result.structuredContent["slots"][0]["offer_id"]
 
 
 @pytest.mark.asyncio
 async def test_a_machine_token_without_agent_claims_cannot_write(runtime, cognito):
     token = tokens.machine_token(cognito, "bot-m2m")
-    slot = await a_real_slot_token(runtime, token)  # allowed: a read
-    result = await call(runtime, token, "reservation_hold", slot_token=slot, idempotency_key="smoke-bot-00001")
+    slot = await a_real_offer_id(runtime, token)  # allowed: a read
+    result = await call(runtime, token, "reservation_hold", offer_id=slot, idempotency_key="smoke-bot-00001")
     assert result.isError and result.structuredContent["error"] == "POLICY_DENIED"
 
 
 @pytest.mark.asyncio
 async def test_the_unverified_agent_cannot_write(runtime, cognito):
     token = tokens.sign_in(cognito, "shady-agent", "diner-bob")
-    slot = await a_real_slot_token(runtime, token)
-    result = await call(runtime, token, "reservation_hold", slot_token=slot, idempotency_key="smoke-shady-0001")
+    slot = await a_real_offer_id(runtime, token)
+    result = await call(runtime, token, "reservation_hold", offer_id=slot, idempotency_key="smoke-shady-0001")
     assert result.isError and result.structuredContent["error"] == "POLICY_DENIED"
 
 
 @pytest.mark.asyncio
-async def test_a_booking_inside_alices_permission_runs_end_to_end_and_is_cancelled(runtime, cognito):
+async def test_a_booking_confirmed_after_the_read_back_runs_end_to_end_and_is_cancelled(runtime, cognito):
     """Hold, confirm and cancel through the runtime: DynamoDB transactions with the execution role."""
     from datetime import UTC, datetime, timedelta
 
@@ -160,12 +170,22 @@ async def test_a_booking_inside_alices_permission_runs_end_to_end_and_is_cancell
     slots = (await call(runtime, token, "availability_check", restaurant_id="luna-trattoria", date=day,
                         time_window="20:00-20:00", party_size=2)).structuredContent["slots"]
     assert slots
-    held = await call(runtime, token, "reservation_hold", slot_token=slots[0]["slot_token"],
+    held = await call(runtime, token, "reservation_hold", offer_id=slots[0]["offer_id"],
                       idempotency_key=f"smoke-hold-{tag}")
     assert not held.isError, held.structuredContent
+    assert held.structuredContent["read_back"] and held.structuredContent["read_back_token"]
+    no_yes = await call(runtime, token, "reservation_confirm", hold_id=held.structuredContent["hold_id"],
+                        idempotency_key=f"smoke-conf-{tag}", read_back_token=held.structuredContent["read_back_token"],
+                        user_confirmed=False)  # no yes: refused, and nothing changes. (The 3 s pause is not tested
+    # here: a call through the Runtime already takes about that long, so "too soon" cannot be arranged.)
+    assert no_yes.isError and no_yes.structuredContent["rule_id"] == "S5c_confirm_needs_an_explicit_yes"
+    import asyncio
+
+    await asyncio.sleep(4)  # the diner listens and answers; longer than the 3 s pause (real time on AWS)
     confirmed = await call(runtime, token, "reservation_confirm", hold_id=held.structuredContent["hold_id"],
-                           idempotency_key=f"smoke-conf-{tag}")
-    assert not confirmed.isError, confirmed.structuredContent  # Luna is inside Alice's seeded permission
+                           idempotency_key=f"smoke-conf-{tag}", read_back_token=held.structuredContent["read_back_token"],
+                           user_confirmed=True)
+    assert not confirmed.isError, confirmed.structuredContent
     reservation_id = confirmed.structuredContent["reservation_id"]
     cancelled = await call(runtime, token, "reservation_manage", action="cancel", reservation_id=reservation_id,
                            idempotency_key=f"smoke-cancel-{tag}")

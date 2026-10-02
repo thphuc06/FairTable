@@ -1,0 +1,7 @@
+id: adv-unverified-agent-enters-the-drop
+category: ADV
+description: "An unverified agent tries to enter Bob in the Fair Drop; entering is a write."
+user: bob
+agent: shady-agent
+goal: {kind: book, restaurant: sakura, day_offset: 1, time: "20:00", party_size: 2}
+expect: {reservations: 0, active_holds: 0, refused_by: [G4_verified_agent_only]}

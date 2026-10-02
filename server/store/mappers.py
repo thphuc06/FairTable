@@ -3,9 +3,9 @@
 from decimal import Decimal
 from typing import Any
 
-from server.domain.booking import HOLD_HELD, Approval, Hold, Reservation
+from server.domain.booking import HOLD_HELD, Hold, Reservation
 from server.domain.fairdrop import Drop, DropEntry
-from server.domain.models import Mandate, Slot, Venue
+from server.domain.models import Slot, Venue
 from server.domain.waitlist import WATCH_WAITING, Watch
 from server.store import keys
 
@@ -99,59 +99,14 @@ def item_to_slot(item: dict[str, Any]) -> Slot:
     )
 
 
-def mandate_to_item(m: Mandate) -> dict[str, Any]:
-    k = keys.mandate(m.sub, m.venue_id)
-    return {
-        "PK": k.pk,
-        "SK": k.sk,
-        "entity": "mandate",
-        "sub": m.sub,
-        "venue_id": m.venue_id,
-        "status": m.status,
-        "version": m.version,
-        "party_size_max": m.party_size_max,
-        "days_ahead_max": m.days_ahead_max,
-        "window_start": m.window_start,
-        "window_end": m.window_end,
-        "max_cancel_fee_cents": m.max_cancel_fee_cents,
-        "allow_auto_confirm": m.allow_auto_confirm,
-        "actions": sorted(m.actions),
-        "agent_ids": sorted(m.agent_ids),
-        "approved_at": m.approved_at,
-        "expires_at": m.expires_at,
-        **({"revoked_at": m.revoked_at} if m.revoked_at else {}),
-    }
-
-
-def item_to_mandate(item: dict[str, Any]) -> Mandate:
-    item = plain(item)
-    return Mandate(
-        sub=item["sub"],
-        venue_id=item["venue_id"],
-        status=item["status"],
-        version=item["version"],
-        party_size_max=item["party_size_max"],
-        days_ahead_max=item["days_ahead_max"],
-        window_start=item["window_start"],
-        window_end=item["window_end"],
-        max_cancel_fee_cents=item["max_cancel_fee_cents"],
-        allow_auto_confirm=item["allow_auto_confirm"],
-        actions=frozenset(item["actions"]),
-        agent_ids=frozenset(item["agent_ids"]),
-        approved_at=item["approved_at"],
-        expires_at=item["expires_at"],
-        revoked_at=item.get("revoked_at"),
-    )
-
-
 def hold_to_item(h: Hold) -> dict[str, Any]:
     k = keys.hold(h.hold_id)
     item: dict[str, Any] = {
         "PK": k.pk, "SK": k.sk, "entity": "hold", "hold_id": h.hold_id, "sub": h.sub,
         "agent_id": h.agent_id, "venue_id": h.venue_id, "date": h.date, "time": h.time,
         "table_group": h.table_group, "party_size": h.party_size, "status": h.status,
-        "held_until": h.held_until, "created_at": h.created_at, "within_mandate": h.within_mandate,
-        "terms": h.terms, "hold_extended": h.extended,
+        "held_until": h.held_until, "created_at": h.created_at,
+        "terms": h.terms,
         "GSI2PK": keys.user_partition(h.sub), "GSI2SK": f"HOLD#{h.created_at}#{h.hold_id}",
     }
     if h.status == HOLD_HELD:  # listed by expiry only while it can still expire
@@ -166,9 +121,7 @@ def item_to_hold(item: dict[str, Any]) -> Hold:
         hold_id=item["hold_id"], sub=item["sub"], agent_id=item.get("agent_id"),
         venue_id=item["venue_id"], date=item["date"], time=item["time"],
         table_group=item["table_group"], party_size=item["party_size"], status=item["status"],
-        held_until=item["held_until"], created_at=item["created_at"],
-        within_mandate=item["within_mandate"], terms=item.get("terms", {}),
-        extended=item.get("hold_extended", False),
+        held_until=item["held_until"], created_at=item["created_at"], terms=item.get("terms", {}),
     )
 
 
@@ -179,9 +132,13 @@ def reservation_to_item(r: Reservation) -> dict[str, Any]:
         "code": r.code, "hold_id": r.hold_id, "sub": r.sub, "agent_id": r.agent_id,
         "venue_id": r.venue_id, "date": r.date, "time": r.time, "table_group": r.table_group,
         "party_size": r.party_size, "status": r.status, "terms_snapshot": r.terms_snapshot,
-        "created_at": r.created_at,
+        "created_at": r.created_at, "confirmation": r.confirmation,
         "GSI2PK": keys.user_partition(r.sub), "GSI2SK": f"RES#{r.date}#{r.time}#{r.reservation_id}",
     }
+    if r.read_back_at is not None:
+        item["read_back_at"] = r.read_back_at
+    if r.cancel_read_back_at is not None:
+        item["cancel_read_back_at"] = r.cancel_read_back_at
     if r.cancelled_at is not None:
         item["cancelled_at"] = r.cancelled_at
     if r.cancel_fee_cents is not None:
@@ -198,28 +155,8 @@ def item_to_reservation(item: dict[str, Any]) -> Reservation:
         party_size=item["party_size"], status=item["status"],
         terms_snapshot=item["terms_snapshot"], created_at=item["created_at"],
         cancelled_at=item.get("cancelled_at"), cancel_fee_cents=item.get("cancel_fee_cents"),
-    )
-
-
-def approval_to_item(a: Approval) -> dict[str, Any]:
-    k = keys.approval(a.subject_id)
-    item: dict[str, Any] = {
-        "PK": k.pk, "SK": k.sk, "entity": "approval", "subject_id": a.subject_id, "kind": a.kind,
-        "sub": a.sub, "venue_id": a.venue_id, "terms_hash": a.terms_hash, "terms": a.terms,
-        "status": a.status, "created_at": a.created_at, "expires_at": a.expires_at,
-    }
-    if a.decided_at is not None:
-        item["decided_at"] = a.decided_at
-    return item
-
-
-def item_to_approval(item: dict[str, Any]) -> Approval:
-    item = plain(item)
-    return Approval(
-        subject_id=item["subject_id"], kind=item["kind"], sub=item["sub"],
-        venue_id=item["venue_id"], terms_hash=item["terms_hash"], terms=item["terms"],
-        status=item["status"], created_at=item["created_at"], expires_at=item["expires_at"],
-        decided_at=item.get("decided_at"),
+        confirmation=item.get("confirmation", "spoken"), read_back_at=item.get("read_back_at"),
+        cancel_read_back_at=item.get("cancel_read_back_at"),
     )
 
 

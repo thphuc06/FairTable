@@ -1,0 +1,6 @@
+id: neg-ember-bob-party-of-eleven
+category: NEG
+description: "Eleven is one over the limit for any booking made by an assistant."
+user: bob
+goal: {kind: book, restaurant: ember, day_offset: 3, time: "19:00", party_size: 11}
+expect: {reservations: 0, active_holds: 0, refused_by: [G3_party_size_max_10]}

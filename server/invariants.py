@@ -1,9 +1,10 @@
 """Invariant checker: reads the whole table and reports anything that should never be true.
 
 Used by the concurrency tests now and by the eval graders later (design section 9.1):
-  I1  no booking outside the user's mandate unless the user approved that exact hold
+  I1  every reservation was confirmed with a read-back the server had handed out for exactly its terms
+      (the server cannot hear the diner, so this is the strongest thing it can check, D-051)
   I2  no double-booked table (at most one live hold or confirmed reservation per slot)
-  I3  a cancellation fee is charged only after the user approved it
+  I3  a cancellation fee is charged only after the fee was read back
   I4  one Fair Drop ticket per person, and an allocated drop's audit verifies
   I5  no write without a verified identity
   plus the bookkeeping that makes the rules trustworthy:
@@ -14,22 +15,17 @@ This module scans everything: for tests, graders and diagnostics, never for a re
 """
 
 from collections import defaultdict
-from dataclasses import dataclass, replace
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import datetime
 
 from server.domain.booking import (
-    APPROVAL_USED,
     HOLD_HELD,
-    KIND_CANCEL_FEE,
     RES_CANCELLED,
     RES_CONFIRMED,
     Hold,
 )
 from server.domain.fairdrop import DROP_ALLOCATED, ENTRY_WON, verify_audit
-from server.domain.mandate import check_mandate
 from server.domain.models import (
-    MANDATE_ACTIVE,
-    MANDATE_REVOKED,
     SLOT_CONFIRMED,
     SLOT_HELD,
     SLOT_OPEN,
@@ -37,14 +33,11 @@ from server.domain.models import (
 from server.domain.tool_names import WRITE_TOOLS
 from server.store import Store
 from server.store.mappers import (
-    item_to_approval,
     item_to_drop,
     item_to_entry,
     item_to_hold,
-    item_to_mandate,
     item_to_reservation,
     item_to_slot,
-    item_to_venue,
 )
 
 
@@ -55,6 +48,13 @@ class Violation:
 
     def __str__(self) -> str:
         return f"{self.code}: {self.detail}"
+
+
+def _later(a_iso: str, b_iso: str, tolerance_s: float) -> bool:
+    """True when ``a`` is more than ``tolerance_s`` after ``b`` (the read-back moment is rounded up to half a second)."""
+    a = datetime.fromisoformat(a_iso.replace("Z", "+00:00"))
+    b = datetime.fromisoformat(b_iso.replace("Z", "+00:00"))
+    return (a - b).total_seconds() > tolerance_s
 
 
 def check_invariants(store: Store, now_iso: str) -> list[Violation]:
@@ -69,9 +69,6 @@ def check_invariants(store: Store, now_iso: str) -> list[Violation]:
 
     holds = {h.hold_id: h for h in map(item_to_hold, by_entity["hold"])}
     reservations = {r.reservation_id: r for r in map(item_to_reservation, by_entity["reservation"])}
-    approvals = {a.subject_id: a for a in map(item_to_approval, by_entity["approval"])}
-    mandates = {(m.sub, m.venue_id): m for m in map(item_to_mandate, by_entity["mandate"])}
-    venues = {v.venue_id: v for v in map(item_to_venue, by_entity["venue"])}
     slots = list(map(item_to_slot, by_entity["slot"]))
     out: list[Violation] = []
 
@@ -123,30 +120,15 @@ def check_invariants(store: Store, now_iso: str) -> list[Violation]:
         if counters.get(pk, 0) < 0:
             out.append(Violation("COUNTER", f"{pk} is negative"))
 
-    # ---- I1: every booking was inside the mandate or approved by the user
+    # ---- I1: every reservation was confirmed after a read-back of exactly its terms
     for r in reservations.values():
-        approval = approvals.get(r.hold_id)
-        approved = approval is not None and approval.status == APPROVAL_USED and approval.sub == r.sub
-        venue = venues.get(r.venue_id)
-        created = datetime.fromisoformat(r.created_at)
-        held = mandates.get((r.sub, r.venue_id))
-        if held is not None and held.status == MANDATE_REVOKED and held.revoked_at and r.created_at < held.revoked_at:
-            held = replace(held, status=MANDATE_ACTIVE)  # it was live when this booking was made
-        covered = venue is not None and check_mandate(
-            held, now=created, agent_id=r.agent_id,
-            party_size=r.terms_snapshot.get("party_size", r.party_size), day=date.fromisoformat(r.date),
-            time=r.time, cancel_fee_cents=venue.cancel_fee_cents,
-        ).covered
-        if not (approved or covered):
-            out.append(Violation("I1", f"reservation {r.reservation_id} is outside the mandate and unapproved"))
+        if r.confirmation != "spoken" or not r.read_back_at or _later(r.read_back_at, r.created_at, 1):
+            out.append(Violation("I1", f"reservation {r.reservation_id} was made without a read-back of its terms"))
 
-    # ---- I3: a fee is charged only after approval
+    # ---- I3: a fee is charged only after the fee was read back
     for r in reservations.values():
-        if r.status == RES_CANCELLED and (r.cancel_fee_cents or 0) > 0:
-            approval = approvals.get(r.reservation_id)
-            if not (approval and approval.kind == KIND_CANCEL_FEE and approval.status == APPROVAL_USED
-                    and approval.sub == r.sub):
-                out.append(Violation("I3", f"reservation {r.reservation_id} paid a fee without approval"))
+        if r.status == RES_CANCELLED and (r.cancel_fee_cents or 0) > 0 and not r.cancel_read_back_at:
+            out.append(Violation("I3", f"reservation {r.reservation_id} paid a fee that was not read back"))
 
     # ---- I4: one ticket per person per drop; an allocated drop is consistent and verifiable
     drops = {d.drop_id: d for d in map(item_to_drop, by_entity["drop"])}

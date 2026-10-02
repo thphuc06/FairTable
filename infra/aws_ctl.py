@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CDK_DIR = ROOT / "infra" / "cdk"
 
 # Destroy order: what depends on another stack goes first.
-STACKS = ("FairTableGateway", "FairTableRuntime", "FairTableIdentity", "FairTableData")
+STACKS = ("FairTableObservability", "FairTableGateway", "FairTableRuntime", "FairTableNotify", "FairTableIdentity",
+          "FairTableData")
 BUDGET_STACK = "FairTableBudget"
 BOOTSTRAP_STACK = "CDKToolkit"
 
@@ -40,6 +41,7 @@ OWNED = {
     "policy_engine_prefix": "fairtable_engine",
     "log_prefixes": ("/aws/bedrock-agentcore/runtimes/fairtable_mcp-", "/aws/lambda/FairTable"),
     "secret_marker": "SlotTokenSecret",
+    "span_log_groups": ("aws/spans", "/aws/application-signals/data"),  # made by CloudWatch Transaction Search
     "budget_prefix": "fairtable-cap-",  # the stack names its budget like this; the developer's own budgets differ
 }
 
@@ -109,6 +111,7 @@ class Account:
         self.s3 = s.client("s3")
         self.budgets = s.client("budgets")
         self.sts = s.client("sts")
+        self.xray = s.client("xray")
 
     def account_id(self) -> str:
         return self.sts.get_caller_identity()["Account"]
@@ -154,12 +157,25 @@ class Account:
         for prefix in OWNED["log_prefixes"]:
             for page in self.logs.get_paginator("describe_log_groups").paginate(logGroupNamePrefix=prefix):
                 items += [Item("log-group", g["logGroupName"], True, "direct") for g in page["logGroups"]]
+        if self.trace_destination() != "XRay":  # Transaction Search switches the whole account (P2-9, D-050)
+            items.append(Item("setting", "X-Ray trace destination is CloudWatchLogs", True, "direct"))
+            for name in OWNED["span_log_groups"]:
+                items += [Item("log-group", g["logGroupName"], True, "direct")
+                          for g in self.logs.describe_log_groups(logGroupNamePrefix=name)["logGroups"]
+                          if g["logGroupName"] == name]
         for page in self.budgets.get_paginator("describe_budgets").paginate(AccountId=self.account_id()):
             items += [Item("budget", b["BudgetName"], False, "stack:FairTableBudget")
                       for b in page["Budgets"] if b["BudgetName"].startswith(OWNED["budget_prefix"])]
         return items
 
+    def trace_destination(self) -> str:
+        return self.xray.get_trace_segment_destination().get("Destination", "XRay")
+
     # ------------------------------------------------------------------------- removal of what stacks leave
+    def restore_trace_destination(self) -> None:
+        """Give the account's spans back to X-Ray (the default) after Transaction Search has been used."""
+        self.xray.update_trace_segment_destination(Destination="XRay")
+
     def delete_table(self, name: str) -> None:
         self.ddb.delete_table(TableName=name)
         self.ddb.get_waiter("table_not_exists").wait(TableName=name)
@@ -213,6 +229,8 @@ def cmd_up(account: Account, with_runtime: bool) -> int:
         if rc:
             return rc
     stacks = ["FairTableData", "FairTableIdentity"] + (["FairTableRuntime", "FairTableGateway"] if with_runtime else [])
+    if with_runtime and os.environ.get("NOTIFY_EMAIL"):
+        stacks.insert(2, "FairTableNotify")  # the topic first: the Runtime reads its ARN
     if os.environ.get("BUDGET_EMAIL"):
         stacks.append(BUDGET_STACK)
     if with_runtime and os.environ.get("GATEWAY_POLICY"):
@@ -263,9 +281,11 @@ def cmd_down(account: Account, *, yes: bool, include_budget: bool, include_boots
         print(f"  destroy stack {s}")
     for i in loose:
         print(f"  delete {i.kind} {i.name}")
+    if any(i.kind == "setting" for i in items):
+        print("  give the account's trace destination back to X-Ray")
     if include_bootstrap and BOOTSTRAP_STACK in existing:
         print("  empty and delete the CDK asset bucket, then the bootstrap stack")
-    if not order and not loose:
+    if not order and not loose and not any(i.kind == "setting" for i in items):
         print("  nothing to do")
     if not yes:
         return 0
@@ -279,6 +299,8 @@ def cmd_down(account: Account, *, yes: bool, include_budget: bool, include_boots
         elif cdk(["destroy", s, "--force"]):
             print(f"cdk destroy {s} failed", file=sys.stderr)
             return 1
+    if any(i.kind == "setting" for i in items):  # before the span log groups go, so nothing refills them
+        account.restore_trace_destination()
     for i in loose:  # leftovers that no stack owns (test tables, the service's own log groups)
         if i.kind == "table":
             account.delete_table(i.name)

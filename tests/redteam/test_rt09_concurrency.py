@@ -18,13 +18,15 @@ from world import World
 from server.domain.booking import Hold
 from server.domain.clock import iso_z
 from server.domain.errors import FairTableError
-from server.domain.models import Identity, Mandate
-from server.domain.slot_token import SlotClaims
+from server.domain.clock import FakeClock
+from server.domain.models import Identity
+from server.domain.readback import KIND_CONFIRM, ReadBackCodec
+from server.domain.offers import SlotClaims
 from server.invariants import assert_invariants
 from server.ops.confirm import ConfirmOperation
 from server.ops.hold import HoldOperation
 from server.ops.manage import CancelOperation
-from server.pipeline import StepUpRequired, run_write
+from server.pipeline import run_write
 from server.store import keys
 
 pytestmark = pytest.mark.ddb
@@ -40,14 +42,12 @@ def racer(i: int) -> Identity:
                     agent_id="alexa-plus-sim", scopes=frozenset({"fairtable/book"}))
 
 
-def give_mandate(world: World, who: Identity, venue: str) -> None:
-    now = world.clock.now()
-    world.store.put_mandate(Mandate(
-        who.sub, venue, "active", 1, party_size_max=6, days_ahead_max=30, window_start="00:00",
-        window_end="23:59", max_cancel_fee_cents=5000, allow_auto_confirm=True,
-        actions=frozenset({"hold", "confirm", "watch"}), agent_ids=frozenset({"alexa-plus-sim"}),
-        approved_at=iso_z(now), expires_at=iso_z(now + timedelta(days=90)),
-    ))
+def confirm_op(world: World, who: Identity, hold: Hold) -> ConfirmOperation:
+    """A confirm the way a good assistant sends it: the read-back token handed over ten seconds ago, and a yes.
+    (The token is minted with a clock ten seconds behind, so the 3 s pause has passed whatever the test's clock is.)"""
+    codec = ReadBackCodec(world.deps.settings.slot_token_secret.encode(), FakeClock(world.clock.now() - timedelta(seconds=10)))
+    token = codec.issue(kind=KIND_CONFIRM, subject_id=hold.hold_id, sub=who.sub, terms=hold.terms)
+    return ConfirmOperation(world.deps, hold, token, True)
 
 
 def date_of(world: World, offset: int = 2) -> str:
@@ -66,8 +66,6 @@ def attempt(fn) -> str:
         return "ok"
     except FairTableError as e:
         return e.code.value
-    except StepUpRequired:
-        return "STEP_UP"
 
 
 def race(jobs: list, workers: int | None = None) -> list[str]:
@@ -145,7 +143,6 @@ def test_rt07_the_agent_share_cap_holds_under_concurrent_holds(world):
 
 # ---------------------------------------------------------------- confirm and cancel races
 def make_hold(world: World, who: Identity, time: str = "19:00", key: str = "setup-hold-01") -> Hold:
-    give_mandate(world, who, "luna-trattoria")
     result = run_write(world.deps, who, hold_op(world, who, "luna-trattoria", time), key)
     return world.store.get_hold(result["hold_id"])
 
@@ -153,7 +150,7 @@ def make_hold(world: World, who: Identity, time: str = "19:00", key: str = "setu
 def test_twenty_deliveries_of_the_same_confirm_make_one_booking(world):
     alice = racer(1)
     hold = make_hold(world, alice)
-    jobs = [lambda: run_write(world.deps, alice, ConfirmOperation(world.deps, hold), "confirm-key-0001")
+    jobs = [lambda: run_write(world.deps, alice, confirm_op(world, alice, hold), "confirm-key-0001")
             for _ in range(20)]
     results: list = []
 
@@ -170,7 +167,7 @@ def test_twenty_deliveries_of_the_same_confirm_make_one_booking(world):
 def test_ten_different_keys_confirming_one_hold_make_one_booking(world):
     alice = racer(1)
     hold = make_hold(world, alice)
-    jobs = [lambda i=i: run_write(world.deps, alice, ConfirmOperation(world.deps, hold), f"confirm-key-{i:04d}")
+    jobs = [lambda i=i: run_write(world.deps, alice, confirm_op(world, alice, hold), f"confirm-key-{i:04d}")
             for i in range(10)]
     outcomes = race(jobs)
     assert outcomes.count("ok") == 1
@@ -183,7 +180,7 @@ def test_ten_different_keys_confirming_one_hold_make_one_booking(world):
 def test_ten_cancels_of_one_booking_free_the_table_exactly_once(world):
     alice = racer(1)
     hold = make_hold(world, alice)
-    booked = run_write(world.deps, alice, ConfirmOperation(world.deps, hold), "confirm-key-0001")
+    booked = run_write(world.deps, alice, confirm_op(world, alice, hold), "confirm-key-0001")
     reservation = world.store.get_reservation(booked["reservation_id"])
     jobs = [lambda i=i: run_write(world.deps, alice, CancelOperation(world.deps, reservation), f"cancel-key-{i:04d}")
             for i in range(10)]
@@ -199,11 +196,11 @@ def test_a_confirm_one_second_before_expiry_works_and_at_the_exact_moment_it_doe
     alice, bob = racer(1), racer(2)
     early = make_hold(world, alice, time="19:00", key="setup-hold-01")
     world.clock.set(datetime.fromisoformat(early.held_until) - timedelta(seconds=1))
-    assert attempt(lambda: run_write(world.deps, alice, ConfirmOperation(world.deps, early), "confirm-key-early")) == "ok"
+    assert attempt(lambda: run_write(world.deps, alice, confirm_op(world, alice, early), "confirm-key-early")) == "ok"
 
     late = make_hold(world, alice, time="19:30", key="setup-hold-02")
     world.clock.set(datetime.fromisoformat(late.held_until))  # exactly held_until: the hold is over
-    assert attempt(lambda: run_write(world.deps, alice, ConfirmOperation(world.deps, late), "confirm-key-late")) == "HOLD_EXPIRED"
+    assert attempt(lambda: run_write(world.deps, alice, confirm_op(world, alice, late), "confirm-key-late")) == "HOLD_EXPIRED"
     # the table is free again for somebody else, with no worker involved
     assert attempt(lambda: run_write(world.deps, bob, hold_op(world, bob, "luna-trattoria", "19:30"), "bob-hold-key-01")) == "ok"
     assert_invariants(world.store, now_iso(world))
@@ -220,9 +217,6 @@ class Trader:
 def test_a_storm_of_mixed_operations_leaves_every_invariant_intact(world):
     rng_seed = 20261001
     traders = [Trader(racer(i), [], []) for i in range(10)]
-    for t in traders:
-        give_mandate(world, t.who, "luna-trattoria")
-        give_mandate(world, t.who, "ember-grill")
     venues = ["luna-trattoria", "ember-grill"]
     times = ["17:30", "18:00", "18:30", "19:00"]
     outcomes: list[str] = []
@@ -245,7 +239,7 @@ def test_a_storm_of_mixed_operations_leaves_every_invariant_intact(world):
             elif action == "confirm" and t.holds:
                 hold_id = t.holds.pop(rng.randrange(len(t.holds)))
                 hold = world.store.get_hold(hold_id)
-                result = _try(lambda hold=hold, key=key: run_write(world.deps, t.who, ConfirmOperation(world.deps, hold), key))
+                result = _try(lambda hold=hold, key=key: run_write(world.deps, t.who, confirm_op(world, t.who, hold), key))
                 if isinstance(result, dict):
                     t.bookings.append(result["reservation_id"])
             elif action == "cancel" and t.bookings:
@@ -270,8 +264,6 @@ def _try(fn):
         return fn()
     except FairTableError as e:
         return e.code.value
-    except StepUpRequired:
-        return "STEP_UP"
 
 
 # ---------------------------------------------------------------- RT12 and the draw under load

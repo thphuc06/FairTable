@@ -17,6 +17,7 @@ from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3_assets as s3_assets
 from aws_cdk import aws_secretsmanager as secretsmanager
+from aws_cdk import aws_sns as sns
 from constructs import Construct
 
 RUNTIME_NAME = "fairtable_mcp"  # letters, digits and underscores only
@@ -36,9 +37,9 @@ class RuntimeStack(Stack):
         issuer: str,
         client_ids: list[str],
         package_path: Path,
-        consent_base_url: str,
         allowed_hosts: str | None = None,
         stateless: bool = True,
+        notify_topic: sns.ITopic | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -95,12 +96,14 @@ class RuntimeStack(Stack):
             "AUTH_AUDIENCE": ",".join(client_ids),
             "AUTH_TOKEN_USE": "access",
             "SLOT_TOKEN_SECRET": slot_secret.secret_value.unsafe_unwrap(),
-            "CONSENT_BASE_URL": consent_base_url,
         }
+        if notify_topic is not None:  # waitlist and Fair Drop notices (P3-12): publish only, to this one topic
+            role.add_to_policy(iam.PolicyStatement(actions=["sns:Publish"], resources=[notify_topic.topic_arn]))
+            environment["NOTIFY_TOPIC_ARN"] = notify_topic.topic_arn
         if allowed_hosts:
             environment["MCP_ALLOWED_HOSTS"] = allowed_hosts
         if not stateless:
-            # Only for the -32042 experiment (D-048): the entry point defaults to stateless, as Runtime recommends.
+            # Stateless is the default everywhere (D-054); this only turns it off, for the Gateway experiment of D-048.
             environment["MCP_STATELESS"] = "false"
 
         runtime = agentcore.CfnRuntime(

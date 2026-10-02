@@ -1,11 +1,8 @@
-"""Reusable booking flows for integration tests (hold, confirm, approve, count)."""
+"""Reusable booking flows for integration tests (hold, read back, confirm, count)."""
 
-from dataclasses import replace
 from datetime import timedelta
 
 from world import World
-
-from server.domain.clock import iso_z
 
 
 def day(world: World, offset: int = 2) -> str:
@@ -24,26 +21,29 @@ async def hold_table(world: World, who: str, venue: str, time: str, *, party: in
                    time_window=f"{time}-{time}", party_size=party)
     slots = r.structuredContent["slots"]
     assert slots, r.structuredContent
-    out = await call(world, "reservation_hold", slot_token=slots[0]["slot_token"], idempotency_key=key)
+    out = await call(world, "reservation_hold", offer_id=slots[0]["offer_id"], idempotency_key=key)
     assert not out.isError, out.structuredContent
     return out.structuredContent
 
 
-def set_approval(world: World, subject_id: str, status: str = "approved", **changes) -> None:
-    """What the consent page does when the user answers."""
-    approval = world.store.get_approval(subject_id)
-    world.store.replace_approval(replace(approval, status=status, decided_at=iso_z(world.clock.now()), **changes))
+ANSWER_AFTER_S = 8  # the diner hears the details and answers; longer than the 3 s and 6 s pauses
+
+
+async def confirm_after_read_back(world: World, who: str, hold: dict, *, key: str, answer_after: float = ANSWER_AFTER_S,
+                                  **over):
+    """What the assistant does once the diner has said yes: wait for the answer, then confirm with the read-back token
+    of the hold. ``over`` replaces or adds arguments (a wrong token, ``user_confirmed=False``...)."""
+    world.clock.advance(answer_after)
+    args = {"hold_id": hold["hold_id"], "idempotency_key": key, "read_back_token": hold["read_back_token"],
+            "user_confirmed": True, **over}
+    return await call(world.as_(who), "reservation_confirm", **{k: v for k, v in args.items() if v is not None})
 
 
 async def book(world: World, who: str, venue: str, time: str, *, party: int = 2, offset: int = 2,
                tag: str = "1") -> dict:
-    """A confirmed reservation for ``who``; approves the step-up on the way when it is needed."""
+    """A confirmed reservation for ``who``: hold, read back, a pause for the diner's yes, confirm."""
     h = await hold_table(world, who, venue, time, party=party, offset=offset, key=f"key-hold-{tag}0001")
-    key = f"key-conf-{tag}0001"
-    r = await call(world.as_(who), "reservation_confirm", hold_id=h["hold_id"], idempotency_key=key)
-    if r.isError and r.structuredContent["error"] == "CONSENT_REQUIRED":
-        set_approval(world, h["hold_id"])
-        r = await call(world, "reservation_confirm", hold_id=h["hold_id"], idempotency_key=key)
+    r = await confirm_after_read_back(world, who, h, key=f"key-conf-{tag}0001")
     assert not r.isError, r.structuredContent
     return r.structuredContent
 

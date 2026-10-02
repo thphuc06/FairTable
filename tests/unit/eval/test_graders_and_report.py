@@ -78,3 +78,14 @@ def test_the_opening_sentence_names_everything_a_real_model_needs():
     text = opening_text(Goal(kind="book", date="2026-10-03", time="19:00", party_size=4, restaurant="luna"))
     assert text == "Book a table at luna for 4 on 2026-10-03 at 19:00"
     assert opening_text(Goal(kind="watch", date="2026-10-03")).startswith("Put me on the waitlist")
+
+
+# ---------------------------------------------------------------------------------------- Expect.succeeded (P3-1)
+def test_succeeded_needs_a_step_of_that_tool_without_an_error():
+    ok = Step("waitlist_watch", {}, {"spoken_summary": "You are in the draw."}, False)
+    failed = Step("waitlist_watch", {}, {"error": "DROP_CLOSED"}, True)
+    expect = Expect(succeeded=("waitlist_watch",))
+    assert state_grade(expect, Snapshot(0, 0), [ok]) == []
+    assert state_grade(expect, Snapshot(0, 0), [failed, ok]) == []  # an earlier failure does not matter
+    assert state_grade(expect, Snapshot(0, 0), [failed]) == ["expected waitlist_watch to succeed at least once"]
+    assert state_grade(expect, Snapshot(0, 0), []) == ["expected waitlist_watch to succeed at least once"]

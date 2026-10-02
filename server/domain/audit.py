@@ -12,7 +12,7 @@ class AuditEntry:
     sub: str
     agent_id: str | None
     tool: str
-    decision: str  # "allow" | "deny" | "step_up" | "conflict" | "failed"
+    decision: str  # "allow" | "deny" | "conflict" | "failed"
     rule_ids: tuple[str, ...] = ()
     detail: dict[str, Any] = field(default_factory=dict)
 

@@ -15,7 +15,8 @@ def parse_slot_key(slot_key: str) -> tuple[str, str]:
     """'1900#T4' -> ('19:00', 'T4')."""
     hhmm, sep, group = slot_key.partition("#")
     if not sep or len(hhmm) != 4 or not hhmm.isdigit() or not group:
-        raise FairTableError(ErrorCode.INVALID_SLOT_TOKEN, "The slot_token is not valid.", reason="slot_key")
+        raise FairTableError(ErrorCode.INVALID_OFFER, "That table offer is no longer valid.",
+                         hint="Use the offer_id from a fresh availability result.", reason="slot_key")
     return f"{hhmm[:2]}:{hhmm[2:]}", group
 
 
@@ -41,3 +42,10 @@ def capacity_condition(limit: int) -> str:
     """'counter + x <= cap' written as 'counter <= cap - x' (DynamoDB has no arithmetic in
     conditions). A missing counter counts as 0, but only when even 0 fits."""
     return "attribute_not_exists(n) OR n <= :limit" if limit >= 0 else "n <= :limit"
+
+
+# The spoken-confirmation facts (S5a-c) for every call that is not a confirm or a cancel with a fee: the rules
+# do not apply, and Cedar still needs a complete context (docs/PLAN.md section 3a).
+NO_READ_BACK = {
+    "read_back_required": False, "read_back_matches": False, "pause_elapsed": False, "user_confirmed": False,
+}

@@ -1,7 +1,7 @@
 """Build the FairTable MCP server (FastMCP 3.4.7, spec 2025-11-25, Streamable HTTP).
 
 Secure defaults (docs/PLAN.md section 3a): Origin/Host validation on, unexpected error text masked,
-structured errors and -32042 handled by ``ErrorMappingMiddleware``. No LLM is called in any tool.
+structured errors handled by ``ErrorMappingMiddleware``, HTTP 401 for a tool call without a token (``http_auth``). No LLM is called in any tool.
 """
 
 import logging
@@ -12,7 +12,7 @@ from fastmcp import FastMCP
 from server import resources
 from server.config import Settings
 from server.domain.clock import Clock, SystemClock
-from server.domain.slot_token import SlotTokenCodec
+from server.domain.readback import ReadBackCodec
 from server.identity import HttpJwks, JwksProvider, TokenVerifier, VerifierConfig
 from server.kernel import TrustKernel
 from server.matcher import safe_offer
@@ -22,7 +22,6 @@ from server.store import Store, make_client
 from server.telemetry import TelemetryMiddleware
 from server.tools import (
     availability_check,
-    mandate_status,
     reservation_confirm,
     reservation_hold,
     reservation_manage,
@@ -30,13 +29,19 @@ from server.tools import (
     waitlist_status,
     waitlist_watch,
 )
+from server.http_auth import RequireToken
+from server.offers import OfferBook
+from server.notify import FanoutNotifier, SnsNotifier
 from server.tools.common import AppDeps
 
 INSTRUCTIONS = (
     "FairTable is a restaurant's front door for booking agents. Search with restaurant_search, "
-    "check slots with availability_check, and read mandate_status to know what the user has "
-    "pre-approved. Every result has a short spoken_summary and a next_step. On an error, follow "
-    "its next_step; never retry a refused rule with the same input."
+    "check slots with availability_check, hold a slot, read the details back to the user and "
+    "confirm only after they say yes. Every result has a short spoken_summary and a next_step. "
+    "On an error, follow its next_step; never retry a refused rule with the same input. "
+    "Only the spoken_summary, an error's message and the read_back sentence are meant for the user: "
+    "never read out tool names, parameter names, codes, ids or tokens (the booking code in a confirmed "
+    "booking is the exception). Show at most five options at a time."
 )
 
 
@@ -48,6 +53,7 @@ def build_deps(
     jwks: JwksProvider | None = None,
     kernel: TrustKernel | None = None,
     header_provider=None,
+    notifier=None,
 ) -> AppDeps:
     clock = clock or SystemClock()
     store = store or Store(make_client(settings.store), settings.store.table_name)
@@ -62,15 +68,25 @@ def build_deps(
         store=store,
         verifier=verifier,
         kernel=kernel or TrustKernel.load(),
-        slot_codec=SlotTokenCodec(
-            settings.slot_token_secret.encode(), clock, settings.slot_token_ttl_s
-        ),
+        offers=OfferBook(store, clock, settings.offer_ttl_s),
+        readback_codec=ReadBackCodec(settings.slot_token_secret.encode(), clock),
         limiter=RateLimiter(store, clock, per_hour=settings.rate_limit_per_hour),
     )
     if header_provider is not None:
         deps.header_provider = header_provider
+    if notifier is not None:
+        deps.notifier = notifier
+    elif settings.notify_topic_arn:  # the dev inbox keeps working; the notice also goes to the SNS topic
+        deps.notifier = FanoutNotifier(deps.notifier, SnsNotifier(sns_client(settings), settings.notify_topic_arn))
     deps.slot_released = lambda venue_id, date, time, group: safe_offer(deps, venue_id, date, time, group)
     return deps
+
+
+def sns_client(settings: Settings):
+    """boto3 is imported here so that the local profile never needs AWS credentials or a region."""
+    import boto3
+
+    return boto3.client("sns", region_name=settings.store.region or None)
 
 
 def create_server(deps: AppDeps) -> FastMCP:
@@ -81,7 +97,7 @@ def create_server(deps: AppDeps) -> FastMCP:
         mask_error_details=True,
     )
     for module in (
-        restaurant_search, availability_check, mandate_status, reservation_hold,
+        restaurant_search, availability_check, reservation_hold,
         reservation_confirm, reservation_manage, waitlist_watch, waitlist_status,
     ):
         module.register(mcp, deps)
@@ -126,7 +142,7 @@ def create_app(deps: AppDeps):
     """ASGI app for uvicorn. Host/Origin protection is ON; hosted profiles list their hostnames
     in ``MCP_ALLOWED_HOSTS`` / ``MCP_ALLOWED_ORIGINS``."""
     s = deps.settings
-    return LogRefusedHost(_http_app(deps, s))
+    return LogRefusedHost(RequireToken(_http_app(deps, s), deps.verifier))
 
 
 def _http_app(deps: AppDeps, s):

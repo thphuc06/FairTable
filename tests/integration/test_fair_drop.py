@@ -181,6 +181,28 @@ async def test_the_first_request_after_the_drop_time_runs_the_draw_in_the_publis
     assert_invariants(world.store, iso_z(world.clock.now()))
 
 
+async def test_a_winner_is_held_the_seat_for_two_hours_and_confirms_in_a_later_conversation(world):
+    did = drop_id(world)
+    ids = {who: (await enter(world, who)).structuredContent["watch_id"] for who in ("alice", "bob", "carol")}
+    after_the_draw(world)
+    winner_id = expected_order("dev-alice", "dev-bob", "dev-carol", did=did)[0]
+    winner = next(w for w, t in ids.items() if t == winner_id)
+    await ticket(world, "alice", ids["alice"])  # the first request runs the draw
+    entry = world.store.get_entry(did, fd.entry_hash(did, f"dev-{winner}"))
+    hold = world.store.get_hold(entry.hold_id)
+    assert hold.held_until == iso_z(world.clock.now() + timedelta(hours=2))
+
+    world.clock.advance(minutes=45)  # long past a normal hold: the winner asks again, in a new conversation
+    world._tokens.clear()
+    answer = (await ticket(world, winner, ids[winner])).structuredContent
+    assert answer["read_back"].endswith("Shall I book it?") and answer["read_back_token"]
+    world.clock.advance(8)
+    done = await call(world.as_(winner), "reservation_confirm", hold_id=answer["hold_id"],
+                      idempotency_key="drop-conf-0001", read_back_token=answer["read_back_token"], user_confirmed=True)
+    assert not done.isError, done.structuredContent
+    assert_invariants(world.store, iso_z(world.clock.now()))
+
+
 async def test_the_published_audit_lets_anyone_recompute_the_draw(world):
     did = drop_id(world)
     for who in ("alice", "bob", "carol"):

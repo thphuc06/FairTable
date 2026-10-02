@@ -1,7 +1,7 @@
 """One isolated environment per trial (design section 9.1: every run gets a fresh namespace).
 
 Creates a new DynamoDB table, seeds it, and starts the dev issuer (in process), the MCP server (on a
-free local port, in a thread) and the consent page (in process). ``close()`` deletes the table.
+free local port, in a thread). ``close()`` deletes the table.
 Nothing here needs an AWS account: the table lives in DynamoDB Local (``DDB_ENDPOINT_URL``).
 """
 
@@ -30,10 +30,6 @@ from server.identity import StaticJwks
 from server.kernel import TrustKernel
 from server.store import Store, StoreConfig, create_table, delete_table, make_client
 from server.store.seeding import seed_store
-from web.app import WebDeps
-from web.app import create_app as create_web
-from web.auth import DevLogin
-from web.session import SessionCodec
 
 log = logging.getLogger("fairtable.eval")
 SEEDED = {"alice": "diner-alice", "bob": "diner-bob", "carol": "diner-carol"}
@@ -114,17 +110,6 @@ class EvalEnv:
         body = {k: v for k, v in body.items() if v is not None}
         signer = key or self.key
         return jwt.encode({"alg": "RS256", "kid": signer.kid, "typ": "JWT"}, body, signer)
-
-    def browser(self, user: str) -> tuple[TestClient, str, str]:
-        """A browser for the consent page plus the diner's username and password."""
-        deps = WebDeps(
-            settings=self.deps.settings, store=self.store, clock=self.clock,
-            login=DevLogin(self.auth, "/token", self.deps.verifier),
-            sessions=SessionCodec(self.deps.settings.web_session_secret, self.clock),
-            new_id=lambda: self.deps.new_id(),
-        )
-        account = USERS_BY_NAME[SEEDED[user]]
-        return TestClient(create_web(deps), follow_redirects=False), account.username, account.password
 
     def close(self) -> None:
         if self._server is not None:

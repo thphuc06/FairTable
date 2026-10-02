@@ -15,6 +15,8 @@ from stacks.budget_stack import BudgetStack
 from stacks.data_stack import DataStack
 from stacks.gateway_stack import GatewayStack
 from stacks.identity_stack import IdentityStack
+from stacks.notify_stack import NotifyStack
+from stacks.observability_stack import ObservabilityStack
 from stacks.runtime_stack import RuntimeStack
 
 app = cdk.App()
@@ -31,6 +33,9 @@ identity = IdentityStack(app, "FairTableIdentity", domain_prefix=os.environ.get(
 package = Path(os.environ.get("RUNTIME_ZIP") or Path(__file__).resolve().parents[2] / "dist" / "fairtable-runtime.zip")
 if package.exists():
     client_ids = [c.user_pool_client_id for c in identity.clients.values()]
+    notify = None
+    if os.environ.get("NOTIFY_EMAIL"):  # the one address that gets the notices (D-054); never written to the repo
+        notify = NotifyStack(app, "FairTableNotify", email=os.environ["NOTIFY_EMAIL"], env=env)
     runtime = RuntimeStack(
         app,
         "FairTableRuntime",
@@ -38,12 +43,12 @@ if package.exists():
         issuer=identity.pool.user_pool_provider_url,
         client_ids=client_ids,
         package_path=package,
-        consent_base_url=os.environ.get("CONSENT_BASE_URL", "http://localhost:8080"),
         allowed_hosts=os.environ.get("MCP_ALLOWED_HOSTS"),
         stateless=os.environ.get("RUNTIME_STATELESS", "true").lower() != "false",
+        notify_topic=notify.topic if notify else None,
         env=env,
     )
-    GatewayStack(
+    gateway = GatewayStack(
         app,
         "FairTableGateway",
         runtime=runtime.runtime,
@@ -55,8 +60,17 @@ if package.exists():
         permits_only=os.environ.get("GATEWAY_POLICY_STAGE") == "permits",  # first of two deploys (D-049)
         env=env,
     )
+    if os.environ.get("OBSERVABILITY", "").lower() == "true":  # opt-in (P2-9, D-050)
+        ObservabilityStack(
+            app,
+            "FairTableObservability",
+            gateway=gateway.gateway,
+            # tracing for the Runtime is an experiment (no documented API): its own switch
+            runtime=runtime.runtime if os.environ.get("OBSERVABILITY_RUNTIME", "").lower() == "true" else None,
+            env=env,
+        )
 
-email = os.environ.get("BUDGET_EMAIL")
+email =os.environ.get("BUDGET_EMAIL")
 if email:
     limit = float(os.environ.get("BUDGET_LIMIT_USD", "150"))
     alerts = tuple(float(x) for x in os.environ.get("BUDGET_ALERTS", "50,100,140").split(",") if x.strip())

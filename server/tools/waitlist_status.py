@@ -19,6 +19,7 @@ from server.domain.fairdrop import (
     split_entry_id,
 )
 from server.domain.models import Identity
+from server.domain.readback import KIND_CONFIRM, min_pause_s
 from server.domain.output import success
 from server.domain.tool_names import ToolName
 from server.domain.waitlist import (
@@ -35,7 +36,7 @@ from server.middleware import business_errors
 from server.ops.fairdrop import drop_closed, retry_after_until
 from server.store import TransactionCancelled, TxOp, keys
 from server.tools.common import AppDeps, authorize
-from server.tools.present import say_date, say_time
+from server.tools.present import read_back_confirm, say_date, say_time
 
 
 def register(mcp: FastMCP, deps: AppDeps) -> None:
@@ -46,7 +47,8 @@ def register(mcp: FastMCP, deps: AppDeps) -> None:
         """Check a waitlist watch or a Fair Drop ticket, or cancel it.
 
         `watch_id` is what waitlist_watch returned. While it says `waiting` or `entered`, ask again
-        no sooner than `retry_after_s`. `matched` (or `won`) comes with a `hold_id`: confirm it with
+        no sooner than `retry_after_s`. `matched` (or `won`) comes with a `hold_id`, the details to read to the user
+        (`read_back`) and a `read_back_token`: ask the user, and if they say yes confirm with
         reservation_confirm before `hold_expires_at`. For a drop, `audit_resource` is a public
         record anyone can check once the draw has happened.
         """
@@ -72,11 +74,17 @@ def _hold_answer(deps: AppDeps, hold_id: str, where: str, base: dict, source: st
         return success(f"That table at {where} is booked.", **base, hold_id=hold_id,
                        next_step={"tool": "reservation_manage", "why": "View or cancel the booking."})
     if hold is not None and hold.status == HOLD_HELD and hold.held_until > now_iso:
+        read_back = read_back_confirm(hold.terms)
+        pause = min_pause_s(hold.terms["cancel_fee_cents"])
+        token = deps.readback_codec.issue(kind=KIND_CONFIRM, subject_id=hold.hold_id, sub=hold.sub, terms=hold.terms)
         return success(
-            f"{source} at {where} at {say_time(hold.time)}. It is held for the user: confirm it now.",
+            f"{source} at {where} at {say_time(hold.time)}. It is held for the user. {read_back}",
             **base, hold_id=hold_id, hold_expires_at=hold.held_until, time=hold.time,
+            read_back=read_back, read_back_token=token, min_pause_s=pause,
             next_step={"tool": "reservation_confirm",
-                       "why": "Confirm the hold before it expires; the user may be asked to approve."},
+                       "why": "Read the details to the user and ask whether to book. If they say yes (wait at least "
+                              f"{pause} seconds after reading), confirm with the hold_id, the "
+                              "read_back_token and user_confirmed set to true, before hold_expires_at."},
         )
     return success(
         f"{source} at {where}, but the hold ran out before it was confirmed.", **base, hold_id=hold_id,
@@ -155,7 +163,7 @@ def _ticket_status(deps: AppDeps, drop: Drop, e: DropEntry) -> dict:
         return success(f"You were not picked in the draw for {where}. Anyone can check the draw fairly.", **base,
                        next_step={"tool": "waitlist_watch", "why": "Watch for a table on another day, or look for other slots."})
     if e.status == ENTRY_SKIPPED:
-        return success(f"You were drawn for {where} but could not be given a table ({e.reason}).", **base,
+        return success(f"You were drawn for {where} but could not be given a table.", **base,
                        reason=e.reason,
                        next_step={"tool": "availability_check", "why": "Look for other slots."})
     return success("That ticket is closed.", **base,

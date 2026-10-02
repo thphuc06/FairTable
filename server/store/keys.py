@@ -35,10 +35,6 @@ def slot(venue_id: str, date: str, time: str, table_group: str) -> Key:
     return Key(slot_day(venue_id, date), f"SLOT#{hhmm}#{part(table_group, 'table_group')}")
 
 
-def mandate(sub: str, venue_id: str) -> Key:
-    return Key(f"USER#{part(sub, 'sub')}", f"MANDATE#{part(venue_id, 'venue_id')}")
-
-
 def active_holds_counter(sub: str, venue_id: str) -> Key:
     return Key(f"CNT#USER#{part(sub, 'sub')}#REST#{part(venue_id, 'venue_id')}", "ACTIVE_HOLDS")
 
@@ -55,12 +51,12 @@ def hold_day_partition(venue_id: str, date: str) -> str:
     return f"HOLDS#{part(venue_id, 'venue_id')}#{part(date, 'date')}"
 
 
+def offer(code: str) -> Key:
+    return Key(f"OFFER#{part(code, 'offer_id')}", "META")
+
+
 def user_partition(sub: str) -> str:
     return f"USER#{part(sub, 'sub')}"
-
-
-def approval(subject_id: str) -> Key:
-    return Key(f"APPROVAL#{part(subject_id, 'subject_id')}", "META")
 
 
 def inbox_partition(sub: str) -> str:

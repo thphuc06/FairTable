@@ -1,0 +1,6 @@
+id: happy-luna-carol-six
+category: HAPPY
+description: "Carol books the large table at Luna: a party of six."
+user: carol
+goal: {kind: book, restaurant: luna, day_offset: 5, time: "20:00", party_size: 6}
+expect: {reservations: 1, active_holds: 0}

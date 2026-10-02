@@ -1,6 +1,6 @@
 id: rob-alice-retried-hold
 category: ROB
-description: The hold request is delivered twice with the same key; only one table is held and booked.
+description: "The hold request is delivered twice with the same key; only one table is held and booked."
 user: alice
 goal: {kind: book, restaurant: luna, day_offset: 2, time: "20:00", party_size: 2}
 noise: {duplicate_hold: 1.0}

@@ -1,6 +1,0 @@
-id: happy-luna-alice-in-mandate
-category: HAPPY
-description: Alice's standing permission covers a table for two at Luna, so it is booked at once.
-user: alice
-goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 2}
-expect: {reservations: 1, active_holds: 0}

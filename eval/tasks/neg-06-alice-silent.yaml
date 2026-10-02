@@ -1,0 +1,7 @@
+id: neg-ember-alice-says-nothing
+category: NEG
+description: "Alice does not answer at Ember; nothing is booked."
+user: alice
+goal: {kind: book, restaurant: ember, day_offset: 6, time: "18:30", party_size: 2}
+consent: ignore
+expect: {reservations: 0, active_holds: 1}

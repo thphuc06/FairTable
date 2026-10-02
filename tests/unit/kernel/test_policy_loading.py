@@ -20,7 +20,7 @@ def load(text: str, schema: str = SCHEMA) -> PolicyBundle:
 def test_real_policy_directory_loads_both_bundles():
     kernel = TrustKernel.load()
     assert len(kernel.pep1.bundle.rule_ids) == 4
-    assert len(kernel.pep2.bundle.rule_ids) == 6
+    assert len(kernel.pep2.bundle.rule_ids) == 7
     assert default_policy_dir().name == "policies"
 
 

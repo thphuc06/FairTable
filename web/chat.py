@@ -67,6 +67,11 @@ class ChatService:
         c = self._conversations.get(sub)
         return c is not None and c.expires_at > epoch_seconds(self._clock)
 
+    def token_of(self, sub: str) -> str | None:
+        """The diner's access token while it is still valid (the voice call reaches the MCP server with it)."""
+        c = self._conversations.get(sub)
+        return c.token if c is not None and c.expires_at > epoch_seconds(self._clock) else None
+
     def transcript(self, sub: str) -> list[Turn]:
         c = self._conversations.get(sub)
         return list(c.turns) if c else []

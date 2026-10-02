@@ -69,10 +69,12 @@ def body_of(response: httpx.Response) -> dict:
     return json.loads(text)
 
 
-def test_the_setting_is_read_from_the_environment():
-    assert Settings.from_env({"MCP_STATELESS": "true"}).stateless_http
+def test_stateless_is_the_default_and_the_setting_can_turn_it_off():
+    """AgentCore Runtime and Alexa+ send no MCP session id (docs/alexa-plus-addon-notes.md section 7)."""
+    assert Settings.from_env({}).stateless_http and Settings.from_env({"MCP_STATELESS": "true"}).stateless_http
     assert Settings.from_env({"MCP_STATELESS": "1"}).stateless_http
-    assert not Settings.from_env({}).stateless_http and not Settings.from_env({"MCP_STATELESS": "no"}).stateless_http
+    for off in ("false", "0", "no", "False"):
+        assert not Settings.from_env({"MCP_STATELESS": off}).stateless_http
 
 
 def test_the_runtime_contract_is_what_the_documentation_fixes():
@@ -80,13 +82,13 @@ def test_the_runtime_contract_is_what_the_documentation_fixes():
     assert RUNTIME_CONTRACT["MCP_STATELESS"] == "true"
 
 
-async def test_a_stateless_server_lists_the_eight_tools_without_a_handshake(running):
+async def test_a_stateless_server_lists_the_seven_tools_without_a_handshake(running):
     url = await running()
     async with httpx.AsyncClient() as http:
         r = await http.post(url, headers=HEADERS, json=LIST)  # no initialize first: each call stands alone
     assert r.status_code == 200
     names = {t["name"] for t in body_of(r)["result"]["tools"]}
-    assert names == {"restaurant_search", "availability_check", "mandate_status", "reservation_hold",
+    assert names == {"restaurant_search", "availability_check", "reservation_hold",
                      "reservation_confirm", "reservation_manage", "waitlist_watch", "waitlist_status"}
 
 
@@ -100,7 +102,7 @@ async def test_a_session_id_added_by_the_platform_is_accepted(running):
 
 
 async def test_the_default_server_still_wants_a_session(running):
-    """The local profile is unchanged: without MCP_STATELESS an unknown session id is refused."""
+    """With MCP_STATELESS=false (not the default any more) an unknown session id is refused."""
     url = await running(MCP_STATELESS="false")
     async with httpx.AsyncClient() as http:
         r = await http.post(url, headers={**HEADERS, "Mcp-Session-Id": "made-up-session-0123456789abcdef"}, json=LIST)
@@ -111,9 +113,11 @@ async def test_the_client_library_works_against_a_stateless_server(running):
     url = await running()
     async with Client(StreamableHttpTransport(url)) as c:
         assert c.initialize_result.protocolVersion == "2025-11-25"
-        assert len(await c.list_tools()) == 8
-        r = await c.call_tool_mcp("restaurant_search", {})  # no token: refused before any database call
-    assert r.isError and r.structuredContent["error"] == "UNAUTHENTICATED"
+        assert len(await c.list_tools()) == 7
+    call = {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "restaurant_search", "arguments": {}}}
+    async with httpx.AsyncClient() as http:  # no token: HTTP 401 before any tool or database call
+        r = await http.post(url, headers=HEADERS, json=call)
+    assert r.status_code == 401 and r.json()["error"] == "unauthorized"
 
 
 async def test_host_protection_still_applies_when_stateless(running):

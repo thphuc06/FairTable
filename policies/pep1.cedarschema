@@ -11,6 +11,6 @@ entity Service;
 
 type Ctx = { party_size: Long };
 
-action restaurant_search, availability_check, mandate_status, waitlist_status,
+action restaurant_search, availability_check, waitlist_status,
        reservation_hold, reservation_confirm, reservation_manage, waitlist_watch
   appliesTo { principal: Client, resource: Service, context: Ctx };

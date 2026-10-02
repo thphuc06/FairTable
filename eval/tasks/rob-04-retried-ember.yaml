@@ -1,0 +1,7 @@
+id: rob-carol-retried-hold-at-ember
+category: ROB
+description: "A retried hold at Ember, then Carol's yes, ends in exactly one booking."
+user: carol
+goal: {kind: book, restaurant: ember, day_offset: 5, time: "19:00", party_size: 2}
+noise: {duplicate_hold: 1.0}
+expect: {reservations: 1, active_holds: 0}

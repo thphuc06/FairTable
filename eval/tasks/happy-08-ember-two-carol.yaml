@@ -1,0 +1,6 @@
+id: happy-ember-carol-two
+category: HAPPY
+description: "Carol books Ember on a quiet weekday evening."
+user: carol
+goal: {kind: book, restaurant: ember, day_offset: 6, time: "18:30", party_size: 2}
+expect: {reservations: 1, active_holds: 0}

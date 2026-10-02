@@ -86,37 +86,3 @@ def release_expired_for(store: Store, *, venue_id: str, date: str, sub: str, now
         if release_expired(store, hold, now_iso):
             released.append(hold)
     return released
-
-
-def extend_hold(store: Store, hold: Hold, new_until: str, now_iso: str) -> bool:
-    """Lengthen a live hold ONCE so the user has time to approve on their phone (D-022).
-
-    Hold and slot move together in one transaction, guarded so that a hold that already expired,
-    was already extended, or was taken over cannot be extended. Returns True when extended.
-    The total lock is bounded: the step-up can only start while the hold is alive (at most 10
-    minutes after it was taken) and adds at most the approval window.
-    """
-    if new_until <= hold.held_until:
-        return False
-    hold_key = keys.hold(hold.hold_id)
-    slot_key = keys.slot(hold.venue_id, hold.date, hold.time, hold.table_group)
-    ops = [
-        TxOp(
-            "Update", key={"PK": hold_key.pk, "SK": hold_key.sk},
-            update="SET held_until = :new, hold_extended = :yes, GSI1SK = :sk",
-            condition="#st = :held AND held_until > :now AND (attribute_not_exists(hold_extended) OR hold_extended = :no)",
-            names={"#st": "status"},
-            values={":new": new_until, ":yes": True, ":no": False, ":held": HOLD_HELD, ":now": now_iso,
-                    ":sk": f"{new_until}#{hold.hold_id}"},
-        ),
-        TxOp(
-            "Update", key={"PK": slot_key.pk, "SK": slot_key.sk}, update="SET held_until = :new",
-            condition="hold_id = :hid AND #st = :slot_held", names={"#st": "status"},
-            values={":new": new_until, ":hid": hold.hold_id, ":slot_held": SLOT_HELD},
-        ),
-    ]
-    try:
-        store.transact(ops)
-    except TransactionCancelled:
-        return False
-    return True

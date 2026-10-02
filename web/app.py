@@ -1,49 +1,31 @@
-"""The consent page (plan task P1-11): a signed-in user approves or declines what their assistant
-asked for. The link only *names* the approval; access needs a login as the same user.
+"""The demo web app: sign-in, the chat page with the simulated assistant, and the owner console.
 
-Routes: ``GET /login``, ``POST /login``, ``GET /consent/{id}``, ``POST /consent/{id}/decision``,
+There is no consent page any more: a booking is confirmed by the diner's spoken yes (docs/DECISIONS.md D-051).
+Routes: ``GET/POST /login``, ``GET/POST /chat``, ``POST /chat/reset``, ``GET /owner``, ``POST /owner/agent-share``,
 ``GET /healthz``. Every response is ``no-store`` and cannot be framed (clickjacking).
 """
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from datetime import timedelta
 from typing import Any
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, WebSocket
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from server.config import Settings
 from server.domain.audit import AuditEntry
-from server.domain.booking import (
-    APPROVAL_APPROVED,
-    APPROVAL_DECLINED,
-    APPROVAL_PENDING,
-    HOLD_HELD,
-    KIND_CANCEL_FEE,
-    RES_CONFIRMED,
-    Approval,
-    approval_is_expired,
-)
 from server.domain.clock import Clock, iso_z
-from server.domain.grant import (
-    DEFAULT_GRANT_DAYS,
-    GRANT_DAYS,
-    build_mandate,
-    can_offer,
-    describe_mandate,
-    offer_parts,
-)
-from server.domain.mandate import is_active
-from server.domain.models import Mandate
-from server.store import Store, TransactionCancelled, TxOp, keys
+from server.store import Store, TxOp, keys
 from web import pages
 from web.auth import Login
 from web.chat import ChatService
 from web.session import COOKIE_NAME, Session, SessionCodec
+from web.voice import VoiceService
+from web.voice_protocol import origin_ok
 
-SUBJECT_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-SAFE_NEXT = re.compile(r"^(/consent/[A-Za-z0-9_-]{1,128}|/owner|/chat|/permissions)$")
+SAFE_NEXT = re.compile(r"^(/owner|/chat|/voice)$")
 HEADERS = {
     "Cache-Control": "no-store",
     "X-Frame-Options": "DENY",
@@ -56,6 +38,14 @@ HEADERS = {
 }
 
 
+VOICE_CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; media-src 'self'; "
+    "worker-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+)
+STATIC = Path(__file__).parent / "static"
+STATIC_FILES = {"voice.js": "text/javascript", "worklet.js": "text/javascript"}
+
+
 @dataclass
 class WebDeps:
     settings: Settings
@@ -65,6 +55,7 @@ class WebDeps:
     sessions: SessionCodec
     new_id: Any
     chat: ChatService | None = None  # the demo chat page; off when there is no assistant configured
+    voice: VoiceService | None = None  # the voice page; off unless the voice extra and a model are configured
 
 
 def page(status: int, title: str, text: str) -> HTMLResponse:
@@ -76,46 +67,21 @@ def safe_next(value: str | None) -> str:
 
 
 def create_app(deps: WebDeps) -> FastAPI:
-    app = FastAPI(title="FairTable consent", docs_url=None, redoc_url=None, openapi_url=None)
-    secure_cookie = deps.settings.consent_base_url.startswith("https://")
+    app = FastAPI(title="FairTable", docs_url=None, redoc_url=None, openapi_url=None)
+    secure_cookie = deps.settings.web_public_url.startswith("https://")
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
         response = await call_next(request)
         for name, value in HEADERS.items():
             response.headers[name] = value
+        if request.url.path.startswith("/voice"):  # the voice page needs its own scripts, the microphone and a socket
+            response.headers["Content-Security-Policy"] = VOICE_CSP
+            response.headers["Permissions-Policy"] = "microphone=(self)"
         return response
 
     def session_of(request: Request) -> Session | None:
         return deps.sessions.read(request.cookies.get(COOKIE_NAME))
-
-    def to_login(subject_path: str) -> RedirectResponse:
-        return RedirectResponse(f"/login?next={subject_path}", status_code=303)
-
-    def live_approval(subject_id: str, session: Session) -> tuple[Approval | None, Response | None]:
-        """The approval this user may act on, or the page to show instead."""
-        if not SUBJECT_ID.match(subject_id):
-            return None, page(404, "Not found", "There is nothing to approve here.")
-        approval = deps.store.get_approval(subject_id)
-        if approval is None:
-            return None, page(404, "Not found", "There is nothing to approve here.")
-        if approval.sub != session.sub:
-            return None, page(403, "Not your request",
-                              "This request belongs to another account. Sign in with the account that made it.")
-        now_iso = iso_z(deps.clock.now())
-        if approval.status == APPROVAL_PENDING and approval_is_expired(approval, now_iso):
-            return None, page(410, "Expired", "This request has expired. Ask your assistant to try again.")
-        if approval.status == APPROVAL_PENDING and not subject_is_live(subject_id, approval, now_iso):
-            return None, page(410, "No longer active",
-                              "The booking this refers to is no longer active. Ask your assistant to try again.")
-        return approval, None
-
-    def subject_is_live(subject_id: str, approval: Approval, now_iso: str) -> bool:
-        if approval.kind == KIND_CANCEL_FEE:
-            reservation = deps.store.get_reservation(subject_id)
-            return reservation is not None and reservation.status == RES_CONFIRMED
-        hold = deps.store.get_hold(subject_id)
-        return hold is not None and hold.status == HOLD_HELD and hold.held_until > now_iso
 
     @app.get("/healthz")
     def healthz() -> dict:
@@ -148,105 +114,6 @@ def create_app(deps: WebDeps) -> FastAPI:
         )
         return response
 
-    @app.get("/consent/{subject_id}")
-    def show(subject_id: str, request: Request) -> Response:
-        session = session_of(request)
-        if session is None:
-            return to_login(f"/consent/{subject_id}" if SUBJECT_ID.match(subject_id) else "/")
-        approval, problem = live_approval(subject_id, session)
-        if problem is not None:
-            return problem
-        assert approval is not None
-        if approval.status == APPROVAL_PENDING:
-            csrf = deps.sessions.csrf_token(session, subject_id)
-            offer = grant_offer(approval, session)
-            return HTMLResponse(pages.consent_page(
-                approval, session.username, csrf, offer=offer[1] if offer else None,
-                agent_days=GRANT_DAYS, default_days=DEFAULT_GRANT_DAYS))
-        done = {
-            APPROVAL_APPROVED: "You approved this. Go back to your assistant and ask it to try again.",
-            APPROVAL_DECLINED: "You declined this. Nothing was booked or changed.",
-        }.get(approval.status, "This request has already been used.")
-        return page(200, "Already answered", done)
-
-    @app.post("/consent/{subject_id}/decision")
-    def decide(subject_id: str, request: Request, decision: str = Form(""), csrf: str = Form(""),
-               remember: str = Form(""), days: str = Form("")) -> Response:
-        session = session_of(request)
-        if session is None:
-            return to_login(f"/consent/{subject_id}" if SUBJECT_ID.match(subject_id) else "/")
-        if not deps.sessions.csrf_ok(session, subject_id, csrf):
-            return page(403, "Not allowed", "This form is out of date. Open the link again.")
-        approval, problem = live_approval(subject_id, session)
-        if problem is not None:
-            return problem
-        assert approval is not None
-        if decision not in ("approve", "decline"):
-            return page(400, "Not understood", "Choose Approve or Decline.")
-        grant: Mandate | None = None
-        if decision == "approve" and remember == "1" and approval.status == APPROVAL_PENDING:
-            if not (days.isdigit() and int(days) in GRANT_DAYS):
-                return page(400, "Not understood", f"Choose {', '.join(map(str, GRANT_DAYS))} days.")
-            offer = grant_offer(approval, session)
-            if offer is not None:  # only when nothing live exists for this restaurant (never narrows one)
-                venue, _, agent_id = offer
-                grant = build_mandate(sub=session.sub, venue=venue, agent_id=agent_id, days=int(days),
-                                      now=deps.clock.now())
-        if approval.status == APPROVAL_PENDING:
-            record_decision(deps, approval, session, approved=decision == "approve", grant=grant)
-        return RedirectResponse(f"/consent/{subject_id}", status_code=303)
-
-    def grant_offer(approval: Approval, session: Session):
-        """(venue, (before, after, limits), agent id) when this approval may carry a standing permission,
-        else None: only for booking confirmations, only for a named assistant, and only when the diner has no
-        live permission at this restaurant."""
-        if approval.kind == KIND_CANCEL_FEE:
-            return None
-        hold = deps.store.get_hold(approval.subject_id)
-        venue = deps.store.get_venue(approval.venue_id)
-        if hold is None or venue is None or not hold.agent_id or hold.sub != session.sub:
-            return None
-        if not can_offer(deps.store.get_mandate(session.sub, venue.venue_id), deps.clock.now()):
-            return None
-        return venue, offer_parts(venue, hold.agent_id), hold.agent_id
-
-    @app.get("/permissions")
-    def permissions(request: Request) -> Response:
-        session = session_of(request)
-        if session is None:
-            return to_login("/permissions")
-        return render_permissions(session)
-
-    def render_permissions(session: Session, notice: str | None = None) -> Response:
-        now = deps.clock.now()
-        rows = []
-        for m in deps.store.mandates_of_user(session.sub):
-            venue = deps.store.get_venue(m.venue_id)
-            if is_active(m, now) and venue is not None:
-                rows.append((m.venue_id, describe_mandate(m, venue.name)))
-        csrf = deps.sessions.csrf_token(session, "permissions")
-        return HTMLResponse(pages.permissions_page(session.username, rows, csrf, notice))
-
-    @app.post("/permissions/revoke")
-    def revoke(request: Request, venue_id: str = Form(""), csrf: str = Form("")) -> Response:
-        session = session_of(request)
-        if session is None:
-            return to_login("/permissions")
-        if not deps.sessions.csrf_ok(session, "permissions", csrf):
-            return page(403, "Not allowed", "This form is out of date. Open the page again.")
-        if not SUBJECT_ID.match(venue_id):
-            return page(400, "Not understood", "Unknown restaurant.")
-        now_iso = iso_z(deps.clock.now())
-        entry = AuditEntry(
-            venue_id=venue_id, timestamp=now_iso, request_id=deps.new_id(), sub=session.sub, agent_id=None,
-            tool="permissions", decision="revoked", rule_ids=(), detail={},
-        )
-        try:  # the diner's own record only: the key is built from the signed-in user, not from the form
-            deps.store.transact([deps.store.mandate_revoke_op(session.sub, venue_id, now_iso), deps.store.audit_op(entry)])
-        except TransactionCancelled:
-            return render_permissions(session, "That permission was already gone.")
-        return RedirectResponse("/permissions", status_code=303)
-
     def owner_session(request: Request) -> tuple[Session | None, Response | None]:
         session = session_of(request)
         if session is None:
@@ -260,7 +127,7 @@ def create_app(deps: WebDeps) -> FastAPI:
         turns = [(t.who, t.text, t.steps) for t in deps.chat.transcript(session.sub)]
         inbox = deps.store.list_inbox(session.sub)
         csrf = deps.sessions.csrf_token(session, "chat")
-        html = pages.chat_page(session.username, turns, inbox, csrf, deps.settings.consent_base_url.rstrip("/") + "/consent")
+        html = pages.chat_page(session.username, turns, inbox, csrf)
         return HTMLResponse(html, status_code=status)
 
     def chat_session(request: Request) -> tuple[Session | None, Response | None]:
@@ -270,6 +137,35 @@ def create_app(deps: WebDeps) -> FastAPI:
         if session is None or not deps.chat.is_signed_in(session.sub):
             return None, RedirectResponse("/login?next=/chat", status_code=303)
         return session, None
+
+    def voice_session(request: Request) -> tuple[Session | None, Response | None]:
+        if deps.voice is None or deps.chat is None:
+            return None, page(404, "Not found", "The voice page is not switched on here.")
+        session = session_of(request)
+        if session is None or deps.chat.token_of(session.sub) is None:
+            return None, RedirectResponse("/login?next=/voice", status_code=303)
+        return session, None
+
+    @app.get("/voice")
+    def voice(request: Request) -> Response:
+        session, problem = voice_session(request)
+        return problem if problem is not None else HTMLResponse(pages.voice_page(session.username))  # type: ignore[union-attr]
+
+    @app.get("/voice/{name}")
+    def voice_static(name: str) -> Response:
+        if deps.voice is None or name not in STATIC_FILES:
+            return page(404, "Not found", "There is nothing here.")
+        return Response((STATIC / name).read_bytes(), media_type=STATIC_FILES[name])
+
+    @app.websocket("/voice/ws")
+    async def voice_ws(ws: WebSocket) -> None:
+        session = deps.sessions.read(ws.cookies.get(COOKIE_NAME))
+        token = deps.chat.token_of(session.sub) if session is not None and deps.chat is not None else None
+        if (deps.voice is None or session is None or token is None
+                or not origin_ok(ws.headers.get("origin"), ws.headers.get("host"), deps.settings.web_public_url)):
+            await ws.close(code=1008)  # policy violation: not signed in, or not our own page
+            return
+        await deps.voice.serve(ws, sub=session.sub, token=token)
 
     @app.get("/chat")
     def chat(request: Request) -> Response:
@@ -354,38 +250,3 @@ def change_agent_share(deps: WebDeps, session: Session, pct: int) -> None:
         detail={"agent_share_pct_from": venue.agent_share_pct, "agent_share_pct_to": pct},
     )
     deps.store.transact([op, deps.store.audit_op(entry)])
-
-
-def record_decision(deps: WebDeps, approval: Approval, session: Session, *, approved: bool,
-                    grant: Mandate | None = None) -> None:
-    """Pending -> approved/declined, exactly once, and audited in the same transaction. With ``grant`` (only
-    when approving), the standing permission is stored in that same transaction. A double click or a race
-    finds the approval already answered and changes nothing (so it cannot create a second permission)."""
-    now_iso = iso_z(deps.clock.now())
-    status = APPROVAL_APPROVED if approved else APPROVAL_DECLINED
-    key = keys.approval(approval.subject_id)
-    op = TxOp(
-        "Update", key={"PK": key.pk, "SK": key.sk}, update="SET #st = :new, decided_at = :now",
-        condition="#st = :pending AND #sub = :sub AND expires_at > :now AND terms_hash = :h",
-        names={"#st": "status", "#sub": "sub"},
-        values={":new": status, ":pending": APPROVAL_PENDING, ":sub": session.sub, ":now": now_iso,
-                ":h": approval.terms_hash},
-    )
-    entry = AuditEntry(
-        venue_id=approval.venue_id, timestamp=now_iso, request_id=deps.new_id(), sub=session.sub,
-        agent_id=None, tool="consent_page", decision=status, rule_ids=(),
-        detail={"subject_id": approval.subject_id, "kind": approval.kind,
-                **({"granted_days": grant.days_ahead_max} if grant is not None and approved else {})},
-    )
-    ops = [op, deps.store.audit_op(entry)]
-    if grant is not None and approved:
-        ops.append(deps.store.mandate_grant_op(grant, now_iso))
-    try:
-        deps.store.transact(ops)
-    except TransactionCancelled:
-        if len(ops) == 3:  # the permission was refused (a live one appeared): still record the answer
-            try:
-                deps.store.transact(ops[:2])
-            except TransactionCancelled:
-                pass
-        # otherwise answered or expired in the meantime: the page shows the current state

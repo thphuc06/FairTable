@@ -2,10 +2,10 @@
 
 One span per tool call, named ``fairtable.tool <name>``, carrying what a person troubleshooting needs to
 know: which tool, what each policy layer decided and by which rule, whether the answer was ok, a refusal,
-an approval request or an error, and whether it was an idempotent replay.
+a refusal to confirm or an error, and whether it was an idempotent replay.
 
 Privacy is enforced in code, not by care: ``annotate`` accepts only the attribute names in ``ALLOWED``
-(no token, no user id, no idempotency key, no approval link, no free text), and a value that is not a bool,
+(no token, no user id, no idempotency key, no read-back token, no free text), and a value that is not a bool,
 an int or a short string is refused. A test scans real spans for anything that looks like a secret.
 
 Without an OpenTelemetry SDK configured the API is a no-op, so the local profile pays nothing. On AWS the
@@ -21,7 +21,6 @@ from contextvars import ContextVar
 from typing import Any
 
 from fastmcp.server.middleware import Middleware
-from mcp.shared.exceptions import UrlElicitationRequiredError
 from opentelemetry import propagate, trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
@@ -30,7 +29,7 @@ TRACER_NAME = "fairtable.server"
 PREFIX = "fairtable."
 MAX_TEXT = 120
 CARRIER_KEYS = ("traceparent", "tracestate", "baggage")
-STEP_UP_CODES = ("CONSENT_REQUIRED", "FEE_APPLIES")
+READ_BACK_CODES = ("CONFIRMATION_REQUIRED",)
 
 # Every attribute the server may put on a span (without the "fairtable." prefix).
 ALLOWED = frozenset({
@@ -41,9 +40,9 @@ ALLOWED = frozenset({
     "party_size",
     "pep1.decision",           # "allow" | "deny"
     "pep1.rule_ids",           # rule ids that decided
-    "pep2.decision",           # "allow" | "deny" | "step_up"
+    "pep2.decision",           # "allow" | "deny"
     "pep2.rule_ids",
-    "outcome",                 # "ok" | "refused" | "step_up" | "error"
+    "outcome",                 # "ok" | "refused" | "read_back" | "error"
     "error_code",              # the tool's error code, e.g. POLICY_DENIED
     "rule_id",                 # the rule named in a refusal
     "idempotent_replay",
@@ -121,7 +120,7 @@ def _record_result(result: Any) -> None:
     if getattr(result, "is_error", False):
         code = data.get("error") if isinstance(data, dict) else None
         annotate(
-            outcome="step_up" if code in STEP_UP_CODES else "refused",
+            outcome="read_back" if code in READ_BACK_CODES else "refused",
             error_code=code if isinstance(code, str) else "error",
             rule_id=data.get("rule_id") if isinstance(data, dict) else None,
         )
@@ -151,9 +150,6 @@ class TelemetryMiddleware(Middleware):
         with tool_span(context.message.name, _carrier(context)) as span:
             try:
                 result = await call_next(context)
-            except UrlElicitationRequiredError:
-                annotate(outcome="step_up", error_code="URL_ELICITATION_REQUIRED")
-                raise
             except Exception as e:
                 annotate(outcome="error", exception_type=type(e).__name__)
                 span.set_status(Status(StatusCode.ERROR))

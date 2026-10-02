@@ -1,4 +1,4 @@
-"""P1-21: the ablation kernels (A0 open store, A2 no step-up) differ from the real kernel in exactly one way each."""
+"""P1-21, P3-10: the ablation kernels (A0 open store, A2 no voice guards) differ from the real kernel in exactly one way each."""
 
 from dataclasses import replace
 
@@ -18,8 +18,11 @@ from server.kernel import (
 VENUE = VenueRef("luna", agent_cover_cap=20)
 BASE = PolicyContext(
     agent_tier="verified", active_holds_user_venue=0, agent_covers_booked=0, party_size=2,
-    mandate_covers_booking=True, slot_is_drop_controlled=False, cancel_fee_cents=0, cancel_fee_acknowledged=False,
+    slot_is_drop_controlled=False, read_back_required=False, read_back_matches=False, pause_elapsed=False,
+    user_confirmed=False,
 )
+# a confirm with nothing behind it: no read-back token, no pause, no yes
+UNGUARDED = {"read_back_required": True}
 BOT = Identity(sub="bot")  # a machine token: no username, no agent tier, no scope
 DINER = Identity(sub="alice", username="diner-alice", agent_tier="verified", agent_id="a",
                  scopes=frozenset({"fairtable/book"}))
@@ -48,19 +51,29 @@ def test_the_real_kernel_refuses_the_same_requests(real):
     assert not pep2_decide(real.pep2, ToolName.RESERVATION_HOLD, slot_is_drop_controlled=True).allowed
 
 
-def test_without_step_up_an_unapproved_confirm_is_simply_allowed():
-    kernel = TrustKernel.without_step_up()
+def test_without_the_voice_guards_a_confirm_with_nothing_behind_it_is_simply_allowed():
+    kernel = TrustKernel.without_voice_guards()
     real = Pep2.from_dir(default_policy_dir())
-    outside = {"mandate_covers_booking": False}
-    assert pep2_decide(real, ToolName.RESERVATION_CONFIRM, **outside).kind is DecisionKind.STEP_UP
-    d = pep2_decide(kernel.pep2, ToolName.RESERVATION_CONFIRM, **outside)
-    assert d.kind is DecisionKind.ALLOW and d.rule_ids == ("S3_confirm_needs_mandate",)  # the rule is still named
+    refused = pep2_decide(real, ToolName.RESERVATION_CONFIRM, **UNGUARDED)
+    assert refused.kind is DecisionKind.DENY and "S5a_confirm_needs_read_back" in refused.rule_ids
+    d = pep2_decide(kernel.pep2, ToolName.RESERVATION_CONFIRM, **UNGUARDED)
+    assert d.kind is DecisionKind.ALLOW and d.rule_ids == ("P0_base",)  # judged as if the guards were satisfied
 
 
-def test_without_step_up_a_cancel_fee_needs_no_acknowledgement_either():
-    kernel = TrustKernel.without_step_up()
-    d = pep2_decide(kernel.pep2, ToolName.RESERVATION_MANAGE, cancel_fee_cents=2500)
-    assert d.allowed
+def test_without_the_voice_guards_a_cancel_with_a_fee_needs_no_read_back_either():
+    kernel = TrustKernel.without_voice_guards()
+    assert pep2_decide(kernel.pep2, ToolName.RESERVATION_MANAGE, **UNGUARDED).allowed
+
+
+def test_without_the_voice_guards_an_unverified_agent_is_still_refused():
+    """A forbid hides a missing permit: the real kernel names only the S5 rules for this request. The ablation
+    must not let it through because those rules are switched off."""
+    real = Pep2.from_dir(default_policy_dir())
+    kernel = TrustKernel.without_voice_guards()
+    both = pep2_decide(real, ToolName.RESERVATION_CONFIRM, agent_tier="unverified", **UNGUARDED)
+    assert both.kind is DecisionKind.DENY and all(r.startswith("S5") for r in both.rule_ids)
+    d = pep2_decide(kernel.pep2, ToolName.RESERVATION_CONFIRM, agent_tier="unverified", **UNGUARDED)
+    assert d.kind is DecisionKind.DENY and d.rule_ids == ("no_permit",)
 
 
 @pytest.mark.parametrize("overrides,rule", [
@@ -69,13 +82,13 @@ def test_without_step_up_a_cancel_fee_needs_no_acknowledgement_either():
     ({"slot_is_drop_controlled": True}, "S4_drop_slots_via_waitlist"),
     ({"agent_tier": "unverified"}, "no_permit"),  # no permit matches: P0 is the missing one
 ])
-def test_without_step_up_every_denial_still_holds(overrides, rule):
-    kernel = TrustKernel.without_step_up()
+def test_without_the_voice_guards_every_other_denial_still_holds(overrides, rule):
+    kernel = TrustKernel.without_voice_guards()
     d = pep2_decide(kernel.pep2, ToolName.RESERVATION_HOLD, **overrides)
     assert d.kind is DecisionKind.DENY and d.rule_ids == (rule,)
 
 
-def test_without_step_up_pep1_is_the_real_one():
-    kernel = TrustKernel.without_step_up()
+def test_without_the_voice_guards_pep1_is_the_real_one():
+    kernel = TrustKernel.without_voice_guards()
     assert not kernel.pep1.decide(identity=BOT, action=ToolName.RESERVATION_HOLD, party_size=2).allowed
     assert kernel.pep1.decide(identity=DINER, action=ToolName.RESERVATION_HOLD, party_size=2).allowed

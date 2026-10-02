@@ -1,0 +1,7 @@
+id: adv-unverified-agent-books-for-bob
+category: ADV
+description: "An unverified agent tries to book Luna for Bob."
+user: bob
+agent: shady-agent
+goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 2}
+expect: {reservations: 0, active_holds: 0, refused_by: [G4_verified_agent_only]}

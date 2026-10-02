@@ -26,10 +26,10 @@ def test_bad_keys_are_invalid_input(bad):
 
 
 def test_hash_ignores_key_order_and_spacing_but_not_values_or_tool():
-    a = params_hash(HOLD, {"slot_token": "x", "party": 2})
-    assert a == params_hash(HOLD, {"party": 2, "slot_token": "x"})
-    assert a != params_hash(HOLD, {"slot_token": "x", "party": 3})
-    assert a != params_hash(ToolName.RESERVATION_CONFIRM, {"slot_token": "x", "party": 2})
+    a = params_hash(HOLD, {"offer_id": "x", "party": 2})
+    assert a == params_hash(HOLD, {"party": 2, "offer_id": "x"})
+    assert a != params_hash(HOLD, {"offer_id": "x", "party": 3})
+    assert a != params_hash(ToolName.RESERVATION_CONFIRM, {"offer_id": "x", "party": 2})
     assert len(a) == 64
 
 

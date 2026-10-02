@@ -12,6 +12,7 @@ class Guidance:
     code: ErrorCode
     hint: str
     next_step: NextStep
+    message: str | None = None  # what to say instead of the generic "not allowed by the booking rules"
 
 
 CALL_THE_RESTAURANT = NextStep("Suggest that the user calls the restaurant.")
@@ -49,10 +50,33 @@ GUIDANCE: dict[str, Guidance] = {
         "Agent bookings for that day are full. Suggest calling the restaurant or joining the waitlist.",
         NextStep("Join the waitlist.", ToolName.WAITLIST_WATCH),
     ),
+    # D-051: the spoken confirmation. Nothing is booked; the messages are phrased for the assistant to act on.
+    "S5a_confirm_needs_read_back": Guidance(
+        ErrorCode.CONFIRMATION_REQUIRED,
+        "The details have not been read back to the user yet, or the read_back_token is missing, belongs to "
+        "other terms, or is too old.",
+        NextStep(
+            "Read the details to the user (use the read_back sentence), ask for a yes, then repeat this call "
+            "with the read_back_token and user_confirmed set to true."
+        ),
+        "The user has not heard these details yet.",
+    ),
+    "S5b_confirm_needs_the_diners_answer": Guidance(
+        ErrorCode.CONFIRMATION_REQUIRED,
+        "The user has not had time to answer: the details were handed over only a moment ago.",
+        NextStep("Wait for the user's answer, then repeat this call once they have said yes."),
+        "I am waiting for the user's answer.",
+    ),
+    "S5c_confirm_needs_an_explicit_yes": Guidance(
+        ErrorCode.CONFIRMATION_REQUIRED,
+        "The user's yes is required, and user_confirmed was not set to true.",
+        NextStep("Ask the user whether to go ahead; set user_confirmed to true only after they say yes."),
+        "I need the user's yes first.",
+    ),
     "S4_drop_slots_via_waitlist": Guidance(
         ErrorCode.DROP_CONTROLLED,
         "This slot is released through a Fair Drop, not by direct booking.",
-        NextStep("Enter the drop with waitlist_watch.", ToolName.WAITLIST_WATCH),
+        NextStep("Enter the draw for this slot instead.", ToolName.WAITLIST_WATCH),
     ),
 }
 
@@ -79,7 +103,7 @@ def deny_to_error(decision: Decision) -> FairTableError:
         guidance = GUIDANCE.get(shown or "", SAFE_FAILURE)
     return FairTableError(
         guidance.code,
-        "The request is not allowed by the restaurant's booking rules.",
+        guidance.message or "The request is not allowed by the restaurant's booking rules.",
         hint=guidance.hint,
         rule_id=shown,
         next_step=guidance.next_step,

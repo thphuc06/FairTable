@@ -1,44 +1,40 @@
-"""reservation_confirm: turn a live hold into a reservation.
+"""reservation_confirm: turn a live hold into a reservation, after a spoken yes (D-051).
 
-Inside the user's standing mandate it confirms at once. Outside it (or with no mandate) rule S3
-answers step-up until the user has approved this exact hold on the consent page; the approval is
-then consumed in the same transaction.
+The diner is asked by the assistant, who read back the terms from ``reservation_hold``. The server cannot hear
+the answer; rules S5a-c (Cedar) check what it can: the read-back token fits this hold, this user and these terms
+(a), enough time has passed for an answer (b), and the assistant states that the diner said yes (c). The
+booking records when the read-back was handed over.
 
 Transaction (plus idempotency record and audit from the pipeline):
   0. hold -> confirmed       (still held, not expired, same user)
   1. slot -> confirmed       (still owned by this hold)
   2. S1 counter - 1          (a confirmed hold is no longer an active hold; S2 covers stay)
-  3. reservation record      (new)
-  4. approval -> used        (only when an approval made the booking allowed)
+  3. reservation record      (new, with how it was confirmed)
 """
 
-from server.consent import ApprovalRequest, declined_error, is_declined
+from datetime import UTC, datetime
+
 from server.domain.booking import (
-    APPROVAL_APPROVED,
-    APPROVAL_USED,
     HOLD_CONFIRMED,
     HOLD_HELD,
-    KIND_CONFIRM,
     RES_CONFIRMED,
-    Approval,
     Hold,
     Reservation,
-    approval_is_usable,
     reservation_code,
-    terms_hash,
 )
+from server.domain.clock import iso_z
 from server.domain.errors import ErrorCode, FairTableError
-from server.domain.mandate import check_mandate
 from server.domain.models import SLOT_CONFIRMED, SLOT_HELD, Identity
 from server.domain.output import success
+from server.domain.readback import KIND_CONFIRM, min_pause_s, pause_elapsed
 from server.domain.tool_names import ToolName
 from server.kernel import Decision, PolicyContext, VenueRef
 from server.lifecycle import release_expired
-from server.ops.common import counter_value, parse_iso
+from server.ops.common import counter_value
 from server.pipeline import WriteFacts, WritePlan
 from server.store import Store, TransactionCancelled, TxOp, keys
 from server.tools.common import AppDeps
-from server.tools.present import cancel_policy_text_from_terms, say_date, say_time
+from server.tools.present import cancel_policy_text_from_terms, read_back_confirm, say_date, say_time
 
 
 def hold_expired() -> FairTableError:
@@ -48,19 +44,26 @@ def hold_expired() -> FairTableError:
 class ConfirmOperation:
     tool = ToolName.RESERVATION_CONFIRM
 
-    def __init__(self, deps: AppDeps, hold: Hold) -> None:
+    def __init__(self, deps: AppDeps, hold: Hold, read_back_token: str | None, user_confirmed: bool) -> None:
         self.deps = deps
         self.hold = hold
         self.venue_id = hold.venue_id
         self.party_size = hold.party_size
-        self.approval: Approval | None = None  # set when an approval makes the booking allowed
+        self.read_back_token = read_back_token
+        self.user_confirmed = user_confirmed is True
+        self.read_back_at: str | None = None  # when the read-back was handed over, if the token fits
 
     def params(self) -> dict:
         return {"hold_id": self.hold.hold_id}
 
-    def approval_request(self) -> ApprovalRequest:
-        h = self.hold
-        return ApprovalRequest(h.hold_id, KIND_CONFIRM, h.sub, h.venue_id, h.terms)
+    # ------------------------------------------------------------------ the read-back, offered again
+    def read_back_offer(self, identity: Identity) -> dict:
+        """A fresh read-back for the assistant to say, used when the first one is missing or does not fit."""
+        terms = self.hold.terms
+        token = self.deps.readback_codec.issue(
+            kind=KIND_CONFIRM, subject_id=self.hold.hold_id, sub=identity.sub, terms=terms)
+        return {"read_back": read_back_confirm(terms), "read_back_token": token,
+                "min_pause_s": min_pause_s(terms["cancel_fee_cents"])}
 
     # ------------------------------------------------------------------ facts
     def load_facts(self, store: Store, identity: Identity, now_iso: str) -> WriteFacts:
@@ -86,20 +89,12 @@ class ConfirmOperation:
         if venue is None or slot is None or slot.hold_id != hold.hold_id or slot.status != SLOT_HELD:
             raise hold_expired()
 
-        mandate = store.get_mandate(identity.sub, hold.venue_id)
-        check = check_mandate(
-            mandate, now=parse_iso(now_iso), agent_id=identity.agent_id, party_size=hold.party_size,
-            day=parse_iso(hold.date).date(), time=hold.time, cancel_fee_cents=venue.cancel_fee_cents,
-        )
-        allowed = check.covered
-        if not allowed:
-            digest = terms_hash(hold.terms)
-            approval = store.get_approval(hold.hold_id)
-            if is_declined(approval, sub=identity.sub, terms_digest=digest):
-                raise declined_error()
-            if approval_is_usable(approval, sub=identity.sub, terms_digest=digest, now_iso=now_iso):
-                self.approval, allowed = approval, True
-        self.venue, self.slot, self.check = venue, slot, check
+        check = self.deps.readback_codec.check(
+            self.read_back_token, kind=KIND_CONFIRM, subject_id=hold.hold_id, sub=identity.sub, terms=hold.terms)
+        waited = pause_elapsed(check.issued_at_ms, self.deps.clock.now(), min_pause_s(hold.terms["cancel_fee_cents"]))
+        if check.matches and check.issued_at_ms is not None:
+            self.read_back_at = iso_z(datetime.fromtimestamp(check.issued_at_ms / 1000, UTC))
+        self.venue, self.slot = venue, slot
         return WriteFacts(
             VenueRef(venue.venue_id, venue.agent_cover_cap),
             PolicyContext(
@@ -107,10 +102,11 @@ class ConfirmOperation:
                 active_holds_user_venue=counter_value(store, keys.active_holds_counter(identity.sub, hold.venue_id)),
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(hold.venue_id, hold.date)),
                 party_size=hold.party_size,
-                mandate_covers_booking=allowed,
                 slot_is_drop_controlled=slot.drop_controlled,
-                cancel_fee_cents=0,
-                cancel_fee_acknowledged=False,
+                read_back_required=True,
+                read_back_matches=check.matches,
+                pause_elapsed=waited,
+                user_confirmed=self.user_confirmed,
             ),
         )
 
@@ -123,7 +119,7 @@ class ConfirmOperation:
             reservation_id=reservation_id, code=code, hold_id=hold.hold_id, sub=identity.sub,
             agent_id=identity.agent_id, venue_id=hold.venue_id, date=hold.date, time=hold.time,
             table_group=hold.table_group, party_size=hold.party_size, status=RES_CONFIRMED,
-            terms_snapshot=hold.terms, created_at=now_iso,
+            terms_snapshot=hold.terms, created_at=now_iso, confirmation="spoken", read_back_at=self.read_back_at,
         )
         hold_key = keys.hold(hold.hold_id)
         slot_key = keys.slot(hold.venue_id, hold.date, hold.time, hold.table_group)
@@ -150,15 +146,6 @@ class ConfirmOperation:
             ),
             store.reservation_put_op(reservation),
         ]
-        if self.approval is not None:
-            ak = keys.approval(hold.hold_id)
-            ops.append(TxOp(
-                "Update", key={"PK": ak.pk, "SK": ak.sk}, update="SET #st = :used",
-                condition="#st = :approved AND #sub = :sub AND terms_hash = :h AND expires_at > :now",
-                names={"#st": "status", "#sub": "sub"},
-                values={":used": APPROVAL_USED, ":approved": APPROVAL_APPROVED, ":sub": identity.sub,
-                        ":h": self.approval.terms_hash, ":now": now_iso},
-            ))
         card = {
             "title": f"Table at {venue.name}", "code": code, "restaurant": venue.name,
             "date": hold.date, "time": hold.time, "party_size": hold.party_size,
@@ -168,17 +155,11 @@ class ConfirmOperation:
             f"Booked. A table for {hold.party_size} at {venue.name} on {say_date(hold.date)} at "
             f"{say_time(hold.time)}. Your code is {code}.",
             reservation_id=reservation_id, code=code, terms_snapshot=hold.terms, booking_card=card,
-            approved_by_user=self.approval is not None,
             next_step={"tool": "reservation_manage",
                        "why": "If plans change, view or cancel the booking with its reservation_id."},
         )
         return WritePlan(ops, result, {"reservation_id": reservation_id, "hold_id": hold.hold_id,
-                                       "approved_by_user": self.approval is not None})
+                                       "confirmation": "spoken", "read_back_at": self.read_back_at})
 
     def explain_cancel(self, failed: list[int], exc: TransactionCancelled) -> FairTableError:
-        if 4 in failed:
-            return FairTableError(
-                ErrorCode.CONSENT_REQUIRED, "The user's approval was already used or has expired.",
-                hint="Ask the user to approve again.",
-            )
         return hold_expired()

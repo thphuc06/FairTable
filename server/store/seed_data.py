@@ -1,9 +1,8 @@
-"""Deterministic demo data: three restaurants, two weeks of slots (some hot, some Fair-Drop), and a
-few standing mandates. Pure function of (today, now, user subs): no I/O, so tests can use it too.
+"""Deterministic demo data: three restaurants and two weeks of slots (some hot, some Fair-Drop).
+Pure function of (today, now, user subs): no I/O, so tests can use it too.
 
 Fictional restaurants; the numbers are chosen so each rule is easy to trigger in a demo:
-- Luna Trattoria: roomy agent share (cap 24 covers/day), free cancellation, so Alice's mandate
-  (max fee 0) covers ordinary bookings there.
+- Luna Trattoria: roomy agent share (cap 24 covers/day) and free cancellation.
 - Ember Grill: small agent share (cap 10) and a hot Saturday 19:00 table: shows rule S2.
 - Sakura Counter: a Friday 20:00 seat released through a Fair Drop: shows rule S4.
 """
@@ -14,7 +13,7 @@ from datetime import date, datetime, timedelta
 
 from server.domain.booking import starts_at
 from server.domain.clock import iso_z as _iso
-from server.domain.models import MANDATE_ACTIVE, Mandate, Slot, Venue
+from server.domain.models import Slot, Venue
 
 DAYS = 14
 TIMES = ("17:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30")
@@ -62,7 +61,6 @@ class DropSpec:
 class SeedData:
     venues: tuple[Venue, ...]
     slots: tuple[Slot, ...]
-    mandates: tuple[Mandate, ...]
     drops: tuple[DropSpec, ...] = ()
 
 
@@ -88,29 +86,6 @@ def _slots(today: date) -> list[Slot]:
     return slots
 
 
-def _mandates(subs: Mapping[str, str], now: datetime) -> list[Mandate]:
-    approved = _iso(now)
-    expires = _iso(now + timedelta(days=90))
-    return [
-        # Alice trusts Luna for small groups in the evening: in-scope bookings confirm at once.
-        Mandate(
-            subs["alice"], "luna-trattoria", MANDATE_ACTIVE, 1,
-            party_size_max=4, days_ahead_max=30, window_start="17:00", window_end="22:00",
-            max_cancel_fee_cents=0, allow_auto_confirm=True,
-            actions=frozenset({"hold", "confirm", "watch", "drop_entry"}),
-            agent_ids=frozenset({"alexa-plus-sim"}), approved_at=approved, expires_at=expires,
-        ),
-        # Carol never allows auto-confirm: every confirm at Ember needs step-up.
-        Mandate(
-            subs["carol"], "ember-grill", MANDATE_ACTIVE, 1,
-            party_size_max=2, days_ahead_max=14, window_start="18:00", window_end="21:00",
-            max_cancel_fee_cents=0, allow_auto_confirm=False,
-            actions=frozenset({"hold", "watch"}),
-            agent_ids=frozenset({"alexa-plus-sim"}), approved_at=approved, expires_at=expires,
-        ),
-    ]
-
-
 def _drops(slots: list[Slot], now: datetime) -> list[DropSpec]:
     """One drop per ``drop_id``: entries open now; the draw is a day before the seats, but never
     sooner than ten minutes from now so a fresh demo always has time to enter."""
@@ -130,4 +105,4 @@ def _drops(slots: list[Slot], now: datetime) -> list[DropSpec]:
 def build_seed(today: date, now: datetime, subs: Mapping[str, str]) -> SeedData:
     """``subs`` maps "alice" / "carol" (and "bob") to the ``sub`` claim of their dev tokens."""
     slots = _slots(today)
-    return SeedData(VENUES, tuple(slots), tuple(_mandates(subs, now)), tuple(_drops(slots, now)))
+    return SeedData(VENUES, tuple(slots), tuple(_drops(slots, now)))

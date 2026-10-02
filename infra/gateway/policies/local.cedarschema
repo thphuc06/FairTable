@@ -12,25 +12,21 @@ namespace AgentCore {
     principal: [OAuthUser], resource: [Gateway],
     context: { input: { restaurant_id: String, date: String, time_window?: String, party_size?: Long } }
   };
-  action "ft___mandate_status" appliesTo {
-    principal: [OAuthUser], resource: [Gateway],
-    context: { input: { restaurant_id: String } }
-  };
   action "ft___waitlist_status" appliesTo {
     principal: [OAuthUser], resource: [Gateway],
     context: { input: { watch_id: String, action?: String } }
   };
   action "ft___reservation_hold" appliesTo {
     principal: [OAuthUser], resource: [Gateway],
-    context: { input: { slot_token: String, idempotency_key: String } }
+    context: { input: { offer_id: String, idempotency_key: String } }
   };
   action "ft___reservation_confirm" appliesTo {
     principal: [OAuthUser], resource: [Gateway],
-    context: { input: { hold_id: String, idempotency_key: String } }
+    context: { input: { hold_id: String, idempotency_key: String, read_back_token?: String, user_confirmed?: Bool } }
   };
   action "ft___reservation_manage" appliesTo {
     principal: [OAuthUser], resource: [Gateway],
-    context: { input: { action: String, reservation_id: String, idempotency_key?: String, new_party_size?: Long } }
+    context: { input: { action: String, reservation_id: String, idempotency_key?: String, new_party_size?: Long, read_back_token?: String, user_confirmed?: Bool } }
   };
   action "ft___waitlist_watch" appliesTo {
     principal: [OAuthUser], resource: [Gateway],

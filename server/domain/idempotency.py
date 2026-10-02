@@ -3,7 +3,7 @@
 Key = (user ``sub``, ``idempotency_key``). Same parameters -> return the stored result; different
 parameters (or a different tool) -> ``IDEMPOTENCY_CONFLICT``. A record is stored only when state
 really changed, in the same transaction as the change; denied or failed calls store nothing, so the
-same key can be used again once the cause is fixed (for example after step-up approval).
+same key can be used again once the cause is fixed (for example after the diner has answered).
 """
 
 import hashlib
@@ -33,7 +33,8 @@ def validate_key(key: object) -> str:
     if not isinstance(key, str) or not KEY_PATTERN.match(key):
         raise FairTableError(
             ErrorCode.INVALID_INPUT,
-            "idempotency_key must be 8-128 characters: letters, digits, '.', '_', ':' or '-'.",
+            "The request key is not valid.",
+            hint="idempotency_key must be 8-128 characters: letters, digits, '.', '_', ':' or '-'.",
         )
     return key
 
@@ -49,7 +50,8 @@ def params_hash(tool: ToolName, params: Mapping[str, Any]) -> str:
 def conflict() -> FairTableError:
     return FairTableError(
         ErrorCode.IDEMPOTENCY_CONFLICT,
-        "This idempotency_key was already used with different parameters.",
+        "That request key was already used for a different request.",
+        hint="This idempotency_key was already used with different parameters.",
     )
 
 

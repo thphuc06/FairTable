@@ -16,6 +16,9 @@ def say_money(cents: int) -> str:
     return "free" if cents == 0 else f"${cents / 100:.2f}"
 
 
+MAX_OPTIONS = 5  # Alexa+ functional requirement 9: at most five options on a device without a screen
+
+
 def say_times(times: list[str], limit: int = 3) -> str:
     """'5:30 PM, 6:00 PM and 6:30 PM' (each time once, in order); 'and N more times' beyond limit."""
     unique = list(dict.fromkeys(times))
@@ -52,3 +55,19 @@ def cancel_policy_text_from_terms(terms: dict) -> str:
     if fee == 0:
         return "Cancellation is free."
     return f"Cancel at least {hours} hours ahead for free; after that the fee is {say_money(fee)}."
+
+
+def read_back_confirm(terms: dict) -> str:
+    """The sentence the assistant reads to the diner before a booking is confirmed (plain words, no ids)."""
+    return (
+        f"{terms['restaurant']}, {say_date(terms['date'])} at {say_time(terms['time'])}, "
+        f"a table for {terms['party_size']}. {cancel_policy_text_from_terms(terms)} Shall I book it?"
+    )
+
+
+def read_back_cancel_fee(terms: dict) -> str:
+    """The sentence read to the diner before a cancellation that costs money."""
+    return (
+        f"Cancelling your booking at {terms['restaurant']} on {say_date(terms['date'])} at "
+        f"{say_time(terms['time'])} costs {say_money(terms['fee_cents'])}. Shall I go ahead and cancel?"
+    )

@@ -1,4 +1,4 @@
-"""P1-19: the chat page. One sign-in covers chat and consent; the assistant is the simulator's."""
+"""P1-19, P3-10: the chat page. The diner answers the read-back by typing yes; the assistant is the simulator's."""
 
 import re
 from datetime import timedelta
@@ -31,6 +31,12 @@ def sign_in(browser, who: str, next_path: str = "/chat") -> None:
 
 def csrf_of(html: str) -> str:
     return re.search(r"name='csrf' value='([^']+)'", html).group(1)
+
+
+def yes(world: World, browser) -> str:
+    """The diner has heard the details and answers: a few seconds pass, then the yes."""
+    world.clock.advance(8)
+    return say(browser, "Yes, please")
 
 
 def say(browser, text: str):
@@ -70,7 +76,10 @@ async def test_a_diner_books_a_table_by_chatting(chat_env):
     world, browser, _ = chat_env
     sign_in(browser, "alice")
     html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
-    assert "Assistant:" in html and "booked" in html.lower()
+    assert "Assistant:" in html and "shall i book it" in html.lower()
+    assert not world.store.reservations_of_user(world_sub(world, "alice"))  # asked, not booked
+    html = yes(world, browser)
+    assert "booked" in html.lower()
     assert len(world.store.reservations_of_user(world_sub(world, "alice"))) == 1
 
 
@@ -79,7 +88,9 @@ async def test_one_conversation_can_make_several_different_requests(chat_env):
     world, browser, _ = chat_env
     sign_in(browser, "alice")
     say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
-    html = say(browser, f"Book a table at Luna Trattoria for 4 on {day(world)} at 8pm")
+    yes(world, browser)
+    say(browser, f"Book a table at Luna Trattoria for 4 on {day(world)} at 8pm")
+    html = yes(world, browser)
     assert html.lower().count("booked") >= 2
     reservations = world.store.reservations_of_user(world_sub(world, "alice"))
     assert sorted((r.time, r.party_size) for r in reservations) == [("19:00", 2), ("20:00", 4)]
@@ -91,22 +102,25 @@ def world_sub(world: World, who: str) -> str:
     return SUBS[who]
 
 
-async def test_one_sign_in_covers_the_chat_and_the_approval(chat_env):
-    """Bob is outside his mandate: the assistant hands over a link, Bob approves on the consent page in
-    the same browser session, and tells the assistant, which then completes the booking."""
+async def test_every_diner_just_says_yes_there_is_no_page_to_visit(chat_env):
+    """Bob has no standing permission and needs none: the assistant reads the details back, he answers in the chat."""
     world, browser, _ = chat_env
     sign_in(browser, "bob")
     html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
-    link = re.search(r"href='(http://localhost:8080(/consent/[A-Za-z0-9_-]+))'", html)
-    assert link, html
-    assert "Notifications" in html and "Approve your booking request" in html  # the dev inbox shows it too
-    page = browser.get(link.group(2))
-    assert page.status_code == 200 and "Approve" in page.text
-    r = browser.post(f"{link.group(2)}/decision", data={"decision": "approve", "csrf": csrf_of(page.text)})
-    assert r.status_code == 303
-    html = say(browser, "I approved it")
-    assert "booked" in html.lower()
+    assert "shall i book it" in html.lower() and "/consent/" not in html and "Approve" not in html
+    assert browser.get("/consent/anything").status_code == 404
+    assert "booked" in yes(world, browser).lower()
     assert len(world.store.reservations_of_user(world_sub(world, "bob"))) == 1
+
+
+async def test_a_no_in_the_chat_books_nothing(chat_env):
+    world, browser, _ = chat_env
+    sign_in(browser, "bob")
+    say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
+    world.clock.advance(8)
+    html = say(browser, "No, thanks")
+    assert "won&#x27;t book" in html  # the apostrophe is escaped on the page
+    assert not world.store.reservations_of_user(world_sub(world, "bob"))
 
 
 def test_the_page_escapes_what_people_and_the_assistant_write(chat_env):
@@ -117,12 +131,12 @@ def test_the_page_escapes_what_people_and_the_assistant_write(chat_env):
     assert "<b>x</b>" not in html
 
 
-def test_only_our_own_consent_links_become_anchors(chat_env):
+def test_links_in_what_people_write_are_never_live(chat_env):
     _, browser, _ = chat_env
     sign_in(browser, "alice")
     html = say(browser, "see http://evil.example/consent/abc and http://localhost:8080/consent/abc123")
-    assert "href='http://evil.example" not in html
-    assert "href='http://localhost:8080/consent/abc123'" in html
+    assert "href=" not in html.split("<h2>Notifications</h2>")[0].split("</form>")[-1] or "<a href='http" not in html
+    assert "href='http://evil.example" not in html and "href='http://localhost:8080/consent" not in html
 
 
 def test_forms_need_the_right_csrf_token(chat_env):
@@ -188,18 +202,11 @@ async def test_the_chat_shows_the_tool_calls_and_the_rule_behind_each_answer(cha
     """The proof for a demo: what the assistant asked of the server and what the server decided."""
     world, browser, _ = chat_env
     sign_in(browser, "alice")
-    html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
-    summary = re.search(r"<summary>(.*?)</summary>", html).group(1)
-    for tool in ("restaurant_search", "availability_check", "reservation_hold", "reservation_confirm"):
-        assert tool in summary
-    assert "&#10007;" not in summary  # every step succeeded
+    say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
+    html = yes(world, browser)
+    summaries = re.findall(r"<summary>(.*?)</summary>", html)
+    assert "reservation_hold" in summaries[0] and "reservation_confirm" in summaries[1]
+    assert not any("&#10007;" in s for s in summaries)  # every step succeeded
 
     html = say(browser, f"Book a table at Luna Trattoria for 12 on {day(world)} at 7pm")
     assert "G3_party_size_max_10" in html and "refused" in html  # the rule that stopped it, from the server
-
-
-async def test_a_step_up_shows_as_waiting_for_approval_not_as_a_failure(chat_env):
-    world, browser, _ = chat_env
-    sign_in(browser, "bob")
-    html = say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
-    assert "needs approval" in html and "CONSENT_REQUIRED" in html and "chip wait" in html

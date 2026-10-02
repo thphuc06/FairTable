@@ -3,7 +3,7 @@
 Which AWS services FairTable uses, why, and how. This document feeds the AWS Builder product feedback and the README service list.
 
 **Status legend:** _planned_ = designed, not built · _built_ = implemented · _verified_ = exercised against a real account.
-Status as of 2026-09-30: the local profile calls no AWS service; the DynamoDB table exists on the account (P2-1), everything else is **planned**. Interfaces and configuration exist for some (a KMS seed provider and an SNS notifier are written against fake clients only, D-016).
+Status as of 2026-10-02 (evening: the second account runs the seven-tool server, 35 real-AWS tests pass): the local profile calls no AWS service. On the AWS profile (second account, D-045) DynamoDB, Cognito, Lambda, Runtime, Gateway, Gateway Policy and Budgets are **verified** on the real service; Observability (AWS part) is in progress; a KMS seed provider exists against a fake client only (D-016); an `SnsNotifier` exists against a fake client only (P3-12, 2026-10-02), with the CDK stack `FairTableNotify`; nothing of it is deployed.
 
 **Principles**
 - The **local Docker profile needs no AWS account** (see `docs/DECISIONS.md` D-001, D-007). The AWS profile is the same server code with different configuration.
@@ -16,18 +16,18 @@ Status as of 2026-09-30: the local profile calls no AWS service; the DynamoDB ta
 | Service | Role in FairTable | How we use it | Local equivalent | Status |
 |---|---|---|---|---|
 | **Amazon Bedrock AgentCore Runtime** | Hosts the MCP server (Streamable HTTP) | The same server code as the local profile, as a zip (direct code deployment, no Docker) on Runtime V2; IAM (SigV4) callers only; the diner's token travels in the allowlisted header `x-ft-user-token` | `docker compose` server container | **verified** (second account; D-045) |
-| **Amazon Bedrock AgentCore Gateway** | Front door for agents: JWT check, request interceptor, Policy | `CUSTOM_JWT` authorizer with Cognito JWKS; MCP target pointing at the Runtime; REQUEST interceptor copies the verified user token to `x-ft-user-token` and strips any client-supplied value | Server verifies the token itself; no gateway | planned |
-| **AgentCore Gateway Policy** | Defense in depth for G1–G4 (stateless rules) | Cedar policies G1–G4 at the Gateway; the same rules also run inside the server with `cedarpy` | `policies/g*.cedar` evaluated in the server | built, opt-in (`GATEWAY_POLICY`: `LOG_ONLY` or `ENFORCE`), deployed and measured on the second account (D-049) |
-| **AgentCore Identity** | Outbound OAuth from Gateway to the Runtime target | Gateway calls the Runtime with its own OAuth credentials | – | planned |
-| **Amazon Cognito** (Essentials tier) | User pool, sign-in (`USER_PASSWORD_AUTH`, demo only), machine tokens (client credentials), token claims | One pre-token-generation trigger, version **V3_0** (user and machine tokens), adds `agent_tier`, `agent_id`, the scope `fairtable/book` and `custom:venue_id`; three app clients named like the dev issuer's | `devauth/` dev JWT issuer | built (CDK stack and tests), not deployed |
-| **AWS Lambda** | Pre-token trigger; Gateway interceptor; optional workers later | Small Python functions; workers reuse the same pure functions as the lazy in-server paths. The pre-token function (`infra/cognito/pre_token`) is built and unit-tested | Same logic runs in-process | pre-token function built (not deployed); rest planned |
+| **Amazon Bedrock AgentCore Gateway** | Front door for agents: JWT check, request interceptor, Policy | `CUSTOM_JWT` authorizer with Cognito JWKS; MCP target pointing at the Runtime (SigV4 with the gateway role); REQUEST interceptor copies the verified user token to `x-ft-user-token` and replaces any client-supplied value | Server verifies the token itself; no gateway | **verified** (second account; D-046) |
+| **AgentCore Gateway Policy** | Defense in depth for G1–G4 (stateless rules) | Cedar policies G1–G4 at the Gateway; the same rules also run inside the server with `cedarpy` | `policies/g*.cedar` evaluated in the server | **verified** (opt-in `GATEWAY_POLICY`: `LOG_ONLY` or `ENFORCE`; second account; D-049) |
+| **AgentCore Identity** | Not used (D-035): the Gateway calls the Runtime with its service role (SigV4) | – | – | not used |
+| **Amazon Cognito** (Essentials tier) | User pool, sign-in (`USER_PASSWORD_AUTH`, demo only), machine tokens (client credentials), token claims | One pre-token-generation trigger, version **V3_0** (user and machine tokens), adds `agent_tier`, `agent_id`, the scope `fairtable/book` and `custom:venue_id`; three app clients named like the dev issuer's | `devauth/` dev JWT issuer | **verified** (second account; D-038, D-039) |
+| **AWS Lambda** | Pre-token trigger; Gateway interceptor; optional workers later | Small Python functions; workers reuse the same pure functions as the lazy in-server paths. The pre-token function (`infra/cognito/pre_token`) is built and unit-tested | Same logic runs in-process | pre-token function and Gateway interceptor **verified** |
 | **Amazon DynamoDB** | Single-table store: slots, holds, reservations, mandates, counters, idempotency records, audit, waitlists, drops | `TransactWriteItems` for every state change; conditions are the final concurrency guarantee. No reliance on TTL for business logic | DynamoDB Local | **table deployed by CDK (2026-09-30); store tests verified on the real service** |
 | **AgentCore Observability** (on **Amazon CloudWatch**, OpenTelemetry) | Trace every step of a booking to troubleshoot and to show in the demo (D-031) | One-time CloudWatch *Transaction Search* (spans go to the `aws/spans` log group); Strands agent instrumented with ADOT and `strands-agents[otel]` (our simulator runs outside Runtime); Gateway and Runtime spans; session id as OpenTelemetry baggage; the server adds the policy decision of each call (tool, decision, rule ids, error code) as span attributes, never tokens or personal data | The chat page's *steps* list and the owner console's audit list | planned (required; prices to verify before enabling) |
-| **AWS Budgets** | Cost alerts at $50 / $100 / $140 | Created by the CDK app; credits excluded (`IncludeCredit` defaults to true and would silence the alerts) | – | built (waiting for the alert address to deploy) |
-| **AWS CDK (Python) / CloudFormation** | Infrastructure as code | Table, Cognito, Lambdas, Budgets; AgentCore resources via the `agentcore` CLI or CDK as supported | – | planned |
+| **AWS Budgets** | Cost alerts (second account: $5 cap, alerts at $1 / $3 / $4.5; first account $50 / $100 / $140) | Created by the CDK app; credits excluded (`IncludeCredit` defaults to true and would silence the alerts) | – | **verified** (D-044) |
+| **AWS CDK (Python) / CloudFormation** | Infrastructure as code | Table, Cognito, Lambdas, Budgets, Runtime, Gateway, Policy (CloudFormation AgentCore resources, D-035) | – | **verified** |
 | **Amazon Bedrock (models)** | Optional real model for the simulator and eval | `MODEL_PROVIDER=bedrock`; currently **blocked on the account** (AWS Support case), so mock is the default | `MODEL_PROVIDER=mock` | blocked |
 
-Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local provider), API Gateway, S3, ElastiCache/Redis, AgentCore Evaluations, Nova Act, Nova Sonic. These are Should/Could items and need approval before starting.
+Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local provider), API Gateway, S3, ElastiCache/Redis, AgentCore Evaluations, Nova Act, e-mail or SNS confirmations (D-051). **Planned, not wired:** Amazon Nova 2 Sonic on Bedrock for the voice demo (D-052; model, API and price to verify first); Amazon SNS for waitlist and Fair Drop notices to one subscribed e-mail address (D-054, task P3-12: code, CDK stack and tests are written; deploying needs "wire SNS" and the cost statement). These are Should/Could items and need approval before starting.
 
 **AgentCore Memory: decided out (D-031).** Short-term memory (the conversation, kept by the Strands agent) is enough for this use; durable state lives in DynamoDB.
 
@@ -86,7 +86,12 @@ Not planned for the MVP: EventBridge Scheduler, KMS (seed comes from a local pro
 - *Onboarding:* the Policy permissions page (three actions on the Gateway role, `InvokeGateway` for the creator) was what mattered; the rest was in the CloudFormation reference.
 - *Build again:* yes, with the two-deploy order.
 
-**Amazon Bedrock AgentCore Observability:** to be written when it exists.
+**Amazon Bedrock AgentCore Observability** (Gateway and Runtime spans verified, second account; D-050)
+- *Used for:* one trace per booking: Gateway (tool, latency, policy decision and determining policy) and Runtime spans, searched in CloudWatch Transaction Search (spans stored as logs, 1 % indexed free). The server's own rule-id span is not exported yet.
+- *Worked well:* the policy engine leaves its own span with the decision and the policy that decided; no token or argument in the attributes; cost for a test day is a few MB of logs.
+- *Needs work:* no tracing property on the Runtime or Gateway CloudFormation resources; the Runtime delivery works but is documented nowhere; `filter-log-events` shows nothing on `aws/spans` while Logs Insights does; Transaction Search takes about 7 minutes to deploy and changes the whole account.
+- *Onboarding:* the Observability pages are long and mix Runtime-hosted and outside agents; the CloudWatch CloudFormation page for Transaction Search was the clearest.
+- *Build again:* yes.
 
 
 ## Deploy and tear down

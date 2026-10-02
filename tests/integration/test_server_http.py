@@ -63,45 +63,55 @@ def client(url: str, token: str | None = None, **headers) -> Client:
     return Client(StreamableHttpTransport(url, headers=headers or None))
 
 
+async def refused_with_401(url: str, token: str | None = None, **headers) -> bool:
+    """A `tools/call` that the transport answers with HTTP 401 (Alexa+ starts account linking on it)."""
+    if token:
+        headers["x-ft-user-token"] = token
+    call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "restaurant_search", "arguments": {}}}
+    async with httpx.AsyncClient() as http:
+        r = await http.post(url, json=call, headers={**MCP_HEADERS, **headers})
+    return r.status_code == 401 and r.json()["error"] == "unauthorized"
+
+
 async def test_protocol_version_and_tool_surface(running):
     world, url = await running()
     async with client(url, world.token("alice")) as c:
         assert c.initialize_result.protocolVersion == "2025-11-25"
         tools = {t.name: t for t in await c.list_tools()}
-    reads = {"restaurant_search", "availability_check", "mandate_status"}
+    reads = {"restaurant_search", "availability_check"}
     writes = {"reservation_hold", "reservation_confirm", "reservation_manage", "waitlist_watch", "waitlist_status"}
-    assert set(tools) == reads | writes  # the eight tools of the design
+    assert set(tools) == reads | writes  # the seven tools (D-053)
     assert all(tools[n].annotations.readOnlyHint for n in reads)
     assert not any(tools[n].annotations.readOnlyHint for n in writes)
     assert all(tools[n].annotations.idempotentHint for n in writes)  # safe to retry with the same key
     assert tools["reservation_manage"].annotations.destructiveHint  # cancel is destructive
-    assert "slot_token" in tools["availability_check"].description  # written for the model
+    assert "offer_id" in tools["availability_check"].description  # written for the model
 
 
 async def test_identity_comes_from_the_x_ft_user_token_header(running):
     world, url = await running()
     async with client(url, world.token("alice")) as c:
-        ok = await c.call_tool_mcp("mandate_status", {"restaurant_id": "luna-trattoria"})
-    assert ok.structuredContent["mandate_state"] == "active"  # Alice's own mandate
-    async with client(url, world.token("bob")) as c:
-        other = await c.call_tool_mcp("mandate_status", {"restaurant_id": "luna-trattoria"})
-    assert other.structuredContent["mandate_state"] == "none"  # a different user sees hers, not Alice's
+        slots = await c.call_tool_mcp("availability_check", {
+            "restaurant_id": "luna-trattoria", "date": "2026-10-03", "time_window": "19:00-19:00", "party_size": 2})
+        hold = await c.call_tool_mcp("reservation_hold", {
+            "offer_id": slots.structuredContent["slots"][0]["offer_id"], "idempotency_key": "key-http-0001"})
+    assert not hold.isError
+    async with client(url, world.token("bob")) as c:  # Bob cannot read Alice's hold through his own token
+        other = await c.call_tool_mcp("reservation_confirm", {
+            "hold_id": hold.structuredContent["hold_id"], "idempotency_key": "key-http-0002"})
+    assert other.isError and other.structuredContent["error"] == "NOT_FOUND"
 
 
 @pytest.mark.parametrize("token", [None, "garbage", "a.b.c"])
 async def test_missing_or_garbage_tokens_are_refused(running, token):
     _, url = await running()
-    async with client(url, token) as c:
-        r = await c.call_tool_mcp("restaurant_search", {})
-    assert r.isError and r.structuredContent["error"] == "UNAUTHENTICATED"
+    assert await refused_with_401(url, token)
 
 
 async def test_a_bearer_header_alone_is_not_an_identity(running):
     """Only the gateway-verified x-ft-user-token counts; a plain Authorization header does not."""
     world, url = await running()
-    async with client(url, Authorization=f"Bearer {world.token('alice')}") as c:
-        r = await c.call_tool_mcp("restaurant_search", {})
-    assert r.isError and r.structuredContent["error"] == "UNAUTHENTICATED"
+    assert await refused_with_401(url, Authorization=f"Bearer {world.token('alice')}")
 
 
 async def test_rt4_a_forged_user_token_is_refused(running):
@@ -114,18 +124,14 @@ async def test_rt4_a_forged_user_token_is_refused(running):
          "exp": int(world.clock.now().timestamp()) + 600},
         attacker,
     )
-    async with client(url, forged) as c:
-        r = await c.call_tool_mcp("mandate_status", {"restaurant_id": "luna-trattoria"})
-    assert r.isError and r.structuredContent["error"] == "UNAUTHENTICATED"
+    assert await refused_with_401(url, forged)
 
 
 async def test_an_expired_token_is_refused(running, clock):
     world, url = await running()
     token = world.token("alice")
     clock.advance(seconds=3600 + 60)
-    async with client(url, token) as c:
-        r = await c.call_tool_mcp("restaurant_search", {})
-    assert r.isError and r.structuredContent["error"] == "UNAUTHENTICATED"
+    assert await refused_with_401(url, token)
 
 
 async def test_hostile_origin_and_host_are_rejected_but_plain_clients_work(running):
@@ -157,3 +163,16 @@ async def test_unexpected_exceptions_are_masked(running):
     async with client(url, world.token("alice")) as c:
         r = await c.call_tool_mcp("mandate_status", {"restaurant_id": "luna-trattoria"})
     assert r.isError and "division" not in r.content[0].text.lower()
+
+
+async def test_only_tool_calls_need_a_token_and_a_valid_token_goes_through(running):
+    """Alexa+ discovers the tools with its service-level token and starts account linking on a 401 to a tool call."""
+    world, url = await running()
+    async with httpx.AsyncClient() as http:
+        assert (await http.post(url, json=INIT, headers=MCP_HEADERS)).status_code == 200  # initialize: no token
+    async with client(url) as c:
+        assert len(await c.list_tools()) == 7  # tools/list: no token
+    assert not await refused_with_401(url, world.token("alice"))  # a valid token reaches the tool
+    async with client(url, world.token("alice")) as c:
+        r = await c.call_tool_mcp("restaurant_search", {})
+    assert not r.isError and r.structuredContent["restaurants"]

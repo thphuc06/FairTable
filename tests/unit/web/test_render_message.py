@@ -6,11 +6,8 @@ import pytest
 
 from web.pages import render_message
 
-PREFIX = "http://localhost:8080/consent"
-
-
 def render(text: str) -> str:
-    return render_message(text, PREFIX)
+    return render_message(text)
 
 
 def test_bold_italic_and_code():
@@ -58,21 +55,15 @@ def test_markup_from_the_model_is_never_live(attack):
     assert "&lt;" in html or "javascript:" in html  # shown as text, not interpreted
 
 
-def test_only_our_own_consent_links_become_anchors():
-    ours = render(f"Approve here: {PREFIX}/ev00000012 then tell me")
-    assert f"<a href='{PREFIX}/ev00000012' target='_blank' rel='noopener'>" in ours
+def test_links_are_never_made_live():
+    """The assistant has no links to give any more (D-051); whatever it writes stays text."""
     assert "<a " not in render("see http://evil.example/consent/abc")
-    assert "<a " not in render("http://localhost:8080/other/abc")
+    assert "<a " not in render("http://localhost:8080/consent/abc")
 
 
-def test_a_consent_link_survives_inside_bold_and_lists():
-    html = render(f"- **Approve:** {PREFIX}/abc_12-x")
-    assert f"href='{PREFIX}/abc_12-x'" in html and "<ul><li><b>Approve:</b>" in html
-
-
-def test_underscores_in_a_link_are_not_read_as_italics():
-    html = render(f"{PREFIX}/a_b_c and *real*")
-    assert f"href='{PREFIX}/a_b_c'" in html and "<i>real</i>" in html
+def test_underscores_in_a_word_are_not_read_as_italics():
+    html = render("a_b_c and *real*")
+    assert "<i>real</i>" in html and "a_b_c" in html
 
 
 def test_unbalanced_marks_are_left_alone_and_empty_text_is_empty():

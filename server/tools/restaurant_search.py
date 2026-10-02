@@ -9,7 +9,7 @@ from server.domain.output import success
 from server.domain.tool_names import ToolName
 from server.middleware import business_errors
 from server.tools.common import AppDeps, authorize
-from server.tools.present import cancel_policy_text, say_time, terms
+from server.tools.present import MAX_OPTIONS, cancel_policy_text, say_time, terms
 
 FULL_DAY = ("00:00", "23:59")
 
@@ -22,12 +22,14 @@ def register(mcp: FastMCP, deps: AppDeps) -> None:
         date: str | None = None,
         party_size: int | None = None,
         response_format: Literal["concise", "detailed"] = "concise",
+        offset: int = 0,
     ) -> dict:
         """Find restaurants that take bookings through FairTable.
 
         `query` matches the name, cuisine, city or description (leave empty to list all).
         Give `date` (YYYY-MM-DD) and `party_size` to also see each restaurant's earliest free
-        time that day. Use availability_check next to get bookable slots.
+        time that day. At most five restaurants come back at a time; `offset` skips the first ones
+        to see the next five. Use availability_check next to get bookable slots.
         """
         today = deps.clock.now().date()
         people = check_party_size(party_size, required=False)
@@ -67,8 +69,20 @@ def register(mcp: FastMCP, deps: AppDeps) -> None:
                 restaurants=[],
                 next_step={"tool": "restaurant_search", "why": "Try a broader query or none."},
             )
+        total = len(found)
+        start = max(offset, 0)
+        found = found[start:start + MAX_OPTIONS]
+        if not found:
+            return success(
+                "There are no more restaurants to show.",
+                restaurants=[], total_found=total,
+                next_step={"tool": "restaurant_search", "why": "Start again from the first page."},
+            )
+        more = max(total - start - len(found), 0)
         names = ", ".join(e["name"] for e in found[:3])
-        spoken = f"I found {len(found)} restaurant{'s' if len(found) != 1 else ''}: {names}."
+        spoken = f"I found {total} restaurant{'s' if total != 1 else ''}: {names}."
+        if more:
+            spoken += f" There are {more} more."
         if day is not None:
             first = next((e for e in found if e["earliest_free_time"]), None)
             if first:
@@ -76,8 +90,11 @@ def register(mcp: FastMCP, deps: AppDeps) -> None:
         return success(
             spoken,
             restaurants=found,
+            total_found=total,
+            more_after=more,
             next_step={
                 "tool": "availability_check",
-                "why": "Pick a restaurant, then check its slots for a date and party size.",
+                "why": "Pick a restaurant, then check its slots for a date and party size."
+                + (f" To see the other {more}, search again with offset {start + len(found)}." if more else ""),
             },
         )

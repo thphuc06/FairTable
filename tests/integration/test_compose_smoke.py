@@ -6,6 +6,7 @@ Fixed host ports (8000, 8001, 8080, 9000) must be free.
 """
 
 import re
+import time
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -65,30 +66,32 @@ def test_every_service_is_up_and_only_on_loopback(stack):
     assert httpx.get(f"{WEB}/healthz").json() == {"status": "ok"}
 
 
-async def test_the_mcp_server_offers_the_eight_tools_to_a_signed_in_diner(stack):
+async def test_the_mcp_server_offers_the_seven_tools_to_a_signed_in_diner(stack):
     headers = {"x-ft-user-token": token("diner-alice", "alice-dev-pass")}
     async with Client(StreamableHttpTransport(MCP, headers=headers)) as c:
         assert c.initialize_result.protocolVersion == "2025-11-25"
         tools = {t.name for t in await c.list_tools()}
         found = await c.call_tool_mcp("restaurant_search", {})
-    assert tools == {"restaurant_search", "availability_check", "mandate_status", "reservation_hold",
+    assert tools == {"restaurant_search", "availability_check", "reservation_hold",
                      "reservation_confirm", "reservation_manage", "waitlist_watch", "waitlist_status"}
     assert {r["restaurant_id"] for r in found.structuredContent["restaurants"]} == {
         "luna-trattoria", "ember-grill", "sakura-counter"}
 
 
 async def test_the_server_refuses_a_missing_token_and_a_foreign_host_name(stack):
-    async with Client(StreamableHttpTransport(MCP)) as c:
-        r = await c.call_tool_mcp("restaurant_search", {})
-    assert r.isError
+    call = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "restaurant_search", "arguments": {}}}
+    async with httpx.AsyncClient() as http:
+        unlinked = await http.post(MCP, headers={"Content-Type": "application/json",
+                                                 "Accept": "application/json, text/event-stream"}, json=call)
+    assert unlinked.status_code == 401  # no token: what makes Alexa+ start account linking
     async with httpx.AsyncClient() as http:
         hostile = await http.post(MCP, headers={"Host": "evil.example", "Content-Type": "application/json",
                                                 "Accept": "application/json, text/event-stream"}, json={})
     assert hostile.status_code == 421
 
 
-def test_a_diner_books_through_the_chat_and_approves_on_the_consent_page(stack):
-    """The demo path, with the built-in mock assistant: no key, no AWS."""
+def test_a_diner_books_through_the_chat_by_saying_yes_after_the_read_back(stack):
+    """The demo path, with the built-in mock assistant: no key, no AWS. Real time passes, so the 3 s pause is real."""
     day = (datetime.now(UTC) + timedelta(days=2)).date().isoformat()
     b = browser()
     assert b.get("/").status_code == 200
@@ -97,13 +100,10 @@ def test_a_diner_books_through_the_chat_and_approves_on_the_consent_page(stack):
     sent = b.post("/chat", data={"message": f"Book a table at Luna Trattoria for 2 on {day} at 7pm", "csrf": csrf(page)})
     assert sent.status_code == 303
     page = b.get("/chat").text
-    link = re.search(r"href='http://localhost:8080(/consent/[A-Za-z0-9_-]+)'", page)
-    assert link, page  # Bob has no standing permission, so the assistant hands over an approval link
-    consent = b.get(link.group(1))
-    assert consent.status_code == 200 and "Approve" in consent.text
-    assert b.post(f"{link.group(1)}/decision", data={"decision": "approve", "csrf": csrf(consent.text)}).status_code == 303
-    page = b.get("/chat").text
-    b.post("/chat", data={"message": "I approved it", "csrf": csrf(page)})
+    assert "shall i book it" in page.lower() and "/consent/" not in page  # asked, with no link and no second device
+    assert b.get("/consent/anything").status_code == 404
+    time.sleep(4)  # the diner listens and answers: longer than the server's 3 s pause
+    b.post("/chat", data={"message": "Yes, please", "csrf": csrf(b.get("/chat").text)})
     assert "booked" in b.get("/chat").text.lower()
 
 

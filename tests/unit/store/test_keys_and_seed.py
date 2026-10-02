@@ -7,10 +7,8 @@ import pytest
 from server.domain.models import Slot
 from server.store import keys
 from server.store.mappers import (
-    item_to_mandate,
     item_to_slot,
     item_to_venue,
-    mandate_to_item,
     slot_to_item,
     venue_to_item,
 )
@@ -25,7 +23,6 @@ NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 def test_key_shapes_follow_the_design():
     assert keys.venue("luna") == ("REST#luna", "PROFILE")
     assert keys.slot("luna", "2026-10-30", "19:00", "T4") == ("REST#luna#D#2026-10-30", "SLOT#1900#T4")
-    assert keys.mandate("u1", "luna") == ("USER#u1", "MANDATE#luna")
     assert keys.active_holds_counter("u1", "luna") == ("CNT#USER#u1#REST#luna", "ACTIVE_HOLDS")
     assert keys.agent_covers_counter("luna", "2026-10-30") == ("CNT#REST#luna#D#2026-10-30", "AGENT_COVERS")
     assert keys.idempotency("u1", "abc") == ("IDEM#u1#abc", "META")
@@ -48,14 +45,12 @@ def test_two_different_users_can_never_share_an_idempotency_key():
 
 
 # ---------------------------------------------------------------- mappers
-def test_venue_slot_and_mandate_round_trip():
+def test_venue_and_slot_round_trip():
     seed = build_seed(TODAY, NOW, SUBS)
     for venue in seed.venues:
         assert item_to_venue(venue_to_item(venue)) == venue
     for slot in seed.slots[:50] + tuple(s for s in seed.slots if s.drop_id)[:2]:
         assert item_to_slot(slot_to_item(slot)) == slot
-    for mandate in seed.mandates:
-        assert item_to_mandate(mandate_to_item(mandate)) == mandate
 
 
 def test_venue_directory_sorts_by_name():
@@ -102,11 +97,3 @@ def test_hot_and_drop_slots_are_where_the_demo_expects_them():
         for s in drops
     )
     assert not [s for s in seed.slots if s.venue_id == "luna-trattoria" and (s.hot or s.drop_id)]
-
-
-def test_seeded_mandates_match_the_demo_story():
-    alice, carol = build_seed(TODAY, NOW, SUBS).mandates
-    assert (alice.sub, alice.venue_id, alice.party_size_max, alice.allow_auto_confirm) == (
-        "dev-alice", "luna-trattoria", 4, True)
-    assert (carol.sub, carol.venue_id, carol.allow_auto_confirm) == ("dev-carol", "ember-grill", False)
-    assert alice.approved_at.endswith("Z") and alice.expires_at > alice.approved_at

@@ -1,4 +1,4 @@
-"""P1-18: personas are pure functions of the conversation, so they are tested with hand-made events."""
+"""P1-18, P3-10: personas are pure functions of the conversation, so they are tested with hand-made events."""
 
 from datetime import date
 
@@ -12,11 +12,19 @@ LUNA = {"restaurant_id": "luna-trattoria", "name": "Luna Trattoria", "cuisine": 
 GOAL = Goal(kind="book", date="2026-10-05", time="19:00", party_size=2, restaurant="luna")
 SEARCH = Step("restaurant_search", {}, {"restaurants": [LUNA, {"restaurant_id": "ember-grill", "name": "Ember Grill",
                                                               "cuisine": "Steakhouse"}]})
-SLOTS = Step("availability_check", {}, {"slots": [{"slot_token": "tok", "time": "19:00", "drop_id": None}]})
-HELD = Step("reservation_hold", {"slot_token": "tok", "idempotency_key": "k"}, {"hold_id": "h1"})
-NEEDS_OK = Step("reservation_confirm", {"hold_id": "h1"},
-                {"error": "CONSENT_REQUIRED", "message": "Approval needed.", "consent_url": "http://x/consent/a1"}, True)
+SLOTS = Step("availability_check", {}, {"slots": [{"offer_id": "tok", "time": "19:00", "drop_id": None}]})
+SENTENCE = "Luna Trattoria, Monday at 7:00 PM, a table for 2. Cancellation is free. Shall I book it?"
+HELD = Step("reservation_hold", {"offer_id": "tok", "idempotency_key": "k"},
+            {"hold_id": "h1", "read_back": SENTENCE, "read_back_token": "tok-1", "min_pause_s": 3})
+YES, NO = UserSaid("Yes, please."), UserSaid("No, thanks.")
 BOOKED = Step("reservation_confirm", {"hold_id": "h1"}, {"spoken_summary": "Booked. Your code is ABC."})
+NO_TOKEN = Step("reservation_confirm", {"hold_id": "h1", "user_confirmed": True},
+                {"error": "CONFIRMATION_REQUIRED", "message": "The user has not heard these details yet.",
+                 "rule_id": "S5a_confirm_needs_read_back",
+                 "details": {"read_back": SENTENCE, "read_back_token": "tok-2", "min_pause_s": 3}}, True)
+TOO_SOON = Step("reservation_confirm", {"hold_id": "h1", "read_back_token": "tok-1", "user_confirmed": True},
+                {"error": "CONFIRMATION_REQUIRED", "message": "I am waiting for the user's answer.",
+                 "rule_id": "S5b_confirm_needs_the_diners_answer"}, True)
 
 
 def run(goal, events, noise=NO_NOISE):
@@ -28,23 +36,55 @@ def test_the_first_move_is_a_search():
     assert isinstance(a, Call) and a.tool == "restaurant_search" and a.args["party_size"] == 2
 
 
-def test_the_happy_path_in_order():
+def test_the_happy_path_reads_the_details_back_and_waits_for_the_diner():
     assert run(GOAL, [SEARCH]).tool == "availability_check"
     a = run(GOAL, [SEARCH, SLOTS])
-    assert a.tool == "reservation_hold" and a.args["slot_token"] == "tok"
-    a = run(GOAL, [SEARCH, SLOTS, HELD])
-    assert a.tool == "reservation_confirm" and a.args["hold_id"] == "h1"
-    assert run(GOAL, [SEARCH, SLOTS, HELD, BOOKED]) == Say("Booked. Your code is ABC.")
+    assert a.tool == "reservation_hold" and a.args["offer_id"] == "tok"
+    asked = run(GOAL, [SEARCH, SLOTS, HELD])
+    assert asked == Say(SENTENCE)  # it asks and ends its turn: it does not confirm on its own
+    a = run(GOAL, [SEARCH, SLOTS, HELD, YES])
+    assert a.tool == "reservation_confirm" and a.args == {
+        "hold_id": "h1", "idempotency_key": a.args["idempotency_key"], "read_back_token": "tok-1", "user_confirmed": True}
+    assert run(GOAL, [SEARCH, SLOTS, HELD, YES, BOOKED]) == Say("Booked. Your code is ABC.")
 
 
-def test_needing_approval_gives_the_link_and_waits_for_the_user():
-    a = run(GOAL, [SEARCH, SLOTS, HELD, NEEDS_OK])
-    assert isinstance(a, Say) and "http://x/consent/a1" in a.text
-    events = [UserSaid("book"), SEARCH, SLOTS, HELD, NEEDS_OK, UserSaid("done, I approved")]
-    retry = decide(GOAL, events)
-    assert retry.tool == "reservation_confirm" and retry.args["idempotency_key"]  # same key as before
-    first = decide(GOAL, [UserSaid("book"), SEARCH, SLOTS, HELD]).args["idempotency_key"]
-    assert retry.args["idempotency_key"] == first
+def test_a_no_ends_the_conversation_without_a_confirm():
+    a = run(GOAL, [SEARCH, SLOTS, HELD, NO])
+    assert isinstance(a, Say) and "won't book" in a.text
+
+
+def test_anything_but_a_yes_counts_as_no():
+    assert isinstance(run(GOAL, [SEARCH, SLOTS, HELD, UserSaid("hmm, maybe")]), Say)
+    assert run(GOAL, [SEARCH, SLOTS, HELD, UserSaid("Sure, go ahead")]).tool == "reservation_confirm"
+
+
+def test_the_confirm_key_is_the_same_each_time_the_same_request_is_sent():
+    first = run(GOAL, [SEARCH, SLOTS, HELD, YES]).args["idempotency_key"]
+    assert first == decide(GOAL, [UserSaid("book"), SEARCH, SLOTS, HELD, YES]).args["idempotency_key"]
+
+
+def test_an_eager_assistant_confirms_at_once_and_then_asks_when_refused():
+    eager = Goal(**{**GOAL.__dict__, "behaviour": "eager"})
+    a = run(eager, [SEARCH, SLOTS, HELD])
+    assert a.tool == "reservation_confirm" and a.args["read_back_token"] == "tok-1" and a.args["user_confirmed"] is True
+    assert run(eager, [SEARCH, SLOTS, HELD, TOO_SOON]) == Say(SENTENCE)  # refused: now it asks, as it should have
+    assert run(eager, [SEARCH, SLOTS, HELD, TOO_SOON, YES]).tool == "reservation_confirm"
+    assert isinstance(run(eager, [SEARCH, SLOTS, HELD, TOO_SOON, NO]), Say)
+
+
+def test_a_forgetful_assistant_leaves_out_the_token_then_asks_again_with_the_new_one():
+    forgetful = Goal(**{**GOAL.__dict__, "behaviour": "forgetful"})
+    first = run(forgetful, [SEARCH, SLOTS, HELD, YES])
+    assert first.tool == "reservation_confirm" and "read_back_token" not in first.args and first.args["user_confirmed"] is True
+    assert run(forgetful, [SEARCH, SLOTS, HELD, YES, NO_TOKEN]) == Say(SENTENCE)  # the refusal handed over a new read-back
+    again = run(forgetful, [SEARCH, SLOTS, HELD, YES, NO_TOKEN, YES])
+    assert again.tool == "reservation_confirm" and again.args["read_back_token"] == "tok-2"
+
+
+def test_a_confirm_refused_after_the_yes_is_not_retried_forever():
+    stuck = Step("reservation_confirm", {"hold_id": "h1"}, {"error": "HOLD_EXPIRED", "message": "The hold ran out."}, True)
+    a = run(GOAL, [SEARCH, SLOTS, HELD, YES, stuck])
+    assert isinstance(a, Say) and "ran out" in a.text
 
 
 def test_an_unknown_restaurant_asks_which_one():
@@ -68,7 +108,7 @@ def test_a_rate_limit_is_answered_with_a_watch_not_more_polling():
 
 
 def test_a_drop_slot_is_entered_through_the_lottery():
-    drop = Step("availability_check", {}, {"slots": [{"slot_token": "t", "drop_id": "drop-1"}]})
+    drop = Step("availability_check", {}, {"slots": [{"offer_id": "t", "drop_id": "drop-1"}]})
     a = run(GOAL, [SEARCH, drop])
     assert a.tool == "waitlist_watch" and a.args["drop_id"] == "drop-1"
 
@@ -97,7 +137,7 @@ def test_noise_is_reproducible_and_can_repeat_a_hold():
     a = run(GOAL, [SEARCH, SLOTS, HELD], noisy)
     assert a.tool == "reservation_hold" and a.args == HELD.args  # same key: a retried delivery
     assert run(GOAL, [SEARCH, SLOTS, HELD], noisy) == a
-    assert run(GOAL, [SEARCH, SLOTS, HELD], Noise(seed=7, duplicate_hold=0.0)).tool == "reservation_confirm"
+    assert run(GOAL, [SEARCH, SLOTS, HELD], Noise(seed=7, duplicate_hold=0.0)) == Say(SENTENCE)
 
 
 def test_different_seeds_give_different_idempotency_keys():
@@ -114,22 +154,27 @@ def test_a_watch_registers_then_reports_status_when_asked_again():
     assert run(goal, [SEARCH, empty, watch]) == Say("You are on the list.")
     later = decide(goal, [UserSaid("x"), SEARCH, empty, watch, UserSaid("any news?")])
     assert later.tool == "waitlist_status" and later.args == {"watch_id": "w1"}
-    status = Step("waitlist_status", {}, {"hold_id": "h9", "spoken_summary": "A table opened."})
-    then = decide(goal, [UserSaid("x"), SEARCH, empty, watch, UserSaid("news?"), status])
-    assert then.tool == "reservation_confirm" and then.args["hold_id"] == "h9"
+    status = Step("waitlist_status", {}, {"hold_id": "h9", "spoken_summary": "A table opened.",
+                                          "read_back": SENTENCE, "read_back_token": "tok-9", "min_pause_s": 3})
+    asked = decide(goal, [UserSaid("x"), SEARCH, empty, watch, UserSaid("news?"), status])
+    assert asked == Say(SENTENCE)
+    then = decide(goal, [UserSaid("x"), SEARCH, empty, watch, UserSaid("news?"), status, YES])
+    assert then.tool == "reservation_confirm" and then.args["hold_id"] == "h9" and then.args["read_back_token"] == "tok-9"
 
 
-def test_cancel_views_first_then_cancels_and_waits_for_a_fee_approval():
+def test_cancel_views_first_then_reads_the_fee_back_and_waits_for_a_yes():
     goal = Goal(kind="cancel", reservation_id="r1")
     view = Step("reservation_manage", {"action": "view"}, {"spoken_summary": "Cancelling costs $25."})
+    fee_sentence = "Cancelling your booking at Ember Grill on Monday at 7:00 PM costs $25.00. Shall I go ahead and cancel?"
     fee = Step("reservation_manage", {"action": "cancel", "reservation_id": "r1", "idempotency_key": "kk"},
-               {"error": "FEE_APPLIES", "message": "A fee applies.", "consent_url": "http://x/consent/f1"}, True)
+               {"error": "CONFIRMATION_REQUIRED", "message": "The user has not heard these details yet.",
+                "details": {"read_back": fee_sentence, "read_back_token": "ft-1", "min_pause_s": 6}}, True)
     assert run(goal, []).args["action"] == "view"
     assert run(goal, [view]).args["action"] == "cancel"
-    said = run(goal, [view, fee])
-    assert isinstance(said, Say) and "http://x/consent/f1" in said.text
-    retry = decide(goal, [UserSaid("x"), view, fee, UserSaid("approved")])
-    assert retry.args == fee.args
+    assert run(goal, [view, fee]) == Say(fee_sentence)
+    retry = decide(goal, [UserSaid("x"), view, fee, YES])
+    assert retry.args == {**fee.args, "read_back_token": "ft-1", "user_confirmed": True}
+    assert isinstance(decide(goal, [UserSaid("x"), view, fee, NO]), Say)
 
 
 def test_transcript_pairs_calls_with_results_and_reads_json_text():

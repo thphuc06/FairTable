@@ -1,8 +1,0 @@
-id: rob-bob-retried-hold-with-approval
-category: ROB
-description: A retried hold followed by a step-up approval still ends in exactly one booking.
-user: bob
-goal: {kind: book, restaurant: luna, day_offset: 3, time: "19:30", party_size: 2}
-noise: {duplicate_hold: 1.0}
-consent: approve
-expect: {reservations: 1, active_holds: 0}

@@ -45,11 +45,11 @@ async def token_for(world: World, venue: str, date: str, time: str, party: int =
     slots = r.structuredContent["slots"]
     assert slots, r.structuredContent
     chosen = next((s for s in slots if seats is None or s["table_seats"] == seats), slots[0])
-    return chosen["slot_token"]
+    return chosen["offer_id"]
 
 
 async def hold(world: World, token: str, key: str = "key-hold-0001"):
-    return await call(world, "reservation_hold", slot_token=token, idempotency_key=key)
+    return await call(world, "reservation_hold", offer_id=token, idempotency_key=key)
 
 
 def error_of(result, code: str) -> dict:
@@ -64,16 +64,17 @@ def counter(world: World, key) -> int:
 
 
 # ---------------------------------------------------------------- happy path
-async def test_alice_holds_a_table_inside_her_mandate(world):
+async def test_alice_holds_a_table_and_gets_the_details_to_read_back(world):
     date = day(world)
     token = await token_for(world.as_("alice"), "luna-trattoria", date, "19:00", party=2)
     r = await hold(world, token)
     body = r.structuredContent
     assert not r.isError
     assert body["hold_id"] == "id00001" and body["time"] == "19:00" and body["party_size"] == 2
-    assert body["within_mandate"] is True and body["outside_mandate_because"] == []
+    assert "within_mandate" not in body
     assert body["expires_at"] == iso_z(world.clock.now() + timedelta(minutes=10))
     assert "7:00 PM" in body["spoken_summary"] and "10 minutes" in body["spoken_summary"]
+    assert body["read_back"].endswith("Shall I book it?") and body["read_back_token"] and body["min_pause_s"] == 3
     assert body["next_step"]["tool"] == "reservation_confirm"
 
     slot = world.store.get_slot("luna-trattoria", date, "19:00", "T2")
@@ -86,18 +87,17 @@ async def test_alice_holds_a_table_inside_her_mandate(world):
     assert [e["decision"] for e in world.store.list_audit("luna-trattoria", world.clock.now().date().isoformat())] == ["allow"]
 
 
-async def test_a_booking_outside_the_mandate_says_so_before_confirm(world):
-    token = await token_for(world.as_("bob"), "luna-trattoria", day(world), "19:00")  # Bob has no mandate
-    body = (await hold(world, token)).structuredContent
-    assert body["within_mandate"] is False
-    assert "no standing permission" in body["outside_mandate_because"][0]
-    assert "approve on their phone" in body["next_step"]["why"]
+async def test_every_diner_gets_the_same_read_back_flow_there_is_no_standing_permission(world):
+    for who, key in (("alice", "key-a-0001"), ("bob", "key-b-0001"), ("carol", "key-c-0001")):
+        token = await token_for(world.as_(who), "luna-trattoria", day(world), "19:30", party=2)
+        body = (await hold(world, token, key)).structuredContent
+        assert body["read_back"] and body["read_back_token"], who
+        assert body["next_step"]["tool"] == "reservation_confirm" and "yes" in body["next_step"]["why"]
 
 
-async def test_a_party_bigger_than_the_mandate_is_outside_it(world):
-    token = await token_for(world.as_("alice"), "luna-trattoria", day(world), "19:00", party=5)
-    body = (await hold(world, token)).structuredContent
-    assert body["within_mandate"] is False and "larger than 4" in body["outside_mandate_because"][0]
+async def test_a_waitlist_match_and_a_drop_win_hold_longer_than_a_normal_hold(world):
+    assert world.deps.settings.hold_ttl_s == 600
+    assert world.deps.settings.match_hold_ttl_s == 1800 and world.deps.settings.drop_hold_ttl_s == 7200
 
 
 # ---------------------------------------------------------------- idempotency
@@ -124,6 +124,22 @@ async def test_a_retry_with_a_second_token_for_the_same_slot_is_the_same_request
     second = await hold(world, token2)
     assert not second.isError and second.structuredContent["hold_id"] == first["hold_id"]
     assert second.structuredContent["idempotent_replay"] is True
+
+
+async def test_a_key_reused_after_its_hold_is_over_is_a_conflict_not_a_replay(world):
+    """A speech model likes the key "hold-luna-1" in every conversation. While the hold is live a repeat is the same
+    request; once the hold has expired the same key must not report an old hold as held (D-059)."""
+    date = day(world)
+    world.as_("alice")
+    token1 = await token_for(world, "luna-trattoria", date, "19:00", seats=2)
+    first = (await hold(world, token1)).structuredContent
+    world.clock.advance(seconds=601)  # the ten minutes are over
+    token2 = await token_for(world, "luna-trattoria", date, "19:00", seats=2)
+    again = await hold(world, token2)
+    assert again.isError and again.structuredContent["error"] == "IDEMPOTENCY_CONFLICT"
+    assert first["hold_id"] not in str(again.structuredContent)
+    fresh = await call(world, "reservation_hold", offer_id=token2, idempotency_key="key-hold-0002")
+    assert not fresh.isError and fresh.structuredContent["hold_id"] != first["hold_id"]
 
 
 async def test_reusing_a_key_for_another_slot_is_a_conflict(world):
@@ -197,13 +213,13 @@ async def test_the_second_person_for_a_slot_gets_slot_taken_with_alternatives(wo
 
 async def test_a_token_belongs_to_the_user_it_was_issued_to(world):
     alices = await token_for(world.as_("alice"), "luna-trattoria", day(world), "19:00")
-    error_of(await hold(world.as_("bob"), alices), "INVALID_SLOT_TOKEN")
+    error_of(await hold(world.as_("bob"), alices), "INVALID_OFFER")
 
 
-async def test_an_expired_slot_token_asks_for_fresh_slots(world):
+async def test_an_expired_offer_asks_for_fresh_slots(world):
     token = await token_for(world.as_("alice"), "luna-trattoria", day(world), "19:00")
     world.clock.advance(minutes=16)
-    payload = error_of(await hold(world, token), "SLOT_TOKEN_EXPIRED")
+    payload = error_of(await hold(world, token), "OFFER_EXPIRED")
     assert payload["next_step"]["tool"] == "availability_check"
 
 

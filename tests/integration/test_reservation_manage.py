@@ -1,10 +1,8 @@
-"""P1-12: reservation_manage: view, reduce the party, cancel (with the fee decided before writing)."""
+"""P1-12, P3-10: reservation_manage: view, reduce the party, cancel (a fee is read back and needs a spoken yes)."""
 
 import pytest
 from ddb_env import ENDPOINT
-from fastmcp import Client
-from flows import book, call, counter, day, error_of, hold_table, set_approval
-from mcp import McpError
+from flows import ANSWER_AFTER_S, book, call, counter, day, error_of, hold_table
 from world import World
 
 from server.store import keys
@@ -41,7 +39,7 @@ async def test_view_warns_when_cancelling_now_would_cost_money(world):
     booking = await book(world, "bob", "ember-grill", "18:00", offset=1)  # tomorrow: inside the 48 h window
     body = (await manage(world.as_("bob"), "view", booking["reservation_id"], key=None)).structuredContent
     assert body["cancel_fee_now_cents"] == 2500
-    assert "$25.00" in body["spoken_summary"] and "approval" in body["spoken_summary"]
+    assert "$25.00" in body["spoken_summary"] and "yes" in body["spoken_summary"]
 
 
 async def test_far_enough_ahead_the_same_restaurant_cancels_for_free(world):
@@ -72,7 +70,7 @@ async def test_a_free_cancel_frees_the_table_the_counter_and_the_slot(world):
     assert "no cancellation fee" in body["spoken_summary"]
 
     res = world.store.get_reservation(booking["reservation_id"])
-    assert (res.status, res.cancel_fee_cents, res.cancelled_at) == ("cancelled", 0, "2026-10-01T12:00:00Z")
+    assert (res.status, res.cancel_fee_cents, res.cancelled_at) == ("cancelled", 0, "2026-10-01T12:00:08Z")  # the booking took the 8 s the diner needed to answer
     slot = next(s for s in world.store.get_slots("luna-trattoria", date) if s.time == "19:00" and s.seats == 4)
     assert (slot.status, slot.reservation_id, slot.hold_id) == ("open", None, None)
     assert counter(world, keys.agent_covers_counter("luna-trattoria", date)) == 0
@@ -96,64 +94,80 @@ async def test_a_cancelled_booking_can_still_be_viewed(world):
     assert "was cancelled" in body["spoken_summary"] and body["reservation"]["status"] == "cancelled"
 
 
-# ---------------------------------------------------------------- cancel with a fee: no silent cancel
-async def test_a_cancel_with_a_fee_waits_for_the_user_and_changes_nothing(world):
-    booking = await book(world, "bob", "ember-grill", "18:00", offset=1)
-    rid = booking["reservation_id"]
-    payload = error_of(await manage(world.as_("bob"), "cancel", rid), "FEE_APPLIES")
-    assert payload["rule_id"] == "S3b_cancel_fee_needs_ack"
-    assert payload["consent_url"] == f"http://localhost:8080/consent/{rid}"
-    assert payload["details"]["terms"]["fee_cents"] == 2500 and "$25.00" in payload["hint"]
+# ---------------------------------------------------------------- cancel with a fee: no silent cancel (D-051)
+S5A, S5B, S5C = (
+    "S5a_confirm_needs_read_back", "S5b_confirm_needs_the_diners_answer", "S5c_confirm_needs_an_explicit_yes",
+)
+
+
+async def fee_booking(world: World) -> str:
+    """A booking at Ember for tomorrow: inside the 48 h window, so cancelling costs $25."""
+    return (await book(world, "bob", "ember-grill", "18:00", offset=1))["reservation_id"]
+
+
+async def first_cancel(world: World, rid: str) -> dict:
+    """The refused first call: it carries the fee as a sentence and the token that proves it was handed over."""
+    payload = error_of(await manage(world.as_("bob"), "cancel", rid), "CONFIRMATION_REQUIRED")
+    assert payload["rule_id"] == S5A
+    return payload["details"]
+
+
+async def test_a_cancel_with_a_fee_is_refused_with_the_fee_read_back_and_changes_nothing(world):
+    rid = await fee_booking(world)
+    offer = await first_cancel(world, rid)
+    assert "$25.00" in offer["read_back"] and offer["read_back"].endswith("cancel?") and offer["min_pause_s"] == 6
+    assert offer["read_back_token"]
     assert world.store.get_reservation(rid).status == "confirmed"
-    approval = world.store.get_approval(rid)
-    assert (approval.kind, approval.status, approval.terms["fee_cents"]) == ("cancel_fee", "pending", 2500)
     assert world.store.get_idempotency("dev-bob", "key-mng-0001") is None
 
 
-async def test_after_the_user_approves_the_fee_the_same_call_cancels(world):
-    booking = await book(world, "bob", "ember-grill", "18:00", offset=1)
-    rid = booking["reservation_id"]
-    error_of(await manage(world.as_("bob"), "cancel", rid), "FEE_APPLIES")
-    set_approval(world, rid)
-    body = (await manage(world, "cancel", rid)).structuredContent
+async def test_after_the_pause_and_a_yes_the_second_call_cancels_and_records_the_read_back(world):
+    rid = await fee_booking(world)
+    offer = await first_cancel(world, rid)
+    world.clock.advance(ANSWER_AFTER_S)
+    body = (await manage(world, "cancel", rid, read_back_token=offer["read_back_token"], user_confirmed=True)).structuredContent
     assert body["fee_cents"] == 2500 and "$25.00" in body["spoken_summary"]
     res = world.store.get_reservation(rid)
-    assert (res.status, res.cancel_fee_cents) == ("cancelled", 2500)
-    assert world.store.get_approval(rid).status == "used"
+    assert (res.status, res.cancel_fee_cents) == ("cancelled", 2500) and res.cancel_read_back_at is not None
 
 
-async def test_declining_the_fee_keeps_the_booking(world):
-    booking = await book(world, "bob", "ember-grill", "18:00", offset=1)
-    rid = booking["reservation_id"]
-    error_of(await manage(world.as_("bob"), "cancel", rid), "FEE_APPLIES")
-    set_approval(world, rid, "declined")
-    error_of(await manage(world, "cancel", rid), "CONSENT_DECLINED")
+async def test_the_second_call_too_soon_is_refused_and_the_token_stays_good(world):
+    rid = await fee_booking(world)
+    offer = await first_cancel(world, rid)
+    world.clock.advance(4)  # more than the 3 s of a free booking, less than the 6 s of money
+    soon = error_of(await manage(world, "cancel", rid, read_back_token=offer["read_back_token"], user_confirmed=True),
+                    "CONFIRMATION_REQUIRED")
+    assert soon["rule_id"] == S5B and "details" not in soon
+    world.clock.advance(3)
+    done = await manage(world, "cancel", rid, read_back_token=offer["read_back_token"], user_confirmed=True)
+    assert not done.isError
+
+
+async def test_without_the_explicit_yes_the_booking_is_kept(world):
+    rid = await fee_booking(world)
+    offer = await first_cancel(world, rid)
+    world.clock.advance(ANSWER_AFTER_S)
+    err = error_of(await manage(world, "cancel", rid, read_back_token=offer["read_back_token"]), "CONFIRMATION_REQUIRED")
+    assert err["rule_id"] == S5C
     assert world.store.get_reservation(rid).status == "confirmed"
 
 
-async def test_an_approval_for_a_different_fee_is_worthless(world):
-    booking = await book(world, "bob", "ember-grill", "18:00", offset=1)
-    rid = booking["reservation_id"]
-    error_of(await manage(world.as_("bob"), "cancel", rid), "FEE_APPLIES")
-    set_approval(world, rid, terms_hash="0" * 64)  # approved terms do not match the real fee
-    error_of(await manage(world, "cancel", rid), "FEE_APPLIES")
-    assert world.store.get_reservation(rid).status == "confirmed"
+async def test_a_read_back_of_a_different_fee_is_worthless(world):
+    """The fee was read back while it was $25; if the free window has passed and the terms differ, the token is stale."""
+    rid = await fee_booking(world)
+    offer = await first_cancel(world, rid)
+    other = await book(world, "bob", "ember-grill", "18:30", offset=1, tag="2")  # another booking, same fee
+    world.clock.advance(ANSWER_AFTER_S)
+    err = error_of(await manage(world, "cancel", other["reservation_id"], read_back_token=offer["read_back_token"],
+                                user_confirmed=True), "CONFIRMATION_REQUIRED")
+    assert err["rule_id"] == S5A  # the token belongs to the first booking
+    assert world.store.get_reservation(other["reservation_id"]).status == "confirmed"
 
 
-async def test_a_client_that_can_open_urls_gets_minus_32042_for_the_fee(world):
-    booking = await book(world, "bob", "ember-grill", "18:00", offset=1)
-    world.as_("bob")
-
-    async def never(*_a):
-        raise AssertionError("no live elicitation expected")
-
-    async with Client(world.mcp, elicitation_handler=never) as c:
-        with pytest.raises(McpError) as exc:
-            await c.call_tool_mcp("reservation_manage", {"action": "cancel",
-                                  "reservation_id": booking["reservation_id"], "idempotency_key": "key-mng-0001"})
-    assert exc.value.error.code == -32042
-    [ask] = exc.value.error.data["elicitations"]
-    assert ask["url"].endswith(booking["reservation_id"]) and "$25.00" in ask["message"]
+async def test_a_free_cancel_needs_no_read_back(world):
+    booking = await book(world, "bob", "ember-grill", "18:00", offset=4)  # more than 48 h ahead: free
+    body = (await manage(world.as_("bob"), "cancel", booking["reservation_id"])).structuredContent
+    assert body["fee_cents"] == 0
 
 
 # ---------------------------------------------------------------- reduce the party

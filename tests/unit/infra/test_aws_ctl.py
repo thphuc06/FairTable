@@ -46,6 +46,12 @@ def test_stacks_are_destroyed_dependents_first_and_the_budget_and_bootstrap_only
     assert ctl.stack_order({"FairTableData"}, include_budget=False, include_bootstrap=False) == ["FairTableData"]
 
 
+def test_the_notice_topic_is_destroyed_after_the_runtime_that_publishes_to_it():
+    every = {"FairTableData", "FairTableIdentity", "FairTableRuntime", "FairTableNotify", "FairTableGateway"}
+    order = ctl.stack_order(every, include_budget=False, include_bootstrap=False)
+    assert order.index("FairTableRuntime") < order.index("FairTableNotify") < order.index("FairTableIdentity")
+
+
 def test_a_stack_that_does_not_exist_is_not_in_the_plan():
     assert ctl.stack_order(set(), include_budget=True, include_bootstrap=True) == []
 
@@ -98,6 +104,16 @@ class FakeClient:
 
     def get_caller_identity(self):
         return {"Account": "123456789012"}
+
+    def get_trace_segment_destination(self):
+        return self.pages.get("destination", {"Destination": "XRay"})
+
+    def describe_log_groups(self, logGroupNamePrefix=""):  # noqa: N803
+        return {"logGroups": [g for page in self.pages.get("exact_log_groups", []) for g in page["logGroups"]
+                              if g["logGroupName"].startswith(logGroupNamePrefix)]}
+
+    def update_trace_segment_destination(self, **kwargs):
+        self.deleted.append(("trace_destination", kwargs["Destination"]))
 
 
 class FakeSession:
@@ -172,6 +188,9 @@ class FakeAccount:
 
     def delete_log_group(self, name):
         self.calls.append(("delete_log_group", name))
+
+    def restore_trace_destination(self):
+        self.calls.append(("restore_trace_destination",))
 
     def bootstrap_bucket(self):
         return "bucket"
@@ -292,3 +311,38 @@ def test_who_tells_root_user_and_role_apart(arn, kind):
 
     acct = ctl.Account("us-east-1", "fairtable", session=FakeSession(sts=Sts()))
     assert acct.who() == ("9012", kind)
+
+
+# ---------------------------------------------------------------------------------------- Transaction Search (P2-9)
+def test_the_observability_stack_goes_before_the_gateway_it_watches():
+    every = {"FairTableData", "FairTableIdentity", "FairTableRuntime", "FairTableGateway", "FairTableObservability"}
+    assert ctl.stack_order(every, include_budget=False, include_bootstrap=False)[0] == "FairTableObservability"
+
+
+def test_the_inventory_shows_transaction_search_when_the_account_sends_spans_to_cloudwatch_logs():
+    xray = FakeClient(destination={"Destination": "CloudWatchLogs"})
+    logs = FakeClient(exact_log_groups=[{"logGroups": [{"logGroupName": "aws/spans"}, {"logGroupName": "aws/spans-other"}]}])
+    items = account(xray=xray, logs=logs).inventory()
+    assert Item("setting", "X-Ray trace destination is CloudWatchLogs", True, "direct") in items
+    assert Item("log-group", "aws/spans", True, "direct") in items
+    assert not any(i.name == "aws/spans-other" for i in items)  # only the exact names, never a prefix match
+
+
+def test_the_inventory_has_no_trace_setting_by_default():
+    assert not [i for i in account().inventory() if i.kind == "setting"]
+
+
+def test_down_gives_the_trace_destination_back_before_deleting_the_span_log_groups(monkeypatch, capsys):
+    monkeypatch.setattr(ctl, "cdk", lambda args, env_extra=None: 0)
+    items = [Item("stack", "FairTableObservability", False, "direct"),
+             Item("setting", "X-Ray trace destination is CloudWatchLogs", True, "direct"),
+             Item("log-group", "aws/spans", True, "direct")]
+    acct = FakeAccount(items, after=[])
+    assert ctl.cmd_down(acct, yes=True, include_budget=False, include_bootstrap=False, confirm="1905") == 0
+    assert acct.calls == [("restore_trace_destination",), ("delete_log_group", "aws/spans")]
+
+
+def test_restore_puts_xray_back_as_the_destination():
+    xray = FakeClient()
+    account(xray=xray).restore_trace_destination()
+    assert xray.deleted == [("trace_destination", "XRay")]

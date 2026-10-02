@@ -56,6 +56,6 @@ def test_multiple_rules_use_the_first_for_the_message_and_all_for_the_log():
 
 def test_only_deny_decisions_can_become_errors():
     with pytest.raises(ValueError):
-        deny_to_error(Decision(DecisionKind.STEP_UP, ("S3_confirm_needs_mandate",), "pep2"))
+        deny_to_error(Decision(DecisionKind.ALLOW, ("P0_base",), "pep2"))
     with pytest.raises(ValueError):
         deny_to_error(Decision(DecisionKind.ALLOW, ("P0_base",), "pep2"))

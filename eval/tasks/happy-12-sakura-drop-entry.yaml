@@ -1,0 +1,6 @@
+id: happy-sakura-bob-enters-the-fair-drop
+category: HAPPY
+description: "The Friday seat at Sakura is released by lottery; the assistant follows the advice and enters Bob in the draw."
+user: bob
+goal: {kind: book, restaurant: sakura, day_offset: 1, time: "20:00", party_size: 2}
+expect: {reservations: 0, active_holds: 0, succeeded: [waitlist_watch]}

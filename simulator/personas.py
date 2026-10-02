@@ -5,8 +5,14 @@ state), so a persona can be replayed, tested and used by the mock model and the 
 Every choice that looks random comes from ``noise.seed`` and the number of steps taken, so the same
 seed always gives the same behaviour.
 
-The personas follow the tools' own ``next_step`` advice. Misbehaving agents (for the ADV tasks) are
-variations set through ``Goal.behaviour``.
+The personas follow the tools' own ``next_step`` advice. The booking is confirmed by a spoken yes
+(docs/DECISIONS.md D-051): after a hold the persona reads the details back and ends its turn; only when the
+diner has answered yes does it call ``reservation_confirm`` with the read-back token. Misbehaving assistants
+(for the ADV and ROB tasks) are variations set through ``Goal.behaviour``:
+
+* ``hot_direct``  tries a drop-controlled table by hold instead of entering the draw;
+* ``eager``       confirms in the same breath as the hold, claiming a yes it has not heard;
+* ``forgetful``   asks the diner properly, but forgets the read-back token on its first confirm.
 """
 
 import random
@@ -17,7 +23,8 @@ from simulator.events import Event, Step, UserSaid
 
 MAX_STEPS_PER_TURN = 14
 MAX_AVAILABILITY_CHECKS = 3
-APPROVAL_ERRORS = ("CONSENT_REQUIRED", "FEE_APPLIES")
+BEHAVIOURS = ("polite", "hot_direct", "eager", "forgetful")
+YES_WORDS = ("yes", "yeah", "yep", "sure", "go ahead", "please do", "book it")
 
 
 @dataclass(frozen=True)
@@ -29,7 +36,7 @@ class Goal:
     restaurant: str = ""  # words from the name or cuisine, matched against search results
     restaurant_id: str | None = None
     reservation_id: str | None = None  # for "cancel"
-    behaviour: str = "polite"  # "polite" | "hot_direct" (tries a drop-controlled table by hold)
+    behaviour: str = "polite"  # see BEHAVIOURS
 
 
 @dataclass(frozen=True)
@@ -70,7 +77,7 @@ def _get(steps: list[Step], tool: str) -> Step | None:
 
 
 def _key(noise: Noise, what: str, goal: Goal) -> str:
-    """The same request always gets the same key (a retry after approval must repeat it); a request that
+    """The same request always gets the same key (a retry must repeat it); a request that
     differs in restaurant, day, time or party size gets its own, or the server rightly calls it a conflict."""
     where = (goal.restaurant_id or goal.restaurant or "x").replace(" ", "")
     return f"sim-{noise.seed}-{what}-{where}-{goal.date}-{goal.time.replace(':', '')}-p{goal.party_size}"[:100]
@@ -90,19 +97,57 @@ def _fail(step: Step) -> Say:
     return Say(text)
 
 
-def _asked_for_approval(step: Step) -> Say:
-    text = str(step.result.get("message") or "I need your approval.")
-    return Say(f"{text} Approve here: {step.result.get('consent_url', '')} Tell me when you have answered.")
+def _offer_of(step: Step) -> tuple[str, str] | None:
+    """(sentence to read back, read-back token) when this step handed the assistant a read-back."""
+    r = step.result
+    source = r if r.get("read_back") else (r.get("details") or {})
+    if source.get("read_back") and source.get("read_back_token"):
+        return str(source["read_back"]), str(source["read_back_token"])
+    return None
 
 
-def _user_spoke_after(events: list[Event], step: Step) -> bool:
-    seen = False
+def asks_for_yes(steps: list[Step]) -> bool:
+    """True when the newest read-back has not been used yet: the conversation is waiting for the diner's answer."""
+    for step in reversed(steps):
+        if step.tool in ("reservation_confirm",) and not step.is_error:
+            return False
+        if step.tool == "reservation_manage" and step.args.get("action") == "cancel" and not step.is_error:
+            return False
+        if _offer_of(step) is not None:
+            return True
+    return False
+
+
+def _latest_offer(steps: list[Step]) -> tuple[Step, str, str] | None:
+    for step in reversed(steps):
+        offer = _offer_of(step)
+        if offer is not None:
+            return step, offer[0], offer[1]
+    return None
+
+
+def _answer_after(events: list[Event], step: Step) -> bool | None:
+    """The diner's answer after this step: True for a yes, False for anything else, None if they have not spoken."""
+    seen, answer = False, None
     for e in events:
         if e is step:
             seen = True
         elif seen and isinstance(e, UserSaid):
-            return True
-    return False
+            answer = e.text.strip().lower().startswith(YES_WORDS)
+    return answer
+
+
+def _refused_after_the_answer(events: list[Event], offer_step: Step) -> Step | None:
+    """A confirm that came after the diner's yes to this read-back and was refused (the refusal, or None)."""
+    seen, said_yes, refused = False, False, None
+    for e in events:
+        if e is offer_step:
+            seen = True
+        elif seen and isinstance(e, UserSaid):
+            said_yes, refused = e.text.strip().lower().startswith(YES_WORDS), None
+        elif seen and said_yes and isinstance(e, Step) and e.tool == "reservation_confirm" and e.is_error:
+            refused = e
+    return refused
 
 
 def _pick_restaurant(goal: Goal, search: Step) -> dict[str, Any] | None:
@@ -142,6 +187,34 @@ def _watch_call(goal: Goal, rid: str, noise: Noise) -> Call:
         "idempotency_key": _key(noise, "watch", goal), "restaurant_id": rid, "date": goal.date,
         "time_window": "17:00-22:00", "party_size": goal.party_size,
     })
+
+
+def _confirm_flow(goal: Goal, events: list[Event], steps: list[Step], noise: Noise, hold_id: str | None) -> Action:
+    """From a hold (or a waitlist match) to a booking: read back, wait for the diner, confirm with the token."""
+    done = next((s for s in reversed(steps) if s.tool == "reservation_confirm" and not s.is_error), None)
+    if done is not None:
+        return Say(str(done.result.get("spoken_summary") or "Your table is booked."))
+    latest = _latest_offer(steps)
+    if latest is None:  # nothing was handed over to read back: should not happen
+        return Say("I could not get the details of that table. Please try again or call the restaurant.")
+    offer_step, sentence, token = latest
+    confirms = [s for s in steps if s.tool == "reservation_confirm"]
+    args = {"hold_id": hold_id, "idempotency_key": _key(noise, "confirm", goal)}
+
+    if goal.behaviour == "eager" and not confirms:  # confirms in the same breath, claiming a yes it never heard
+        return Call("reservation_confirm", {**args, "read_back_token": token, "user_confirmed": True})
+    answer = _answer_after(events, offer_step)
+    if answer is None:
+        return Say(sentence)  # ask the diner and end the turn
+    if not answer:
+        return Say("Okay, I won't book it. The hold ends by itself.")
+    # the diner said yes
+    refused = _refused_after_the_answer(events, offer_step)
+    if refused is not None:
+        return _fail(refused)  # a confirm sent after the yes was refused all the same: stop here
+    if goal.behaviour == "forgetful" and not confirms:  # asked properly, but forgets the token
+        return Call("reservation_confirm", {**args, "user_confirmed": True})
+    return Call("reservation_confirm", {**args, "read_back_token": token, "user_confirmed": True})
 
 
 def _book(goal: Goal, events: list[Event], steps: list[Step], noise: Noise) -> Action:
@@ -186,16 +259,13 @@ def _book(goal: Goal, events: list[Event], steps: list[Step], noise: Noise) -> A
         return Say(f"A table is free right now at {venue['name']}, so there is nothing to wait for.")
 
     if hold is None:
-        return Call("reservation_hold", {"slot_token": slot["slot_token"], "idempotency_key": _key(noise, "hold", goal)})
+        return Call("reservation_hold", {"offer_id": slot["offer_id"], "idempotency_key": _key(noise, "hold", goal)})
     if hold.is_error:
         return _fail(hold)
     held = sum(s.tool == "reservation_hold" and not s.is_error for s in steps)
     if held == 1 and _rng(noise, len(steps)).random() < noise.duplicate_hold:
         return Call("reservation_hold", dict(hold.args))  # a retried delivery: must not double-book
-    if confirm is None or (confirm.error in APPROVAL_ERRORS and _user_spoke_after(events, confirm)):
-        return Call("reservation_confirm", {"hold_id": hold.result.get("hold_id"),
-                                            "idempotency_key": _key(noise, "confirm", goal)})
-    return _asked_for_approval(confirm) if confirm.error in APPROVAL_ERRORS else _fail(confirm)
+    return _confirm_flow(goal, events, steps, noise, str(hold.result.get("hold_id")))
 
 
 def _after_watch(goal: Goal, events: list[Event], steps: list[Step], noise: Noise, watch: Step) -> Action:
@@ -204,17 +274,22 @@ def _after_watch(goal: Goal, events: list[Event], steps: list[Step], noise: Nois
     status = _get(steps, "waitlist_status")
     if status is None and not _user_spoke_after(events, watch):
         return Say(str(watch.result.get("spoken_summary")))  # registered; the user asks again later
-    if status is None or _user_spoke_after(events, status):
+    if status is None or (_user_spoke_after(events, status) and _offer_of(status) is None):
         return Call("waitlist_status", {"watch_id": watch.result.get("watch_id")})
     hold_id = status.result.get("hold_id")
     if not hold_id:
         return Say(str(status.result.get("spoken_summary") or "Still waiting."))
-    confirm = _get(steps, "reservation_confirm")
-    if confirm is None:
-        return Call("reservation_confirm", {"hold_id": hold_id, "idempotency_key": _key(noise, "confirm", goal)})
-    if confirm.is_error:
-        return _asked_for_approval(confirm) if confirm.error in APPROVAL_ERRORS else _fail(confirm)
-    return Say(str(confirm.result.get("spoken_summary") or "Your table is booked."))
+    return _confirm_flow(goal, events, steps, noise, str(hold_id))
+
+
+def _user_spoke_after(events: list[Event], step: Step) -> bool:
+    seen = False
+    for e in events:
+        if e is step:
+            seen = True
+        elif seen and isinstance(e, UserSaid):
+            return True
+    return False
 
 
 def _cancel(goal: Goal, events: list[Event], steps: list[Step], noise: Noise) -> Action:
@@ -226,12 +301,18 @@ def _cancel(goal: Goal, events: list[Event], steps: list[Step], noise: Noise) ->
     if view.is_error:
         return _fail(view)
     cancels = [s for s in steps if s.args.get("action") == "cancel"]
+    base = {"action": "cancel", "reservation_id": goal.reservation_id, "idempotency_key": _key(noise, "cancel", goal)}
     if not cancels:
-        return Call("reservation_manage", {"action": "cancel", "reservation_id": goal.reservation_id,
-                                           "idempotency_key": _key(noise, "cancel", goal)})
+        return Call("reservation_manage", base)
     last = cancels[-1]
     if not last.is_error:
         return Say(str(last.result.get("spoken_summary") or "Cancelled."))
-    if last.error in APPROVAL_ERRORS:
-        return Call("reservation_manage", dict(last.args)) if _user_spoke_after(events, last) else _asked_for_approval(last)
+    offer = _offer_of(last)
+    if last.error == "CONFIRMATION_REQUIRED" and offer is not None:
+        answer = _answer_after(events, last)
+        if answer is None:
+            return Say(offer[0])  # the fee, read to the diner
+        if not answer:
+            return Say("Okay, I won't cancel it.")
+        return Call("reservation_manage", {**last.args, "read_back_token": offer[1], "user_confirmed": True})  # same key: a retry
     return _fail(last)

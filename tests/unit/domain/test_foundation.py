@@ -12,8 +12,8 @@ from server.domain.tool_names import READ_TOOLS, WRITE_TOOLS, ToolName
 
 
 # ---------------------------------------------------------------- tool names
-def test_eight_tools_split_into_reads_and_writes():
-    assert len(ToolName) == 8
+def test_seven_tools_split_into_reads_and_writes():
+    assert len(ToolName) == 7
     assert READ_TOOLS | WRITE_TOOLS == set(ToolName)
     assert not READ_TOOLS & WRITE_TOOLS
     assert ToolName.WAITLIST_STATUS in READ_TOOLS  # the polling path is a read
@@ -44,13 +44,11 @@ def test_error_payload_carries_optional_fields_only_when_set():
         hint="call the venue",
         rule_id="S2_agent_share_of_covers",
         retry_after_s=60,
-        consent_url="http://localhost:8080/consent/x",
         next_step=NextStep("join the waitlist", ToolName.WAITLIST_WATCH),
     ).to_payload()
     assert full["hint"] == "call the venue"
     assert full["rule_id"] == "S2_agent_share_of_covers"
     assert full["retry_after_s"] == 60
-    assert full["consent_url"].endswith("/consent/x")
     assert full["next_step"] == {"tool": "waitlist_watch", "why": "join the waitlist"}
 
 

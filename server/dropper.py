@@ -29,7 +29,7 @@ from server.domain.fairdrop import (
 from server.domain.models import SLOT_OPEN, Identity, Slot
 from server.ops.common import parse_slot_key
 from server.ops.fairdrop import DropWinHoldOperation
-from server.pipeline import StepUpRequired, run_write
+from server.pipeline import run_write
 from server.store import Store, TransactionCancelled, TxOp, keys
 from server.tools.common import AppDeps
 from server.tools.present import say_date
@@ -149,8 +149,6 @@ def _try_award(deps: AppDeps, drop: Drop, entry: DropEntry, free: list[Slot]) ->
                 free.remove(slot)  # gone: try the next one for the same entry
                 continue
             return ENTRY_SKIPPED, e.rule_id or e.code.value
-        except StepUpRequired:
-            return ENTRY_SKIPPED, "step_up"
         free.remove(slot)
         return ENTRY_WON, None
     return ENTRY_SKIPPED, "no_fitting_slot"
@@ -168,6 +166,6 @@ def _tell_winners(deps: AppDeps, drop: Drop, entries: list[DropEntry]) -> None:
         if e.status == ENTRY_WON:
             deps.notifier.notify(
                 e.sub, subject="You won the draw",
-                body=f"You won a table at {name} on {say_date(drop.date)}. It is held for you for a few "
-                     "minutes: ask your assistant to confirm it.",
+                body=f"You won a table at {name} on {say_date(drop.date)}. It is held for you for two "
+                     "hours: ask your assistant about your waitlist.",
             )

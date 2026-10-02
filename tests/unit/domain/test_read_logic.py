@@ -1,6 +1,6 @@
-"""P1-7: pure logic behind the read tools: mandate matching, token bucket, slot selection."""
+"""P1-7: pure logic behind the read tools: token bucket, slot selection."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -13,73 +13,11 @@ from server.domain.availability import (
     parse_window,
 )
 from server.domain.errors import ErrorCode, FairTableError
-from server.domain.mandate import check_mandate, is_active, mandate_covers_booking
-from server.domain.models import Mandate, Slot
+from server.domain.models import Slot
 from server.domain.ratelimit import BucketState, consume
 
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 TODAY = NOW.date()
-
-
-# ---------------------------------------------------------------- mandate
-def mandate(**over) -> Mandate:
-    base = {
-        "sub": "u1", "venue_id": "luna", "status": "active", "version": 1, "party_size_max": 4, "days_ahead_max": 30,
-        "window_start": "17:00", "window_end": "22:00", "max_cancel_fee_cents": 0, "allow_auto_confirm": True,
-        "actions": frozenset({"hold", "confirm"}), "agent_ids": frozenset({"alexa-plus-sim"}),
-        "approved_at": "2026-10-01T12:00:00Z", "expires_at": "2026-12-31T00:00:00Z",
-    }
-    return Mandate(**{**base, **over})
-
-
-def booking(**over):
-    base = {"now": NOW, "agent_id": "alexa-plus-sim", "party_size": 4, "day": date(2026, 10, 10),
-                "time": "19:00", "cancel_fee_cents": 0}
-    return {**base, **over}
-
-
-def test_a_booking_inside_the_mandate_is_covered():
-    assert mandate_covers_booking(mandate(), **booking())
-    assert check_mandate(mandate(), **booking()).reasons == ()
-
-
-@pytest.mark.parametrize(
-    "mand,book,fragment",
-    [
-        ({}, {"party_size": 5}, "larger than 4"),
-        ({}, {"time": "16:59"}, "outside 17:00-22:00"),
-        ({}, {"time": "22:01"}, "outside"),
-        ({}, {"day": date(2026, 12, 1)}, "days ahead"),
-        ({}, {"day": date(2026, 9, 30)}, "days ahead"),
-        ({}, {"cancel_fee_cents": 1}, "cancellation fee"),
-        ({}, {"agent_id": "other-agent"}, "not on the permission"),
-        ({"allow_auto_confirm": False}, {}, "without asking"),
-        ({"actions": frozenset({"hold"})}, {}, "without asking"),
-    ],
-)
-def test_each_way_of_leaving_the_mandate_needs_approval(mand, book, fragment):
-    result = check_mandate(mandate(**mand), **booking(**book))
-    assert not result.covered
-    assert any(fragment in r for r in result.reasons)
-
-
-def test_boundaries_are_inclusive():
-    assert mandate_covers_booking(mandate(), **booking(party_size=4, time="17:00"))
-    assert mandate_covers_booking(mandate(), **booking(time="22:00"))
-    assert mandate_covers_booking(mandate(), **booking(day=date(2026, 10, 31)))  # exactly 30 days
-
-
-def test_no_revoked_or_expired_mandate_never_covers():
-    assert not mandate_covers_booking(None, **booking())
-    assert not mandate_covers_booking(mandate(status="revoked"), **booking())
-    late = datetime(2027, 1, 1, tzinfo=UTC)
-    assert not is_active(mandate(), late)
-    assert not mandate_covers_booking(mandate(), **booking(now=late, day=date(2027, 1, 5)))
-
-
-def test_several_problems_are_all_reported():
-    result = check_mandate(mandate(), **booking(party_size=9, time="23:00", cancel_fee_cents=500))
-    assert len(result.reasons) == 3
 
 
 # ---------------------------------------------------------------- token bucket

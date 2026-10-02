@@ -41,7 +41,7 @@ SCENARIOS: tuple[Scenario, ...] = (
              "allow", ("G1_reads_any_valid_jwt",)),
     Scenario("read-bot-without-claims", BOT_NO_CLAIMS, ToolName.RESTAURANT_SEARCH, 0,
              "allow", ("G1_reads_any_valid_jwt",), "M2M bots may read"),
-    Scenario("read-without-scope", Caller(scopes=()), ToolName.MANDATE_STATUS, 0,
+    Scenario("read-without-scope", Caller(scopes=()), ToolName.WAITLIST_STATUS, 0,
              "allow", ("G1_reads_any_valid_jwt",), "reads need only a valid token"),
     Scenario("read-unverified-agent", Caller(agent_tier="unverified"), ToolName.WAITLIST_STATUS, 0,
              "allow", ("G1_reads_any_valid_jwt",)),

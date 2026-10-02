@@ -5,6 +5,7 @@ dependency of the server). The test is skipped when that venv is not set up."""
 
 import json
 import os
+import re
 import subprocess
 import zipfile
 from pathlib import Path
@@ -46,12 +47,14 @@ def templates(tmp_path_factory):
         "CDK_DEFAULT_ACCOUNT": "123456789012",  # dummy, only so that synthesis has an environment
         "AWS_REGION": "us-east-1",
         "BUDGET_EMAIL": "alerts@example.com",
+        "NOTIFY_EMAIL": "notices@example.com",  # a made-up address
         "TABLE_NAME": "fairtable",
     }
     subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, check=True, capture_output=True, timeout=180)
     return {
         name: json.loads((out / f"{name}.template.json").read_text())
-        for name in ("FairTableData", "FairTableBudget", "FairTableIdentity", "FairTableRuntime", "FairTableGateway")
+        for name in ("FairTableData", "FairTableBudget", "FairTableIdentity", "FairTableRuntime", "FairTableGateway",
+                     "FairTableNotify")
     }
 
 
@@ -106,10 +109,38 @@ def test_the_budget_stack_is_only_created_when_an_address_is_given(tmp_path):
     assert not (tmp_path / "FairTableBudget.template.json").exists()
 
 
+def test_the_notice_topic_has_one_email_subscription_and_the_runtime_may_only_publish_to_it(templates):
+    (topic,) = resources(templates["FairTableNotify"], "AWS::SNS::Topic")
+    assert topic["Properties"]["TopicName"] == "fairtable-notices"
+    assert {"Key": "project", "Value": "fairtable"} in topic["Properties"]["Tags"]
+    (sub,) = resources(templates["FairTableNotify"], "AWS::SNS::Subscription")
+    assert sub["Properties"]["Protocol"] == "email" and sub["Properties"]["Endpoint"] == "notices@example.com"
+
+    runtime = templates["FairTableRuntime"]
+    (rt,) = resources(runtime, "AWS::BedrockAgentCore::Runtime")
+    assert "NOTIFY_TOPIC_ARN" in rt["Properties"]["EnvironmentVariables"]
+    publish = [s for p in resources(runtime, "AWS::IAM::Policy")
+               for s in p["Properties"]["PolicyDocument"]["Statement"] if "sns:Publish" in s["Action"]]
+    assert len(publish) == 1 and publish[0]["Action"] == "sns:Publish" and "*" != publish[0]["Resource"]
+
+
+def test_without_an_address_there_is_no_topic_and_the_runtime_does_not_publish(tmp_path):
+    package = tmp_path / "fairtable-runtime.zip"
+    with zipfile.ZipFile(package, "w") as z:
+        z.writestr("runtime_entry.py", "print('stand-in')")
+    env = {**os.environ, "CDK_OUTDIR": str(tmp_path / "out"), "CDK_DEFAULT_ACCOUNT": "123456789012",
+           "AWS_REGION": "us-east-1", "RUNTIME_ZIP": str(package)}
+    env.pop("NOTIFY_EMAIL", None)
+    subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, check=True, capture_output=True, timeout=180)
+    out = tmp_path / "out"
+    assert not (out / "FairTableNotify.template.json").exists()
+    assert "sns:Publish" not in (out / "FairTableRuntime.template.json").read_text()
+
+
 def test_no_account_id_is_stored_in_the_app():
     sources = [CDK_DIR / "app.py", *(CDK_DIR / "stacks").glob("*.py")]
     text = "".join(p.read_text() for p in sources)
-    assert "123456789012" not in text and "448161422673" not in text
+    assert not re.search(r"\d{12}", text), "a 12-digit number (an account id?) is written in the CDK app"
 
 
 def by_name(template, kind, field):
@@ -189,7 +220,7 @@ def test_only_the_user_token_header_reaches_the_server_and_idle_sessions_end_qui
 def test_the_runtime_is_configured_like_the_aws_profile_expects(templates):
     env = runtime_of(templates)["EnvironmentVariables"]
     assert env["AUTH_AUDIENCE_CLAIM"] == "client_id" and env["AUTH_TOKEN_USE"] == "access"
-    assert set(env) >= {"TABLE_NAME", "AUTH_ISSUER", "AUTH_JWKS_URL", "AUTH_AUDIENCE", "SLOT_TOKEN_SECRET", "CONSENT_BASE_URL"}
+    assert set(env) >= {"TABLE_NAME", "AUTH_ISSUER", "AUTH_JWKS_URL", "AUTH_AUDIENCE", "SLOT_TOKEN_SECRET"}
     assert "MCP_ALLOWED_HOSTS" not in env  # only set on request
     assert "resolve:secretsmanager" in json.dumps(env["SLOT_TOKEN_SECRET"])  # the secret is never a literal
 
@@ -442,3 +473,55 @@ def test_the_first_of_two_deploys_creates_only_the_permit_policies(tmp_path):
     names = {p["Properties"]["Name"] for p in resources(template, "AWS::BedrockAgentCore::Policy")}
     assert names == {"ft_g1_reads_any_valid_jwt", "ft_g2_writes_need_user_and_scope"}
     assert resources(template, "AWS::BedrockAgentCore::PolicyEngine")  # the engine is attached from the start
+
+
+def synth_observability(tmp_path, **extra):
+    package = tmp_path / "fairtable-runtime.zip"
+    with zipfile.ZipFile(package, "w") as z:
+        z.writestr("runtime_entry.py", "print('stand-in')")
+    env = {**os.environ, "CDK_OUTDIR": str(tmp_path / "out"), "CDK_DEFAULT_ACCOUNT": "123456789012",
+           "AWS_REGION": "us-east-1", "RUNTIME_ZIP": str(package), **extra}
+    run = subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, capture_output=True, timeout=180, text=True)
+    assert run.returncode == 0, run.stderr[-500:]
+    path = tmp_path / "out" / "FairTableObservability.template.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def test_by_default_there_is_no_observability_stack(tmp_path):
+    assert synth_observability(tmp_path) is None
+
+
+def test_the_observability_switch_enables_transaction_search_with_one_percent_indexing(tmp_path):
+    template = synth_observability(tmp_path, OBSERVABILITY="true")
+    (search,) = resources(template, "AWS::XRay::TransactionSearchConfig")
+    assert search["Properties"]["IndexingPercentage"] == 1
+    (policy,) = resources(template, "AWS::Logs::ResourcePolicy")
+    document = json.dumps(policy["Properties"]["PolicyDocument"])
+    assert "xray.amazonaws.com" in document and "aws/spans" in document
+    assert "logs:PutLogEvents" in document and "aws:SourceAccount" in document  # scoped to this account
+
+
+def test_the_gateway_gets_a_traces_delivery_to_xray_and_never_the_body_logging_one(tmp_path):
+    template = synth_observability(tmp_path, OBSERVABILITY="true")
+    (source,) = resources(template, "AWS::Logs::DeliverySource")
+    assert source["Properties"]["LogType"] == "TRACES"
+    assert "GatewayArn" in json.dumps(source["Properties"]["ResourceArn"])
+    (destination,) = resources(template, "AWS::Logs::DeliveryDestination")
+    assert destination["Properties"]["DeliveryDestinationType"] == "XRAY"
+    assert len(resources(template, "AWS::Logs::Delivery")) == 1
+    assert "APPLICATION_LOGS" not in json.dumps(template)  # those log request bodies (slot tokens, keys)
+
+
+def test_the_runtime_delivery_is_a_separate_experiment_switch(tmp_path):
+    template = synth_observability(tmp_path, OBSERVABILITY="true", OBSERVABILITY_RUNTIME="true")
+    sources = resources(template, "AWS::Logs::DeliverySource")
+    assert len(sources) == 2 and len(resources(template, "AWS::Logs::Delivery")) == 2
+    assert {s["Properties"]["LogType"] for s in sources} == {"TRACES"}
+    assert any("AgentRuntimeArn" in json.dumps(s["Properties"]["ResourceArn"]) for s in sources)
+
+
+def test_everything_in_the_observability_stack_waits_for_transaction_search(tmp_path):
+    template = synth_observability(tmp_path, OBSERVABILITY="true")
+    search = next(k for k, v in template["Resources"].items() if v["Type"] == "AWS::XRay::TransactionSearchConfig")
+    (destination,) = [v for v in template["Resources"].values() if v["Type"] == "AWS::Logs::DeliveryDestination"]
+    assert search in destination["DependsOn"]

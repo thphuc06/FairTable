@@ -1,0 +1,6 @@
+id: rob-carol-forgets-the-token-at-ember
+category: ROB
+description: "The same slip at a restaurant with a fee: still exactly one booking."
+user: carol
+goal: {kind: book, restaurant: ember, day_offset: 4, time: "18:30", party_size: 2, behaviour: forgetful}
+expect: {reservations: 1, active_holds: 0, refused_by: [S5a_confirm_needs_read_back]}

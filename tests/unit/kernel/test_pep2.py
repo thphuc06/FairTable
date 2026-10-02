@@ -1,4 +1,4 @@
-"""P1-2: PEP-2 (P0, S1-S4, S3b) through the policy engine: table-driven, priority, fail-closed."""
+"""P1-2, P3-10: PEP-2 (P0, S1, S2, S4, S5a-c) through the policy engine: table-driven, priority, fail-closed."""
 
 from dataclasses import replace
 
@@ -14,11 +14,14 @@ BASE = PolicyContext(
     active_holds_user_venue=0,
     agent_covers_booked=0,
     party_size=2,
-    mandate_covers_booking=True,
     slot_is_drop_controlled=False,
-    cancel_fee_cents=0,
-    cancel_fee_acknowledged=False,
+    read_back_required=False,
+    read_back_matches=False,
+    pause_elapsed=False,
+    user_confirmed=False,
 )
+# a confirm that did everything right: the terms were read back, the pause passed, the diner said yes
+SPOKEN = {"read_back_required": True, "read_back_matches": True, "pause_elapsed": True, "user_confirmed": True}
 HOLD, CONFIRM, MANAGE, WATCH = (
     ToolName.RESERVATION_HOLD,
     ToolName.RESERVATION_CONFIRM,
@@ -43,20 +46,28 @@ CASES = [
     ("s1-one-active-hold-is-fine", HOLD, {"active_holds_user_venue": 1}, "allow", ("P0_base",)),
     ("s2-over-cap", HOLD, {"agent_covers_booked": 19}, "deny", ("S2_agent_share_of_covers",)),
     ("s2-exactly-at-cap", HOLD, {"agent_covers_booked": 18}, "allow", ("P0_base",)),
-    ("s3-confirm-without-mandate", CONFIRM, {"mandate_covers_booking": False},
-     "step_up", ("S3_confirm_needs_mandate",)),
-    ("s3-confirm-with-mandate", CONFIRM, {}, "allow", ("P0_base",)),
+    # S5a-c (D-051): a confirm needs the read-back, the pause and an explicit yes
+    ("s5-confirm-done-right", CONFIRM, SPOKEN, "allow", ("P0_base",)),
+    ("s5a-no-read-back-token", CONFIRM, {**SPOKEN, "read_back_matches": False}, "deny",
+     ("S5a_confirm_needs_read_back",)),
+    ("s5b-too-soon", CONFIRM, {**SPOKEN, "pause_elapsed": False}, "deny", ("S5b_confirm_needs_the_diners_answer",)),
+    ("s5c-no-explicit-yes", CONFIRM, {**SPOKEN, "user_confirmed": False}, "deny",
+     ("S5c_confirm_needs_an_explicit_yes",)),
+    ("s5-nothing-at-all", CONFIRM, {"read_back_required": True}, "deny",
+     ("S5a_confirm_needs_read_back", "S5c_confirm_needs_an_explicit_yes")),
+    ("s5-token-fits-but-too-soon-and-no-yes", CONFIRM, {**SPOKEN, "pause_elapsed": False, "user_confirmed": False},
+     "deny", ("S5b_confirm_needs_the_diners_answer", "S5c_confirm_needs_an_explicit_yes")),
+    # S5 applies to a confirm always (the caller sets read_back_required) and to a cancel only when it costs money
+    ("s5-cancel-with-fee-done-right", MANAGE, SPOKEN, "allow", ("P0_base",)),
+    ("s5-cancel-with-fee-without-read-back", MANAGE, {**SPOKEN, "read_back_matches": False}, "deny",
+     ("S5a_confirm_needs_read_back",)),
+    ("s5-free-cancel-needs-no-read-back", MANAGE, {}, "allow", ("P0_base",)),
+    ("s5-hold-is-not-covered", HOLD, {"read_back_required": True}, "allow", ("P0_base",)),
     ("s4-drop-slot", HOLD, {"slot_is_drop_controlled": True}, "deny", ("S4_drop_slots_via_waitlist",)),
     ("p0-unverified-agent", HOLD, {"agent_tier": "unverified"}, "deny", (NO_PERMIT,)),
     ("p0-empty-tier", CONFIRM, {"agent_tier": ""}, "deny", (NO_PERMIT,)),
     # D1: a watch consumes no covers, so S2 must not block it (and S2's own next step is a watch).
     ("d1-watch-when-agent-share-is-full", WATCH, {"agent_covers_booked": 19}, "allow", ("P0_base",)),
-    # D2: cancel with an unacknowledged fee needs step-up.
-    ("d2-cancel-with-fee", MANAGE, {"cancel_fee_cents": 2500},
-     "step_up", ("S3b_cancel_fee_needs_ack",)),
-    ("d2-cancel-with-fee-acknowledged", MANAGE,
-     {"cancel_fee_cents": 2500, "cancel_fee_acknowledged": True}, "allow", ("P0_base",)),
-    ("d2-free-cancel", MANAGE, {}, "allow", ("P0_base",)),
     # combinations
     ("s1-and-s2-together", HOLD, {"active_holds_user_venue": 2, "agent_covers_booked": 19},
      "deny", ("S1_max_active_holds", "S2_agent_share_of_covers")),
@@ -75,14 +86,15 @@ def test_pep2_cases(pep2: Pep2, case):
     assert d.errors == ()
 
 
-def test_all_six_rules_are_loaded(pep2: Pep2):
+def test_all_seven_rules_are_loaded(pep2: Pep2):
     assert pep2.bundle.rule_ids == {
         "P0_base",
         "S1_max_active_holds",
         "S2_agent_share_of_covers",
-        "S3_confirm_needs_mandate",
-        "S3b_cancel_fee_needs_ack",
         "S4_drop_slots_via_waitlist",
+        "S5a_confirm_needs_read_back",
+        "S5b_confirm_needs_the_diners_answer",
+        "S5c_confirm_needs_an_explicit_yes",
     }
 
 
@@ -111,7 +123,7 @@ def test_context_requires_every_field():
         ({"party_size": True}, TypeError),  # bool is not a count
         ({"party_size": "2"}, TypeError),
         ({"agent_covers_booked": -1}, ValueError),
-        ({"mandate_covers_booking": 1}, TypeError),
+        ({"user_confirmed": 1}, TypeError),
         ({"agent_tier": None}, TypeError),
     ],
 )
@@ -123,9 +135,8 @@ def test_context_rejects_wrongly_typed_facts(overrides, exc):
 # ---------------------------------------------------------------- priority and fail-closed
 PRIORITY = """
 @id("P") permit (principal, action, resource);
-@id("D") @on_deny("deny") forbid (principal, action, resource);
-@id("U1") @on_deny("step_up") forbid (principal, action, resource);
-@id("U2") @on_deny("step_up") forbid (principal, action, resource);
+@id("D1") @on_deny("deny") forbid (principal, action, resource);
+@id("D2") @on_deny("deny") forbid (principal, action, resource);
 """
 LOOSE_SCHEMA = """
 entity Diner;
@@ -139,13 +150,21 @@ ENTS = [
 ]
 
 
-def test_deny_beats_step_up_beats_allow():
+def test_a_forbid_beats_a_permit_and_every_matching_forbid_is_named():
     d = PolicyBundle("t", PRIORITY, LOOSE_SCHEMA).evaluate(REQ, ENTS)
-    assert (d.kind, d.rule_ids) == (DecisionKind.DENY, ("D",))
+    assert (d.kind, d.rule_ids) == (DecisionKind.DENY, ("D1", "D2"))
 
-    no_deny = PRIORITY.replace('@id("D") @on_deny("deny") forbid (principal, action, resource);', "")
-    d = PolicyBundle("t", no_deny, LOOSE_SCHEMA).evaluate(REQ, ENTS)
-    assert (d.kind, d.rule_ids) == (DecisionKind.STEP_UP, ("U1", "U2"))
+
+def test_a_forbid_without_on_deny_deny_is_refused_at_load_time():
+    """step_up is gone (D-051): only @on_deny("deny") is a valid annotation."""
+    from server.kernel.engine import PolicyLoadError
+
+    text = """
+    @id("P") permit (principal, action, resource);
+    @id("U") @on_deny("step_up") forbid (principal, action, resource);
+    """
+    with pytest.raises(PolicyLoadError):
+        PolicyBundle("t", text, LOOSE_SCHEMA)
 
 
 def test_no_matching_permit_is_a_deny():

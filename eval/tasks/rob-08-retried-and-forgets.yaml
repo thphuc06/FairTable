@@ -1,0 +1,7 @@
+id: rob-bob-retried-hold-and-forgets-the-token
+category: ROB
+description: "A retried hold and a forgotten token in the same conversation: one booking."
+user: bob
+goal: {kind: book, restaurant: sakura, day_offset: 4, time: "18:30", party_size: 2, behaviour: forgetful}
+noise: {duplicate_hold: 1.0}
+expect: {reservations: 1, active_holds: 0, refused_by: [S5a_confirm_needs_read_back]}

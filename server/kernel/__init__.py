@@ -1,4 +1,4 @@
-"""Trust Kernel: PEP-1 (stateless G1-G4) then PEP-2 (stateful P0, S1-S4, S3b), both Cedar."""
+"""Trust Kernel: PEP-1 (stateless G1-G4) then PEP-2 (stateful P0, S1, S2, S4, S5a-c), both Cedar."""
 
 import os
 from dataclasses import dataclass
@@ -8,7 +8,7 @@ from server.kernel.engine import Decision, DecisionKind, PolicyLoadError
 from server.kernel.guidance import deny_to_error
 from server.kernel.pep1 import Pep1
 from server.kernel.pep2 import Pep2, PolicyContext, VenueRef
-from server.kernel.variants import NoStepUpPep2, OpenPep1, OpenPep2
+from server.kernel.variants import NoVoiceGuardsPep2, OpenPep1, OpenPep2
 
 __all__ = [
     "Decision",
@@ -47,7 +47,7 @@ class TrustKernel:
         return cls(OpenPep1(), OpenPep2())  # type: ignore[arg-type]
 
     @classmethod
-    def without_step_up(cls, directory: Path | None = None) -> "TrustKernel":
-        """A2: the real rules, but an approval-needed decision is allowed without asking the diner."""
+    def without_voice_guards(cls, directory: Path | None = None) -> "TrustKernel":
+        """A2: the real rules, but whatever the assistant sends counts as the diner's yes (S5a-c are ignored)."""
         directory = directory or default_policy_dir()
-        return cls(Pep1.from_dir(directory), NoStepUpPep2(Pep2.from_dir(directory)))  # type: ignore[arg-type]
+        return cls(Pep1.from_dir(directory), NoVoiceGuardsPep2(Pep2.from_dir(directory)))  # type: ignore[arg-type]

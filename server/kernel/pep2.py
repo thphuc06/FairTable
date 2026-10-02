@@ -1,5 +1,5 @@
-"""PEP-2: stateful rules P0, S1-S4, S3b. Counters and mandate facts are read from the store by the
-caller and passed in; Cedar only compares numbers and booleans."""
+"""PEP-2: stateful rules P0, S1, S2, S4 and the spoken-confirmation rules S5a-c (D-051). Counters and the
+read-back facts are worked out by the caller and passed in; Cedar only compares numbers and booleans."""
 
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
@@ -23,10 +23,11 @@ class PolicyContext:
     active_holds_user_venue: int
     agent_covers_booked: int
     party_size: int
-    mandate_covers_booking: bool
     slot_is_drop_controlled: bool
-    cancel_fee_cents: int
-    cancel_fee_acknowledged: bool
+    read_back_required: bool  # a confirm, or a cancel that costs money (S5a-c apply)
+    read_back_matches: bool  # the read-back token fits these terms, this user, this hold or reservation
+    pause_elapsed: bool  # long enough since the read-back for the diner to have answered
+    user_confirmed: bool  # the assistant states that the diner said yes
 
     def __post_init__(self) -> None:
         for f in fields(self):

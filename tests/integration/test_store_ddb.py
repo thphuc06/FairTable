@@ -56,8 +56,6 @@ def test_seeded_data_can_be_read_back(store, clock):
     assert store.get_slot("luna-trattoria", today, "19:00", "T4").seats == 4
     assert store.get_slot("luna-trattoria", today, "03:00", "T4") is None
 
-    assert store.get_mandate(SUBS["alice"], "luna-trattoria").party_size_max == 4
-    assert store.get_mandate(SUBS["bob"], "luna-trattoria") is None
     assert len(data.slots) == DAYS * len(TIMES) * 6
 
 

@@ -3,7 +3,7 @@
 Watch creation transaction (plus idempotency record and audit from the pipeline):
   0. watch record          (new)
   1. uniqueness key        (one active watch per person, restaurant and day)
-Matched hold: the normal hold transaction plus
+Matched hold: the normal hold transaction (lasting longer, D-054) plus
   +  watch -> matched      (still waiting, so two matchers cannot both win)
   +  uniqueness key removed (the person may watch again once this one has ended)
 """
@@ -11,7 +11,7 @@ Matched hold: the normal hold transaction plus
 from server.domain.errors import ErrorCode, FairTableError
 from server.domain.models import Identity, Slot
 from server.domain.output import success
-from server.domain.slot_token import SlotClaims
+from server.domain.offers import SlotClaims
 from server.domain.tool_names import ToolName
 from server.domain.waitlist import (
     RETRY_AFTER_S,
@@ -20,7 +20,7 @@ from server.domain.waitlist import (
     Watch,
 )
 from server.kernel import Decision, PolicyContext, VenueRef
-from server.ops.common import counter_value
+from server.ops.common import NO_READ_BACK, counter_value
 from server.ops.hold import HoldOperation
 from server.pipeline import WriteFacts, WritePlan
 from server.store import Store, TransactionCancelled, TxOp, keys
@@ -45,7 +45,8 @@ class WatchOperation:
     def load_facts(self, store: Store, identity: Identity, now_iso: str) -> WriteFacts:
         venue = store.get_venue(self.venue_id)
         if venue is None:
-            raise FairTableError(ErrorCode.NOT_FOUND, "No restaurant with that restaurant_id.")
+            raise FairTableError(ErrorCode.NOT_FOUND, "I could not find that restaurant.",
+                             hint="Use a restaurant_id from the search results.")
         self.venue = venue
         return WriteFacts(
             VenueRef(venue.venue_id, venue.agent_cover_cap),
@@ -53,8 +54,7 @@ class WatchOperation:
                 agent_tier=identity.agent_tier or "none",
                 active_holds_user_venue=counter_value(store, keys.active_holds_counter(identity.sub, self.venue_id)),
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(self.venue_id, self.date)),
-                party_size=self.party_size, mandate_covers_booking=True,
-                slot_is_drop_controlled=False, cancel_fee_cents=0, cancel_fee_acknowledged=False,
+                party_size=self.party_size, slot_is_drop_controlled=False, **NO_READ_BACK,
             ),
         )
 
@@ -96,6 +96,7 @@ class MatchHoldOperation(HoldOperation):
                             watch.sub, hot=slot.hot, drop_id=None)
         super().__init__(deps, claims)
         self.watch = watch
+        self.ttl_s = deps.settings.match_hold_ttl_s  # the diner is not in a conversation when the table opens
 
     def params(self) -> dict:
         return {**super().params(), "watch_id": self.watch.watch_id}

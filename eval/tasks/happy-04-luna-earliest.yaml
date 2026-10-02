@@ -1,0 +1,6 @@
+id: happy-luna-alice-earliest-seating
+category: HAPPY
+description: "The earliest seating of the evening is booked like any other."
+user: alice
+goal: {kind: book, restaurant: luna, day_offset: 5, time: "17:30", party_size: 3}
+expect: {reservations: 1, active_holds: 0}

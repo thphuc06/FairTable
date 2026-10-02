@@ -1,6 +1,6 @@
 # Phase 2 – AWS Builder path (10-14 → 10-17, started early 2026-09-30)
 
-Status: **P2-1 to P2-5, P2-7, P2-8, P2-10 done; P2-6 done; the AWS profile runs in the developer's second account (D-045); next P2-9 observability** (decisions D-016, D-030, D-031, D-034, D-035)
+Status: **all Phase 2 tasks done except the final teardown; the AWS profile runs in the developer's second account (D-045) and stays up until the developer says the demo footage is recorded (D-044)** (decisions D-016, D-030, D-031, D-034, D-035)
 
 ## Plan
 Goal: run the same server on AWS (DynamoDB, Cognito, AgentCore Runtime, Gateway, Policy, Observability) so the demo shows the AWS path once, then tear everything down. Task list and acceptance criteria: `docs/PLAN.md` §3, Phase 2. Choices: D-035.
@@ -27,13 +27,31 @@ Read-only account check at the start, 2026-09-30 (us-east-1): budgets `My Zero-S
 | P2-2 Cognito + pre-token | A | done | 2026-09-30 | deployed; 6/6 real-token tests pass; self-service scope removed (D-039) |
 | P2-3 Server on Runtime | A | done | 2026-10-01 | runs on Runtime V2 in the second account; 16 of 16 real-AWS tests pass (the first account stays blocked, D-041) |
 | P2-4 Verifier with Cognito JWKS | B | done | 2026-09-30 | several client ids, token_use; real Cognito tokens pass with configuration only |
-| P2-5 Gateway + interceptor | B | todo | | |
+| P2-5 Gateway + interceptor | B | done | 2026-10-01 | deployed on the second account; 25 of 25 real-AWS tests at the time (D-046) |
 | P2-6 Gateway Policy G1-G4 | B | done | 2026-10-02 | deployed in `LOG_ONLY` then `ENFORCE` on the second account; two deploys needed (D-049) |
 | P2-7 -32042 through the Gateway | B | done | 2026-10-01 | measured: lost through the Gateway; plain result with the link works; D-048 |
-| P2-9 Observability (AWS part) | C | todo | | server part done (D-032) |
+| P2-9 Observability (AWS part) | C | done | 2026-10-02 | Gateway, Policy and Runtime spans wired and measured, allow and deny (D-050); ADOT for the server and the simulator not done (developer: skip, maybe later) |
 | P2-8 Teardown + aws-integration.md | C | in progress | 2026-09-30 | started while P2-3 waits for the quota |
 
 ## Entries (newest first)
+
+### 2026-10-02 · P2-9 (Gateway and Runtime part) · [aws] [observability] · Transaction Search and service spans wired and measured (second account)
+- **Goal:** one booking visible as a trace, to show in the video.
+- **Done:** account 1905 had only the budget and the bootstrap stack, so `up --runtime` (with `GATEWAY_POLICY=ENFORCE`) rebuilt Data, Identity, Runtime, Gateway and Policy (2 min 0 s) and `seed` wrote the demo data; then `FairTableObservability` (`ObservabilityStack`; 403 s, then +17 s for the Runtime delivery). Spans read with Logs Insights; one booking is one trace across Gateway, Policy and Runtime; attributes checked for tokens and arguments (none). `aws_ctl.py` learned the new stack and the account-level setting (restore the trace destination to X-Ray, then delete the span log groups).
+- **Files:** `infra/cdk/stacks/observability_stack.py`, `infra/cdk/app.py`, `infra/aws_ctl.py`, `tests/unit/infra/{test_cdk_table,test_aws_ctl}.py`, docs (`DECISIONS` D-050, `PLAN` 3a-bis, `friction-log`, `aws-integration`).
+- **Tests:** infra unit tests 176 passed (5 new CDK template tests, 5 new `aws_ctl` tests); `ruff` clean; real AWS with the stack under `ENFORCE` and tracing on: `test_demo_flow` + `test_gateway` 13 of 13, `test_gateway` 9 of 9, `test_runtime_smoke` 8 of 8, the consent flow 1 of 1, `test_gateway_policy` 5 of 5. **Refused calls in the trace (read after `test_gateway_policy`):** the `InvokeTool` SERVER span has status `ERROR` and `jsonrpc.error.code` -32002; the `AuthorizeAction` span has `authorization_decision` DENY and `determining_policies` naming the rule (`ft_g3_party_size_availability_check` for a party of 11, `ft_g4_verified_agent_only` for the unverified agent's `reservation_hold`); no Runtime span is needed for a refusal. The whole local suite: **1060 passed, 40 skipped** (5 Docker, 35 AWS), 16:54, DynamoDB Local on port 8000; `ruff` clean.
+- **Decisions:** D-050.
+- **Surprises / friction:** see the friction log (no tracing property; `filter-log-events` empty while Logs Insights works; 403 s deploy).
+- **Follow-ups:** try exporting the server's own `fairtable.tool` span (rule ids) from the Runtime zip (ADOT, one more 4.4-minute update per try); capture the trace screens for the video; teardown only when the developer says the footage is recorded (the revert of Transaction Search by `down` is unit-tested but not yet run on the account).
+
+### 2026-10-02 · P2-9 (research, nothing created) · [aws] [observability] [docs] · What Observability needs, what it costs, and a proposed order
+- **Goal:** verify the AWS observability route and its price before wiring anything; also bring two stale docs up to date.
+- **Done:** `phase-2.md` Progress (P2-5 `done`, P2-9 `in progress`) and the service table of `aws-integration.md` now match what was deployed. Read the AgentCore and CloudWatch observability pages, introspected the CDK constructs, downloaded the raw CloudWatch price list. Facts and sources: `docs/PLAN.md` §3a-bis "AgentCore Observability on AWS". ADOT for the simulator is skipped for now (developer, 2026-10-02): it needs credentials in the environment of the PC and an exporter path from Vietnam, with no gain for the video that Gateway and Runtime spans do not give.
+- **Files:** `docs/PLAN.md`, `docs/devlog/phase-2.md`, `docs/aws-integration.md`.
+- **Tests:** none (docs only); no AWS call was made.
+- **Decisions:** none yet (D-050 once the developer says "wire observability").
+- **Surprises / friction:** no CloudFormation tracing property on `CfnRuntime`/`CfnGateway`; the Runtime tracing API is undocumented (only a console toggle); the CloudWatch pricing page has no Transaction Search line in the raw HTML, the price list does.
+- **Follow-ups:** "wire observability" (cost and teardown stated in the batch report); the cleanup stays until the developer says the footage is recorded.
 
 ### 2026-10-02 · P2-6 · [aws] [gateway] [policy] · Gateway Policy G1-G4 deployed (second account), LOG_ONLY then ENFORCE, measured
 - **Goal:** repeat G1-G4 at the Gateway as defence in depth and see it work on the real service ("wire Policy" given 2026-10-02).

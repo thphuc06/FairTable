@@ -1,5 +1,7 @@
 """P1-14: standing watches: register, match a freed table lazily, status and cancel."""
 
+from datetime import timedelta
+
 import pytest
 from ddb_env import ENDPOINT
 from flows import book, call, counter, day, error_of, hold_table
@@ -130,19 +132,35 @@ async def test_a_cancel_gives_the_freed_table_to_the_first_watcher(world):
     body = (await status(world, "alice", w)).structuredContent
     assert body["status"] == "matched" and body["hold_id"] == hold.hold_id
     assert body["hold_expires_at"] == hold.held_until and body["next_step"]["tool"] == "reservation_confirm"
+    assert body["read_back_token"]
     assert_invariants(world.store, iso_z(world.clock.now()))
 
 
-async def test_the_watcher_can_confirm_the_table_they_were_given(world):
+async def test_the_watcher_is_told_the_details_and_confirms_the_table_after_a_yes(world):
     booking = await fully_booked(world)
     w = (await watch(world, "alice")).structuredContent["watch_id"]
     await cancel(world, "bob", booking["reservation_id"])
-    hold_id = (await status(world, "alice", w)).structuredContent["hold_id"]
-    done = await call(world.as_("alice"), "reservation_confirm", hold_id=hold_id, idempotency_key="conf-key-0001")
-    # party of five is above Alice's mandate limit of four, so she is asked to approve first
-    payload = error_of(done, "CONSENT_REQUIRED")
-    assert payload["consent_url"].endswith(hold_id)
+    answer = (await status(world, "alice", w)).structuredContent  # a later conversation: she asks, the details come back
+    assert answer["read_back"].endswith("Shall I book it?") and "for 5" in answer["read_back"]
+    assert answer["read_back_token"] and answer["min_pause_s"] == 3
+    soon = await call(world.as_("alice"), "reservation_confirm", hold_id=answer["hold_id"],
+                      idempotency_key="conf-key-0001", read_back_token=answer["read_back_token"], user_confirmed=True)
+    assert error_of(soon, "CONFIRMATION_REQUIRED")["rule_id"] == "S5b_confirm_needs_the_diners_answer"
+    world.clock.advance(8)
+    done = await call(world, "reservation_confirm", hold_id=answer["hold_id"], idempotency_key="conf-key-0001",
+                      read_back_token=answer["read_back_token"], user_confirmed=True)
+    assert not done.isError, done.structuredContent  # five people: no standing permission is needed any more
     assert_invariants(world.store, iso_z(world.clock.now()))
+
+
+async def test_a_waitlist_match_is_held_for_half_an_hour_not_ten_minutes(world):
+    booking = await fully_booked(world)
+    w = (await watch(world, "alice")).structuredContent["watch_id"]
+    await cancel(world, "bob", booking["reservation_id"])
+    hold = world.store.get_hold(world.store.get_watch(w).hold_id)
+    assert hold.held_until == iso_z(world.clock.now() + timedelta(minutes=30))
+    world.clock.advance(minutes=20)  # past a normal hold, inside the match hold
+    assert (await status(world, "alice", w)).structuredContent["read_back"]
 
 
 async def test_watchers_are_served_first_come_first_served(world):
@@ -277,7 +295,7 @@ async def test_a_matched_watch_reports_when_its_hold_ran_out(world):
     booking = await fully_booked(world)
     w = (await watch(world, "alice")).structuredContent["watch_id"]
     await cancel(world, "bob", booking["reservation_id"])
-    world.clock.advance(minutes=11)
+    world.clock.advance(minutes=31)  # a match is held for 30 minutes
     body = (await status(world, "alice", w)).structuredContent
     assert body["status"] == "matched" and "ran out" in body["spoken_summary"]
     assert body["next_step"]["tool"] == "waitlist_watch"

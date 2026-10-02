@@ -53,7 +53,14 @@ async def test_a_real_model_books_a_table_through_the_gateway(model_env, gateway
     reply = None
     try:
         assert "restaurant_search" in assistant.tool_names  # bare names for us, the Gateway's prefix underneath
-        reply = await assistant.say(f"Please book a table at Luna Trattoria for 2 people on {day} at 7pm.")
+        asked = await assistant.say(f"Please book a table at Luna Trattoria for 2 people on {day} at 7pm.")
+        print("asked:", [(s.tool, s.error) for s in asked.steps], "| reply:", asked.text[:200])
+        assert any(s.tool == "reservation_hold" and not s.is_error for s in asked.steps), asked.text[:200]
+        assert not any(s.tool == "reservation_confirm" and not s.is_error for s in asked.steps), (
+            "the model booked without waiting for the user's yes")
+        await asyncio.sleep(4)  # the diner listens and answers
+        reply = await assistant.say("Yes, please.")
+        reply = type(reply)(reply.text, [*asked.steps, *reply.steps], asked.tokens + reply.tokens)
         names = [s.tool for s in reply.steps]
         print("steps:", [(s.tool, s.error, bool(s.result.get("idempotent_replay"))) for s in reply.steps], "| tokens:", reply.tokens, "| reply:", reply.text[:160])
         confirmed = [s for s in reply.steps if s.tool == "reservation_confirm" and not s.is_error]

@@ -42,7 +42,7 @@ def ensure_users(client: Any, pool_id: str) -> dict[str, str]:
 
 
 def resolve_subs(client: Any, pool_id: str, usernames: list[str]) -> dict[str, str]:
-    """`sub` by username, for the seed data (mandates are keyed by the diner's sub)."""
+    """`sub` by username, for the seed data (the seed data is keyed by the diner's sub)."""
     return {n: _sub_of(client.admin_get_user(UserPoolId=pool_id, Username=n)) for n in usernames}
 
 

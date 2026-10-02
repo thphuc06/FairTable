@@ -1,0 +1,6 @@
+id: happy-luna-bob-late-seating
+category: HAPPY
+description: "A late table at Luna is booked after the diner says yes."
+user: bob
+goal: {kind: book, restaurant: luna, day_offset: 6, time: "20:30", party_size: 2}
+expect: {reservations: 1, active_holds: 0}

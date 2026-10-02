@@ -1,7 +1,0 @@
-id: neg-diner-declines-approval
-category: NEG
-description: Bob declines on the consent page; the assistant is told and nothing is booked.
-user: bob
-goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 2}
-consent: decline
-expect: {reservations: 0, errors: [CONSENT_REQUIRED, CONSENT_DECLINED]}

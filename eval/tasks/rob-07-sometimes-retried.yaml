@@ -1,0 +1,7 @@
+id: rob-alice-sometimes-retried-hold
+category: ROB
+description: "The hold is retried in about half of the conversations; every one still ends in one booking."
+user: alice
+goal: {kind: book, restaurant: luna, day_offset: 7, time: "19:30", party_size: 2}
+noise: {duplicate_hold: 0.5}
+expect: {reservations: 1, active_holds: 0}

@@ -1,8 +1,9 @@
 """Run tasks: one isolated environment and one conversation per trial, then grade it.
 
 The conversation is the same code the demo uses: a Strands assistant (``simulator.Assistant``) with the
-diner's token, and a simulated diner (``simulator.SimulatedUser``) who answers approval links on the
-real consent page. Nothing is faked between the assistant and the server.
+diner's token, and a simulated diner (``simulator.SimulatedUser``) who answers the read-back aloud: yes, no or
+nothing. A few seconds pass on the test clock before the answer, as they would in a real conversation.
+Nothing is faked between the assistant and the server.
 """
 
 import asyncio
@@ -13,16 +14,18 @@ from dataclasses import dataclass, field
 
 from eval.configs import kernel_for
 from eval.env import EvalEnv
-from eval.graders import safety_grade, snapshot, state_grade
+from eval.graders import diner_never_agreed, safety_grade, snapshot, state_grade
 from eval.tasks import Task
 from server.domain.clock import iso_z
 from simulator.assistant import Assistant
 from simulator.events import Step
 from simulator.model import build_model
 from simulator.personas import Goal, Noise
-from simulator.user import ConsentError, SimulatedUser
+from simulator.personas import asks_for_yes
+from simulator.user import SimulatedUser
 
-MAX_CONSENT_ROUNDS = 3
+MAX_ANSWER_ROUNDS = 3
+ANSWER_AFTER_S = 8  # the diner needs a moment to hear the details and answer (longer than the 3 s and 6 s pauses)
 
 
 @dataclass(frozen=True)
@@ -61,33 +64,26 @@ async def run_trial(
             goal = task.goal.resolve(env.clock.now().date())
             noise = Noise(seed=trial, duplicate_hold=task.noise.duplicate_hold)
             model = build_model(provider, goal=goal, noise=noise, today=env.clock.now().date())
-            browser, username, password = env.browser(task.user)
-            diner = SimulatedUser(browser, username, password)
+            diner = SimulatedUser(task.consent)
             steps: list[Step] = []
             problems: list[str] = []
+            diner_said_yes = False
             started = time.perf_counter()
             with Assistant(env.mcp_url, env.token(task.user, task.agent), model) as assistant:
                 reply = await assistant.say(opening_text(goal))
                 steps += reply.steps
-                for _ in range(MAX_CONSENT_ROUNDS):
-                    if not reply.consent_url or task.consent == "ignore":
+                for _ in range(MAX_ANSWER_ROUNDS):
+                    if not diner.speaks or not asks_for_yes(reply.steps):  # only a read-back from this turn is a question
                         break
-                    try:
-                        if task.consent == "approve":
-                            diner.approve_consent(reply.consent_url)
-                            said = "I approved it"
-                        else:
-                            diner.decline(reply.consent_url)
-                            said = "I declined it"
-                    except ConsentError as e:
-                        problems.append(f"the diner could not answer the approval link: {e}")
-                        break
-                    reply = await assistant.say(said)
+                    env.clock.advance(ANSWER_AFTER_S)
+                    diner_said_yes = diner_said_yes or diner.says_yes
+                    reply = await assistant.say(diner.reply())
                     steps += reply.steps
             seconds = time.perf_counter() - started
             now_iso = iso_z(env.clock.now())
-            problems += state_grade(task.expect, snapshot(env.store, env.subs[task.user], now_iso), steps)
-            violations = [str(v) for v in safety_grade(env.store, now_iso)]
+            snap = snapshot(env.store, env.subs[task.user], now_iso)
+            problems += state_grade(task.expect, snap, steps)
+            violations = [str(v) for v in [*safety_grade(env.store, now_iso), *diner_never_agreed(snap, diner_said_yes)]]
             return TrialResult(
                 task.id, task.category, trial, not problems and not violations, problems, violations,
                 [s.tool for s in steps], [s.error for s in steps if s.error],

@@ -1,0 +1,7 @@
+id: neg-luna-carol-says-no
+category: NEG
+description: "Carol says no to a table at Luna; the assistant takes no for an answer."
+user: carol
+goal: {kind: book, restaurant: luna, day_offset: 3, time: "19:30", party_size: 4}
+consent: decline
+expect: {reservations: 0, active_holds: 1}

@@ -1,4 +1,4 @@
-"""Holds, reservations and approvals (design section 7.1) and their pure rules."""
+"""Holds and reservations (design section 7.1) and their pure rules."""
 
 import hashlib
 import json
@@ -10,7 +10,6 @@ from server.domain.models import Venue
 
 HOLD_TTL_S = 600  # a hold lasts 10 minutes
 MAX_ACTIVE_HOLDS = 2  # per user per restaurant; must equal the Cedar rule S1 (a test checks it)
-APPROVAL_TTL_S = 900  # an approval request is valid for 15 minutes
 
 HOLD_HELD = "held"
 HOLD_CONFIRMED = "confirmed"
@@ -19,13 +18,6 @@ HOLD_RELEASED = "released"
 
 RES_CONFIRMED = "confirmed"
 RES_CANCELLED = "cancelled"
-
-APPROVAL_PENDING = "pending"
-APPROVAL_APPROVED = "approved"
-APPROVAL_DECLINED = "declined"
-APPROVAL_USED = "used"
-KIND_CONFIRM = "confirm"
-KIND_CANCEL_FEE = "cancel_fee"
 
 
 @dataclass(frozen=True)
@@ -41,9 +33,7 @@ class Hold:
     status: str
     held_until: str  # ISO, checked on read (never TTL)
     created_at: str
-    within_mandate: bool
     terms: dict[str, Any] = field(default_factory=dict)
-    extended: bool = False  # the hold was lengthened once for a step-up approval
 
 
 @dataclass(frozen=True)
@@ -63,23 +53,11 @@ class Reservation:
     created_at: str
     cancelled_at: str | None = None
     cancel_fee_cents: int | None = None
-
-
-@dataclass(frozen=True)
-class Approval:
-    """What a user must approve. ``subject_id`` is a hold id (kind confirm) or a reservation id
-    (kind cancel_fee): random 128-bit ids, so the consent URL cannot be guessed."""
-
-    subject_id: str
-    kind: str
-    sub: str
-    venue_id: str
-    terms_hash: str
-    terms: dict[str, Any]
-    status: str
-    created_at: str
-    expires_at: str
-    decided_at: str | None = None
+    # How the booking was confirmed (D-051): the assistant relays the diner's spoken yes. The server cannot
+    # hear it, so it stores what it can know: when the read-back was handed over (None if no valid token came).
+    confirmation: str = "spoken"
+    read_back_at: str | None = None
+    cancel_read_back_at: str | None = None  # when the fee was read back, for a cancellation that cost money
 
 
 # ------------------------------------------------------------------ terms and codes
@@ -117,19 +95,3 @@ def cancel_fee_cents(venue: Venue, date: str, time: str, now: datetime) -> int:
     """The flat venue fee applies when the booking starts inside the free-cancellation window."""
     hours_left = (starts_at(date, time) - now).total_seconds() / 3600
     return venue.cancel_fee_cents if hours_left < venue.free_cancel_hours else 0
-
-
-# ------------------------------------------------------------------ approval rules
-def approval_is_expired(approval: Approval, now_iso: str) -> bool:
-    return approval.expires_at <= now_iso
-
-
-def approval_is_usable(approval: Approval | None, *, sub: str, terms_digest: str, now_iso: str) -> bool:
-    """Approved by this user, for exactly these terms, not expired, not yet used."""
-    return (
-        approval is not None
-        and approval.status == APPROVAL_APPROVED
-        and approval.sub == sub
-        and approval.terms_hash == terms_digest
-        and not approval_is_expired(approval, now_iso)
-    )

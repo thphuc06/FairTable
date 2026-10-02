@@ -41,12 +41,12 @@ def rule_table(policy_text: str) -> dict[str, tuple[str, str | None]]:
 
 @dataclass(frozen=True)
 class Decision:
-    kind: str  # "allow" | "deny" | "step_up"
+    kind: str  # "allow" | "deny"
     rule_ids: tuple[str, ...] = ()
 
 
 def decide(policy_text, request, entities) -> Decision:
-    """deny > step_up > allow; no matching permit -> deny (rule 'no_permit')."""
+    """A matching forbid -> deny; no matching permit -> deny (rule 'no_permit')."""
     table = rule_table(policy_text)
     res = cedarpy.is_authorized(request, policy_text, entities)
     assert res.diagnostics.errors == [], res.diagnostics.errors
@@ -55,11 +55,7 @@ def decide(policy_text, request, entities) -> Decision:
         return Decision("allow", tuple(rid for rid, _ in matched))
     if not matched:
         return Decision("deny", ("no_permit",))
-    denies = [rid for rid, od in matched if od == "deny"]
-    steps = [rid for rid, od in matched if od == "step_up"]
-    if denies:
-        return Decision("deny", tuple(denies))
-    return Decision("step_up", tuple(steps))
+    return Decision("deny", tuple(rid for rid, od in matched if od == "deny"))
 
 
 ENTITIES = [
@@ -72,10 +68,11 @@ BASE_CTX = {
     "active_holds_user_venue": 0,
     "agent_covers_booked": 0,
     "party_size": 2,
-    "mandate_covers_booking": True,
     "slot_is_drop_controlled": False,
-    "cancel_fee_cents": 0,
-    "cancel_fee_acknowledged": False,
+    "read_back_required": False,
+    "read_back_matches": False,
+    "pause_elapsed": False,
+    "user_confirmed": False,
 }
 
 
@@ -101,23 +98,25 @@ def test_api_surface_exists():
 
 def test_policy_ids_are_policyN_and_annotations_survive_json_export(pep2):
     table = rule_table(pep2)
-    assert len(table) == 6
+    assert len(table) == 7
     assert all(k.startswith("policy") for k in table)
     assert sorted(v[0] for v in table.values()) == [
         "P0_base",
         "S1_max_active_holds",
         "S2_agent_share_of_covers",
-        "S3_confirm_needs_mandate",
-        "S3b_cancel_fee_needs_ack",
         "S4_drop_slots_via_waitlist",
+        "S5a_confirm_needs_read_back",
+        "S5b_confirm_needs_the_diners_answer",
+        "S5c_confirm_needs_an_explicit_yes",
     ]
     assert {v[0]: v[1] for v in table.values()} == {
         "P0_base": None,
         "S1_max_active_holds": "deny",
         "S2_agent_share_of_covers": "deny",
-        "S3_confirm_needs_mandate": "step_up",
-        "S3b_cancel_fee_needs_ack": "step_up",
         "S4_drop_slots_via_waitlist": "deny",
+        "S5a_confirm_needs_read_back": "deny",
+        "S5b_confirm_needs_the_diners_answer": "deny",
+        "S5c_confirm_needs_an_explicit_yes": "deny",
     }
 
 
@@ -147,13 +146,16 @@ def test_scenario_3_s2_agent_share_of_covers(pep2):
     assert decide(pep2, req("reservation_hold", agent_covers_booked=18), ENTITIES).kind == "allow"
 
 
-def test_scenario_4_s3_confirm_without_mandate_needs_step_up(pep2):
-    d = decide(pep2, req("reservation_confirm", mandate_covers_booking=False), ENTITIES)
-    assert d == Decision("step_up", ("S3_confirm_needs_mandate",))
+SPOKEN = {"read_back_required": True, "read_back_matches": True, "pause_elapsed": True, "user_confirmed": True}
 
 
-def test_scenario_5_s3_confirm_with_mandate_allowed(pep2):
-    d = decide(pep2, req("reservation_confirm", mandate_covers_booking=True), ENTITIES)
+def test_scenario_4_s5_confirm_without_the_read_back_is_denied(pep2):
+    d = decide(pep2, req("reservation_confirm", **{**SPOKEN, "read_back_matches": False}), ENTITIES)
+    assert d == Decision("deny", ("S5a_confirm_needs_read_back",))
+
+
+def test_scenario_5_s5_confirm_after_the_read_back_the_pause_and_a_yes_is_allowed(pep2):
+    d = decide(pep2, req("reservation_confirm", **SPOKEN), ENTITIES)
     assert d == Decision("allow", ("P0_base",))
 
 
@@ -167,30 +169,7 @@ def test_scenario_7_unverified_agent_has_no_matching_permit(pep2):
     assert d == Decision("deny", ("no_permit",))
 
 
-# --------------------------------------------------------------------------- priority and edges
-def test_priority_deny_beats_step_up_when_both_match():
-    # Synthetic set: a hold that trips both a deny forbid and a step_up forbid.
-    text = """
-    @id("P") permit (principal, action, resource);
-    @id("D") @on_deny("deny") forbid (principal, action, resource);
-    @id("U") @on_deny("step_up") forbid (principal, action, resource);
-    """
-    d = decide(text, {"principal": 'Diner::"alice"', "action": 'Action::"x"',
-                      "resource": 'Venue::"luna"', "context": {}}, ENTITIES)
-    assert d == Decision("deny", ("D",))
-
-
-def test_two_step_up_rules_still_step_up():
-    text = """
-    @id("P") permit (principal, action, resource);
-    @id("U1") @on_deny("step_up") forbid (principal, action, resource);
-    @id("U2") @on_deny("step_up") forbid (principal, action, resource);
-    """
-    d = decide(text, {"principal": 'Diner::"alice"', "action": 'Action::"x"',
-                      "resource": 'Venue::"luna"', "context": {}}, ENTITIES)
-    assert d.kind == "step_up" and set(d.rule_ids) == {"U1", "U2"}
-
-
+# --------------------------------------------------------------------------- edges
 def test_no_policy_matches_other_action_gives_no_permit(pep2):
     d = decide(pep2, req("restaurant_search"), ENTITIES)
     assert d == Decision("deny", ("no_permit",))
@@ -212,28 +191,22 @@ def test_d1_s2_denial_next_step_is_not_self_blocking(pep2):
     assert decide(pep2, req("waitlist_watch", **ctx), ENTITIES).kind == "allow"
 
 
-# ------------------------------------------------------------------ D2: S3b cancel with a fee
-def test_d2_s3b_cancel_with_fee_needs_step_up(pep2):
-    d = decide(pep2, req("reservation_manage", cancel_fee_cents=2500), ENTITIES)
-    assert d == Decision("step_up", ("S3b_cancel_fee_needs_ack",))
+# ------------------------------------------------------------------ S5 on a cancel (D-051)
+def test_s5_cancel_with_a_fee_needs_the_read_back_the_pause_and_a_yes(pep2):
+    assert decide(pep2, req("reservation_manage", read_back_required=True), ENTITIES).kind == "deny"
+    assert decide(pep2, req("reservation_manage", **SPOKEN), ENTITIES) == Decision("allow", ("P0_base",))
 
 
-def test_d2_s3b_cancel_with_fee_acknowledged_is_allowed(pep2):
-    d = decide(pep2, req("reservation_manage", cancel_fee_cents=2500, cancel_fee_acknowledged=True), ENTITIES)
-    assert d == Decision("allow", ("P0_base",))
+def test_s5_free_cancel_view_and_modify_need_no_read_back(pep2):
+    assert decide(pep2, req("reservation_manage"), ENTITIES).kind == "allow"
 
 
-def test_d2_s3b_free_cancel_view_and_modify_need_no_step_up(pep2):
-    assert decide(pep2, req("reservation_manage", cancel_fee_cents=0), ENTITIES).kind == "allow"
+def test_s5_does_not_apply_to_a_hold(pep2):
+    assert decide(pep2, req("reservation_hold", read_back_required=True), ENTITIES).kind == "allow"
 
 
-def test_d2_s3b_only_applies_to_reservation_manage(pep2):
-    # A fee in the context of another action is irrelevant to S3b.
-    assert decide(pep2, req("reservation_hold", cancel_fee_cents=2500), ENTITIES).kind == "allow"
-
-
-def test_d2_s3b_unverified_agent_still_has_no_permit(pep2):
-    d = decide(pep2, req("reservation_manage", agent_tier="unverified", cancel_fee_cents=0), ENTITIES)
+def test_s5_unverified_agent_still_has_no_permit(pep2):
+    d = decide(pep2, req("reservation_manage", agent_tier="unverified"), ENTITIES)
     assert d == Decision("deny", ("no_permit",))
 
 

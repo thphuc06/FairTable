@@ -5,7 +5,7 @@
 * Cedar decides; the DynamoDB conditions inside the transaction are the final guarantee under
   concurrency (docs/DECISIONS.md D-008).
 * The transaction holds the tool's own changes plus the idempotency record and the audit entry, so
-  a stored key always means "this really happened". Denied, step-up and failed calls store no key.
+  a stored key always means "this really happened". Denied and failed calls store no key.
 * Business code stays in the operation objects (one per tool, added in batch C); this module only
   orders the steps.
 """
@@ -26,7 +26,7 @@ from server.domain.idempotency import (
 )
 from server.domain.models import Identity
 from server.domain.tool_names import ToolName
-from server.kernel import Decision, DecisionKind, PolicyContext, VenueRef, deny_to_error
+from server.kernel import Decision, PolicyContext, VenueRef, deny_to_error
 from server.store import Store, TransactionCancelled, TxOp
 from server.telemetry import annotate, annotate_decision
 from server.tools.common import AppDeps
@@ -62,22 +62,8 @@ class WriteOperation(Protocol):
     def plan(self, store: Store, identity: Identity, now_iso: str, decision: Decision) -> WritePlan:
         ...
 
-    def approval_request(self):
-        """What the user must approve when PEP-2 asks for step-up (a consent.ApprovalRequest)."""
-
     def explain_cancel(self, failed: list[int], exc: TransactionCancelled) -> FairTableError:
         """Turn 'operation i failed' (indexes into ``plan().ops``) into SLOT_TAKEN, POLICY_DENIED..."""
-
-
-class StepUpRequired(Exception):
-    """PEP-2 says the user must approve first. The tool layer turns this into -32042 or a
-    ``consent_url`` result (docs/DECISIONS.md D-016)."""
-
-    def __init__(self, decision: Decision, op: WriteOperation, identity: Identity) -> None:
-        super().__init__(f"step-up required by {', '.join(decision.rule_ids)}")
-        self.decision = decision
-        self.op = op
-        self.identity = identity
 
 
 def _iso(deps: AppDeps) -> str:
@@ -138,6 +124,9 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
     record = deps.store.get_idempotency(identity.sub, key)
     if is_replay(record, digest):
         assert record is not None
+        stale = getattr(op, "replay_is_stale", None)
+        if stale is not None and stale(deps.store, record, now_iso):
+            raise conflict()  # the key belongs to an earlier attempt that is over: ask for a new key, do not replay it
         return _replayed(record)
 
     # 3. Facts, then PEP-2 (stateful). Any refusal here re-checks the key once (see _late_replay).
@@ -152,16 +141,12 @@ def run_write(deps: AppDeps, identity: Identity, op: WriteOperation, idempotency
         action=op.tool, diner_id=identity.sub, venue=facts.venue, ctx=facts.ctx
     )
     annotate_decision("pep2", pep2)
-    if pep2.kind is not DecisionKind.ALLOW:
+    if not pep2.allowed:
         late = _late_replay(deps, identity, key, digest)
         if late is not None:
             return late
-    if pep2.kind is DecisionKind.DENY:
         _audit_quietly(deps, _audit(deps, identity, op, "deny", pep2.rule_ids))
         raise deny_to_error(pep2)
-    if pep2.kind is DecisionKind.STEP_UP:
-        _audit_quietly(deps, _audit(deps, identity, op, "step_up", pep2.rule_ids))
-        raise StepUpRequired(pep2, op, identity)
 
     # 4. One transaction: the tool's writes + idempotency record + audit entry.
     try:

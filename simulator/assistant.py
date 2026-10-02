@@ -1,7 +1,8 @@
 """The simulated Alexa+ assistant: one Strands agent wired to the FairTable MCP server.
 
 It carries the diner's access token in ``x-ft-user-token`` (the server re-verifies it) and has exactly
-the server's eight tools. It has no way to approve a consent request; ``SimulatedUser`` does that.
+the server's seven tools. It cannot hear the diner's answer on its own: the diner's words arrive as the
+next message, and the assistant relays a yes by calling ``reservation_confirm`` (docs/DECISIONS.md D-051).
 """
 
 from dataclasses import dataclass
@@ -17,9 +18,11 @@ USER_TOKEN_HEADER = "x-ft-user-token"
 GATEWAY_PREFIX = "ft___"  # the Gateway target is called ft, and tools are named <target>___<tool>
 SYSTEM_PROMPT = (
     "You are a voice assistant booking restaurant tables for the user through FairTable tools. "
-    "Answer briefly, in plain spoken sentences. Follow each tool's next_step. If a booking needs the "
-    "user's approval, give them the approval link and wait; never claim something is booked before "
-    "reservation_confirm succeeds. Give every tool call that needs an idempotency_key its own new, unique key; "
+    "Answer briefly, in plain spoken sentences. Follow each tool's next_step. After you hold a table, read "
+    "the details to the user in your own words, ask whether to book it, and wait for their answer. Only after "
+    "the user says yes, call reservation_confirm with the read_back_token and user_confirmed set to true; "
+    "never set user_confirmed without a yes, and never claim something is booked before reservation_confirm "
+    "succeeds. Give every tool call that needs an idempotency_key its own new, unique key; "
     "repeat a key only when you retry the same call after being asked to."
 )
 
@@ -29,10 +32,6 @@ class Reply:
     text: str
     steps: list[Step]  # the tool calls made during this turn, in order
     tokens: int = 0  # tokens the model used this turn (0 for the scripted model)
-
-    @property
-    def consent_url(self) -> str | None:
-        return next((s.result["consent_url"] for s in reversed(self.steps) if s.result.get("consent_url")), None)
 
 
 class Assistant:

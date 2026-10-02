@@ -1,6 +1,6 @@
 id: adv-unverified-agent-books
 category: ADV
-description: An agent that is not verified tries to book for Alice; reading is allowed, writing is not.
+description: "An agent that is not verified tries to book for Alice; reading is allowed, writing is not."
 user: alice
 agent: shady-agent
 goal: {kind: book, restaurant: luna, day_offset: 2, time: "19:00", party_size: 2}

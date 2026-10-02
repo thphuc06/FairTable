@@ -34,7 +34,7 @@ def test_a_span_carries_the_tool_and_only_allowed_attributes(spans):
     assert span.name == "fairtable.tool reservation_hold"
 
 
-@pytest.mark.parametrize("name", ["sub", "token", "slot_token", "idempotency_key", "consent_url", "message", "username"])
+@pytest.mark.parametrize("name", ["sub", "token", "offer_id", "idempotency_key", "consent_url", "message", "username"])
 def test_an_attribute_that_is_not_on_the_allow_list_is_refused(spans, name):
     with telemetry.tool_span("x"), pytest.raises(ValueError, match="allow-list"):
         telemetry.annotate(**{name: "value"})
@@ -44,10 +44,10 @@ def test_the_names_with_a_dot_are_written_with_underscores(spans):
     identity = Identity(sub="dev-alice", username="diner-alice", agent_tier="verified")
     with telemetry.tool_span("x"):
         telemetry.annotate_caller(identity)
-        telemetry.annotate_decision("pep2", Decision(DecisionKind.STEP_UP, ("S3_confirm_needs_mandate",), "pep2"))
+        telemetry.annotate_decision("pep2", Decision(DecisionKind.DENY, ("S5b_confirm_needs_the_diners_answer",), "pep2"))
     a = attrs(spans)
     assert a["fairtable.caller.kind"] == "user" and a["fairtable.caller.agent_tier"] == "verified"
-    assert a["fairtable.pep2.decision"] == "step_up" and list(a["fairtable.pep2.rule_ids"]) == ["S3_confirm_needs_mandate"]
+    assert a["fairtable.pep2.decision"] == "deny" and list(a["fairtable.pep2.rule_ids"]) == ["S5b_confirm_needs_the_diners_answer"]
     assert "dev-alice" not in str(a) and "diner-alice" not in str(a)  # who the caller is never appears
 
 

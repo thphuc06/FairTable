@@ -24,8 +24,6 @@ def seed_store(store: Store, clock: Clock, subs: Mapping[str, str],
     for venue in data.venues:
         store.put_venue(venue)
     store.put_slots(list(data.slots))
-    for mandate in data.mandates:
-        store.put_mandate(mandate)
     provider = seeds or LocalSeedProvider()
     for spec in data.drops:
         create_drop(store, provider, spec)

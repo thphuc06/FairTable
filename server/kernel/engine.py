@@ -4,7 +4,7 @@ Verified against cedarpy 4.12.1 (docs/PLAN.md section 3a): reasons come back as 
 the index of the policy in the exact text that was parsed, so the ``policyN -> (@id, @on_deny)``
 table is built from that same text through ``policies_to_json_str``, never by position in a file.
 
-Priority: deny > step_up > allow. No matching permit is a deny (``no_permit``). Any evaluation
+A forbid that matches is a deny. No matching permit is a deny (``no_permit``). Any evaluation
 error is a deny too (``policy_error``): a Cedar forbid whose condition errors is skipped, which
 would otherwise let a permit win (design section 6.1).
 """
@@ -20,7 +20,7 @@ import cedarpy
 
 NO_PERMIT = "no_permit"
 POLICY_ERROR = "policy_error"
-ON_DENY_VALUES = frozenset({"deny", "step_up"})
+ON_DENY_VALUES = frozenset({"deny"})
 
 
 class PolicyLoadError(Exception):
@@ -30,7 +30,6 @@ class PolicyLoadError(Exception):
 class DecisionKind(StrEnum):
     ALLOW = "allow"
     DENY = "deny"
-    STEP_UP = "step_up"
 
 
 @dataclass(frozen=True)
@@ -77,7 +76,7 @@ def _parse_rules(text: str) -> dict[str, Rule]:
         effect = pol["effect"]
         on_deny = ann.get("on_deny")
         if effect == "forbid" and on_deny not in ON_DENY_VALUES:
-            raise PolicyLoadError(f"{rule_id}: forbid needs @on_deny(\"deny\"|\"step_up\")")
+            raise PolicyLoadError(f"{rule_id}: forbid needs @on_deny(\"deny\")")
         if effect == "permit" and on_deny is not None:
             raise PolicyLoadError(f"{rule_id}: permit must not have @on_deny")
         rules[policy_id] = Rule(policy_id, rule_id, effect, on_deny)
@@ -123,11 +122,4 @@ class PolicyBundle:
             return Decision(DecisionKind.ALLOW, tuple(sorted(r.rule_id for r in rules)), self.name)
         if not rules:
             return Decision(DecisionKind.DENY, (NO_PERMIT,), self.name)
-        denies = sorted(r.rule_id for r in rules if r.on_deny == "deny")
-        if denies:
-            return Decision(DecisionKind.DENY, tuple(denies), self.name)
-        return Decision(
-            DecisionKind.STEP_UP,
-            tuple(sorted(r.rule_id for r in rules if r.on_deny == "step_up")),
-            self.name,
-        )
+        return Decision(DecisionKind.DENY, tuple(sorted(r.rule_id for r in rules)), self.name)

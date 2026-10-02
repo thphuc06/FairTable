@@ -105,12 +105,12 @@ async def test_availability_returns_signed_slots_bound_to_the_caller(world, cloc
     assert all(s["table_seats"] >= 4 for s in body["slots"])  # the T2 tables are not offered
     assert "6:00 PM" in body["spoken_summary"] and body["next_step"]["tool"] == "reservation_hold"
     first = body["slots"][0]
-    claims = world.deps.slot_codec.verify(first["slot_token"], sub="dev-alice")
+    claims = world.deps.offers.verify(first["offer_id"], sub="dev-alice")
     assert (claims.restaurant_id, claims.date, claims.party_size) == ("luna-trattoria", day, 4)
     # the token is useless to someone else
     with pytest.raises(Exception) as exc:
-        world.deps.slot_codec.verify(first["slot_token"], sub="dev-bob")
-    assert exc.value.code.value == "INVALID_SLOT_TOKEN"
+        world.deps.offers.verify(first["offer_id"], sub="dev-bob")
+    assert exc.value.code.value == "INVALID_OFFER"
 
 
 async def test_hot_and_drop_slots_are_flagged(world, clock):
@@ -205,48 +205,6 @@ async def test_rate_limit_is_per_user_and_per_restaurant_and_recovers(world, clo
     assert not again.isError and second.isError
 
 
-# ---------------------------------------------------------------- mandate_status
-async def test_alice_sees_her_luna_mandate(world):
-    body = (await call(world.as_("alice"), "mandate_status", restaurant_id="luna-trattoria")).structuredContent
-    assert body["mandate_state"] == "active"
-    assert body["scope"]["party_size_max"] == 4 and body["scope"]["time_window"] == "17:00-22:00"
-    assert any("larger than 4" in c for c in body["needs_approval_when"])
-    assert "up to 4 people" in body["spoken_summary"]
-
-
-async def test_no_mandate_means_every_booking_needs_approval(world):
-    r = await call(world.as_("bob"), "mandate_status", restaurant_id="luna-trattoria")
-    body = r.structuredContent
-    assert not r.isError and body["mandate_state"] == "none" and body["needs_approval_when"] == ["always"]
-    assert "approval" in body["spoken_summary"]
-
-
-async def test_a_mandate_without_auto_confirm_says_so(world):
-    body = (await call(world.as_("carol"), "mandate_status", restaurant_id="ember-grill")).structuredContent
-    assert body["needs_approval_when"][0].startswith("any booking")
-
-
-async def test_expired_and_revoked_mandates_count_as_inactive(world, clock):
-    from dataclasses import replace
-
-    mandate = world.store.get_mandate("dev-alice", "luna-trattoria")
-    world.store.put_mandate(replace(mandate, status="revoked"))
-    body = (await call(world.as_("alice"), "mandate_status", restaurant_id="luna-trattoria")).structuredContent
-    assert body["mandate_state"] == "inactive"
-    world.store.put_mandate(replace(mandate, expires_at="2026-10-01T11:00:00Z"))
-    body = (await call(world, "mandate_status", restaurant_id="luna-trattoria")).structuredContent
-    assert body["mandate_state"] == "inactive"
-
-
-async def test_mandate_status_for_an_unknown_restaurant_is_not_found(world):
-    assert_error(await call(world.as_("alice"), "mandate_status", restaurant_id="nowhere"), "NOT_FOUND")
-
-
-async def test_a_bot_has_no_mandates(world):
-    body = (await call(world.as_("bot"), "mandate_status", restaurant_id="luna-trattoria")).structuredContent
-    assert body["mandate_state"] == "none"
-
-
 # ---------------------------------------------------------------- logging
 class _Capture:
     """Collect log records from FastMCP's logger tree (it may not propagate to the root logger)."""
@@ -270,10 +228,12 @@ class _Capture:
 async def test_expected_refusals_do_not_produce_error_logs_but_real_bugs_do(world):
     with _Capture() as expected:
         await call(world.as_(None), "restaurant_search")  # UNAUTHENTICATED: routine
-        await call(world.as_("alice"), "mandate_status", restaurant_id="nowhere")  # NOT_FOUND: routine
+        await call(world.as_("alice"), "availability_check", restaurant_id="nowhere", date="2026-10-03",
+                   party_size=2)  # NOT_FOUND: routine
     assert [r for r in expected.records if r.levelno >= 40 or r.exc_info] == []
 
     world.deps.store.get_venue = lambda _id: 1 / 0  # a genuine bug must stay loud
     with _Capture() as bug:
-        await call(world.as_("alice"), "mandate_status", restaurant_id="luna-trattoria")
+        await call(world.as_("alice"), "availability_check", restaurant_id="luna-trattoria", date="2026-10-03",
+                   party_size=2)
     assert [r for r in bug.records if r.levelno >= 40]

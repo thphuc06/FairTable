@@ -1,0 +1,6 @@
+id: happy-sakura-carol-two
+category: HAPPY
+description: "Carol books the counter for a later seating."
+user: carol
+goal: {kind: book, restaurant: sakura, day_offset: 6, time: "19:30", party_size: 2}
+expect: {reservations: 1, active_holds: 0}

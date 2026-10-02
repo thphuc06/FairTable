@@ -14,7 +14,7 @@ pytestmark = pytest.mark.ddb
 # The attacks only the policy layer stops: an open store lets them through (D-027). The others are held by
 # token verification, the rate limiter or the database's own conditions, in every configuration.
 POLICY_ONLY_A0 = {"RT1", "RT3", "RT5", "RT8"}
-POLICY_ONLY_A2 = {"RT5"}  # without step-up only the silent-confirm attack gets through
+POLICY_ONLY_A2 = {"RT5"}  # without the voice guards only the confirm-without-a-read-back attack gets through
 
 
 @pytest.fixture(scope="module")

@@ -1,0 +1,6 @@
+id: adv-carol-holds-next-weeks-drop-seat
+category: ADV
+description: "Carol's assistant tries the second Friday's Fair Drop seat by hold."
+user: carol
+goal: {kind: book, restaurant: sakura, day_offset: 8, time: "20:00", party_size: 2, behaviour: hot_direct}
+expect: {reservations: 0, active_holds: 0, refused_by: [S4_drop_slots_via_waitlist]}

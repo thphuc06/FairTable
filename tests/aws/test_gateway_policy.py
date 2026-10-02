@@ -17,7 +17,7 @@ from test_runtime_smoke import cognito  # noqa: F401
 import test_tokens as tokens
 
 pytestmark = pytest.mark.aws
-READS = {"restaurant_search", "availability_check", "mandate_status", "waitlist_status"}
+READS = {"restaurant_search", "availability_check", "waitlist_status"}
 WRITES = TOOLS - READS
 
 
@@ -78,7 +78,7 @@ async def test_the_unverified_agent_sees_only_the_reads(gateway, cognito, enforc
 @pytest.mark.asyncio
 async def test_a_write_by_the_unverified_agent_is_refused_at_the_gateway(gateway, cognito, enforcing):  # noqa: F811
     token = tokens.sign_in(cognito, "shady-agent", "diner-bob")
-    assert await refused(gateway, token, "reservation_hold", slot_token="x", idempotency_key="gw-policy-00001")
+    assert await refused(gateway, token, "reservation_hold", offer_id="x", idempotency_key="gw-policy-00001")
 
 
 @pytest.mark.asyncio

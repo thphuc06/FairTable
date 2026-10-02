@@ -28,7 +28,7 @@ SCHEMA = (ROOT / "infra" / "gateway" / "policies" / "local.cedarschema").read_te
 POLICIES = gp.policy_files()
 RENDERED = {name: gp.render(text, GATEWAY) for name, text in POLICIES.items()}
 POLICY_SET = "\n".join(RENDERED[n] for n in sorted(RENDERED))
-READS = {ToolName.RESTAURANT_SEARCH, ToolName.AVAILABILITY_CHECK, ToolName.MANDATE_STATUS, ToolName.WAITLIST_STATUS}
+READS = {ToolName.RESTAURANT_SEARCH, ToolName.AVAILABILITY_CHECK, ToolName.WAITLIST_STATUS}
 WRITES = set(ToolName) - READS
 HAS_PARTY_SIZE = {ToolName.RESTAURANT_SEARCH, ToolName.AVAILABILITY_CHECK, ToolName.WAITLIST_WATCH}
 # What the gateway cannot see: these tools take a slot token or an id, so a party above 10 is the server's to refuse.

@@ -2,7 +2,7 @@
 
 A person signs in to the web pages through Cognito, chats with the simulated assistant, whose requests go to the
 AgentCore Gateway with a bearer token and on to the MCP server on Runtime and DynamoDB; when a booking needs the
-person's approval, they approve it on the consent page (the same sign-in), tell the assistant, and it finishes.
+person's yes, typed in the chat, and it finishes.
 
 Opt-in: ``pytest -m aws tests/aws/test_demo_flow.py`` after ``cdk deploy FairTableGateway`` and ``seed``. The web
 pages run in-process here (in a browser they are ``python -m web`` with the same settings); every call to Cognito,
@@ -11,6 +11,7 @@ the Gateway, the Runtime and DynamoDB is real. Bookings made here are cancelled 
 
 import random
 import re
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -121,8 +122,11 @@ async def test_a_diner_signs_in_with_cognito_and_books_by_chatting_through_the_g
     try:
         sign_in(client, "diner-alice")
         html = say(client, f"Book a table at Luna Trattoria for 2 on {fresh_day()} at 7pm")
+        assert "Assistant:" in html and "shall i book it" in html.lower(), html[html.find("Book a table"):][:1500]
+        time.sleep(4)  # the diner answers: longer than the server's 3 s pause (real time on AWS)
+        html = say(client, "Yes, please")
         reply = html[html.find("Book a table"):][:1500]
-        assert "Assistant:" in html and "booked" in html.lower(), reply
+        assert "booked" in html.lower(), reply
         assert "restaurant_search" in html and "ft___" not in html  # the steps list shows the server's own names
         assert len(web["store"].reservations_of_user(sub_of(cognito, "diner-alice"))) >= 1
     finally:
@@ -130,18 +134,15 @@ async def test_a_diner_signs_in_with_cognito_and_books_by_chatting_through_the_g
 
 
 @pytest.mark.asyncio
-async def test_a_booking_outside_the_permission_is_approved_on_the_consent_page_with_the_same_sign_in(web, gateway, cognito):  # noqa: F811
+async def test_every_diner_books_by_saying_yes_and_there_is_no_approval_page(web, gateway, cognito):  # noqa: F811
     client = browser(web)
     try:
         sign_in(client, "diner-bob")
         html = say(client, f"Book a table at Luna Trattoria for 2 on {fresh_day()} at 7pm")
-        link = re.search(r"href='(http://localhost:8080(/consent/[A-Za-z0-9_-]+))'", html)
-        assert link, f"the assistant should hand over an approval link (step-up through the Gateway); it said: {html[html.find("Book a table"):][:1800]}"
-        page = client.get(link.group(2))
-        assert page.status_code == 200 and "Approve" in page.text
-        decision = client.post(f"{link.group(2)}/decision", data={"decision": "approve", "csrf": csrf_of(page.text)})
-        assert decision.status_code == 303
-        html = say(client, "I approved it")
+        assert "shall i book it" in html.lower() and "/consent/" not in html, html[html.find("Book a table"):][:1800]
+        assert client.get("/consent/anything").status_code == 404
+        time.sleep(4)
+        html = say(client, "Yes, please")
         assert "booked" in html.lower()
     finally:
         await cancel_all(web, gateway, cognito, "diner-bob")

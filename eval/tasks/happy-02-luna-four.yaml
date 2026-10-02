@@ -1,0 +1,6 @@
+id: happy-luna-bob-four
+category: HAPPY
+description: "Bob books a table for four at Luna after the details are read back."
+user: bob
+goal: {kind: book, restaurant: luna, day_offset: 4, time: "18:30", party_size: 4}
+expect: {reservations: 1, active_holds: 0}

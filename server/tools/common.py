@@ -9,9 +9,10 @@ from fastmcp.server.dependencies import get_http_headers
 from server.config import Settings
 from server.domain.clock import Clock
 from server.domain.models import Identity
-from server.domain.slot_token import SlotTokenCodec
+from server.domain.readback import ReadBackCodec
 from server.domain.tool_names import ToolName
 from server.identity import TokenVerifier
+from server.offers import OfferBook
 from server.kernel import TrustKernel, deny_to_error
 from server.notify import DevInboxNotifier, Notifier
 from server.ratelimit import RateLimiter
@@ -26,7 +27,8 @@ class AppDeps:
     store: Store
     verifier: TokenVerifier
     kernel: TrustKernel
-    slot_codec: SlotTokenCodec
+    offers: OfferBook
+    readback_codec: ReadBackCodec
     limiter: RateLimiter
     # Where request headers come from. Tests swap it to drive the tools in-process.
     header_provider: Callable[[], Mapping[str, str]] = get_http_headers

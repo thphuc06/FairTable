@@ -18,27 +18,23 @@ from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
 from server.domain.audit import AuditEntry
-from server.domain.booking import Approval, Hold, Reservation
+from server.domain.booking import Hold, Reservation
 from server.domain.fairdrop import Drop, DropEntry
 from server.domain.idempotency import IdempotencyRecord
-from server.domain.models import MANDATE_ACTIVE, MANDATE_REVOKED, Mandate, Slot, Venue
+from server.domain.models import Slot, Venue
 from server.domain.waitlist import Watch
 from server.store import keys
 from server.store.mappers import (
-    approval_to_item,
     drop_to_item,
     entry_to_item,
     hold_to_item,
-    item_to_approval,
     item_to_drop,
     item_to_entry,
     item_to_hold,
-    item_to_mandate,
     item_to_reservation,
     item_to_slot,
     item_to_venue,
     item_to_watch,
-    mandate_to_item,
     plain,
     reservation_to_item,
     slot_to_item,
@@ -282,38 +278,6 @@ class Store:
         item = self.get_item(keys.slot(venue_id, date, time_, table_group))
         return item_to_slot(item) if item else None
 
-    def mandates_of_user(self, sub: str) -> list[Mandate]:
-        """Every standing permission the user ever gave (active, revoked or expired)."""
-        items = self.query(keys.mandate(sub, "x").pk, sk_prefix="MANDATE#", consistent=True)
-        return [item_to_mandate(i) for i in items]
-
-    @staticmethod
-    def mandate_grant_op(mandate: Mandate, now_iso: str) -> TxOp:
-        """Store a new permission, but never over a live one (an active, unexpired mandate is kept)."""
-        return TxOp(
-            "Put", item=mandate_to_item(mandate),
-            condition="attribute_not_exists(PK) OR #st <> :active OR expires_at <= :now",
-            names={"#st": "status"}, values={":active": MANDATE_ACTIVE, ":now": now_iso},
-        )
-
-    @staticmethod
-    def mandate_revoke_op(sub: str, venue_id: str, now_iso: str) -> TxOp:
-        """Revoke a live permission (the version goes up by one). Fails if it is not active."""
-        k = keys.mandate(sub, venue_id)
-        return TxOp(
-            "Update", key={"PK": k.pk, "SK": k.sk}, update="SET #st = :revoked, revoked_at = :now ADD #ver :one",
-            condition="#st = :active AND expires_at > :now",
-            names={"#st": "status", "#ver": "version"},
-            values={":revoked": MANDATE_REVOKED, ":active": MANDATE_ACTIVE, ":one": 1, ":now": now_iso},
-        )
-
-    def put_mandate(self, mandate: Mandate) -> None:
-        self.put_item(mandate_to_item(mandate))
-
-    def get_mandate(self, sub: str, venue_id: str) -> Mandate | None:
-        item = self.get_item(keys.mandate(sub, venue_id))
-        return item_to_mandate(item) if item else None
-
     def put_slots(self, slots: list[Slot]) -> None:
         self.batch_put([slot_to_item(s) for s in slots])
 
@@ -372,7 +336,7 @@ class Store:
                 return items
             params["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
-    # ------------------------------------------------------------------ holds, reservations, approvals
+    # ------------------------------------------------------------------ holds and reservations
     def get_hold(self, hold_id: str) -> Hold | None:
         item = self.get_item(keys.hold(hold_id))
         return item_to_hold(item) if item else None
@@ -403,21 +367,6 @@ class Store:
     def reservations_of_user(self, sub: str) -> list[Reservation]:
         items = self.query(keys.user_partition(sub), sk_prefix="RES#", index=keys.GSI2)
         return [item_to_reservation(i) for i in items]
-
-    def get_approval(self, subject_id: str) -> Approval | None:
-        item = self.get_item(keys.approval(subject_id))
-        return item_to_approval(item) if item else None
-
-    def put_approval_if_absent(self, approval: Approval) -> bool:
-        """True when created; False when an approval for this subject already exists."""
-        try:
-            self.put_item(approval_to_item(approval), condition="attribute_not_exists(PK)")
-            return True
-        except ConditionFailed:
-            return False
-
-    def replace_approval(self, approval: Approval) -> None:
-        self.put_item(approval_to_item(approval))
 
     def put_inbox(self, sub: str, timestamp: str, message_id: str, message: dict[str, Any]) -> None:
         k = keys.inbox(sub, timestamp, message_id)

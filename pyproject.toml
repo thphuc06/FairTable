@@ -23,6 +23,7 @@ dependencies = [
 web = ["fastapi", "uvicorn", "mangum"]
 sim = ["strands-agents==1.57.1", "openai>=1.68,<3"]   # openai: only for MODEL_PROVIDER=deepseek (Strands' OpenAIModel imports it)
 eval = ["pyyaml"]   # task files for the evaluation harness (strands-agents already depends on it)
+voice = ["strands-agents[bidi]==1.57.1", "websockets"]   # the voice page (Amazon Nova 2 Sonic, D-052): AWS only, never in the Docker image
 tasks = ["pydocket>=0.20.0"]   # optional MCP Tasks view (D-010), default off
 dev = ["pytest", "pytest-asyncio", "httpx", "ruff"]
 

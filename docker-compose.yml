@@ -1,7 +1,7 @@
 # The local profile that judges run:   docker compose up --build
 # Needs Docker only: no AWS account, no model account. Everything listens on 127.0.0.1.
 #
-#   http://localhost:8080   web: chat with the simulated assistant, consent page, owner console
+#   http://localhost:8080   web: chat with the simulated assistant, owner console
 #   http://localhost:8000/mcp   the MCP server (Streamable HTTP, header x-ft-user-token)
 #   http://localhost:9000   dev token issuer (stands in for Cognito)
 #   http://localhost:8001   DynamoDB Local (for the eval harness and the -m ddb tests)
@@ -60,7 +60,6 @@ services:
       <<: [*store, *auth]
       MCP_HOST: 0.0.0.0
       MCP_ALLOWED_HOSTS: localhost,127.0.0.1,server
-      CONSENT_BASE_URL: http://localhost:8080
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test: ["CMD", "python", "scripts/healthcheck.py", "http://127.0.0.1:8000/mcp", "--any-status"]
@@ -77,7 +76,6 @@ services:
     environment:
       <<: [*store, *auth]
       WEB_HOST: 0.0.0.0
-      CONSENT_BASE_URL: http://localhost:8080
       AUTH_TOKEN_URL: http://devauth:9000/token   # sign-in goes to the issuer by its service name
       MCP_URL: http://server:8000/mcp             # the chat's assistant reaches the server the same way
       MODEL_PROVIDER: ${MODEL_PROVIDER:-mock}

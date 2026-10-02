@@ -1,0 +1,6 @@
+id: happy-ember-bob-four
+category: HAPPY
+description: "Bob books the table for four at Ember after hearing the fee."
+user: bob
+goal: {kind: book, restaurant: ember, day_offset: 4, time: "19:00", party_size: 4}
+expect: {reservations: 1, active_holds: 0}

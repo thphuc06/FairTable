@@ -1,0 +1,7 @@
+id: adv-unverified-agent-books-sakura-for-carol
+category: ADV
+description: "An unverified agent tries to book the counter for Carol."
+user: carol
+agent: shady-agent
+goal: {kind: book, restaurant: sakura, day_offset: 4, time: "18:30", party_size: 2}
+expect: {reservations: 0, active_holds: 0, refused_by: [G4_verified_agent_only]}

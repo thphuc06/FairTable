@@ -1,0 +1,6 @@
+id: happy-sakura-bob-two
+category: HAPPY
+description: "Bob books the Japanese counter on an ordinary day."
+user: bob
+goal: {kind: book, restaurant: sakura, day_offset: 4, time: "18:30", party_size: 2}
+expect: {reservations: 1, active_holds: 0}

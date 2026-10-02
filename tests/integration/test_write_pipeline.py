@@ -19,7 +19,7 @@ from server.domain.models import Identity
 from server.domain.output import success
 from server.domain.tool_names import ToolName
 from server.kernel import Decision, PolicyContext, VenueRef
-from server.pipeline import StepUpRequired, WriteFacts, WritePlan, run_write
+from server.pipeline import WriteFacts, WritePlan, run_write
 from server.store import Store, TransactionCancelled, TxOp, keys
 
 pytestmark = pytest.mark.ddb
@@ -36,7 +36,7 @@ class FakeHold:
     party_size: int
     hold_id: str
     tool: ToolName = ToolName.RESERVATION_HOLD
-    mandate_covers: bool = True
+    read_back_ok: bool = True  # for a confirm: the terms were read back, the pause passed, the diner said yes
 
     def params(self) -> dict[str, Any]:
         return {"venue": self.venue_id, "date": self.date, "time": self.time, "group": self.group,
@@ -52,9 +52,9 @@ class FakeHold:
                 agent_tier=identity.agent_tier or "none",
                 active_holds_user_venue=int(counter["n"]) if counter else 0,
                 agent_covers_booked=0, party_size=self.party_size,
-                mandate_covers_booking=self.mandate_covers,
                 slot_is_drop_controlled=slot.drop_controlled,
-                cancel_fee_cents=0, cancel_fee_acknowledged=False,
+                read_back_required=self.tool is ToolName.RESERVATION_CONFIRM,
+                read_back_matches=self.read_back_ok, pause_elapsed=self.read_back_ok, user_confirmed=self.read_back_ok,
             ),
         )
 
@@ -192,13 +192,13 @@ def test_drop_controlled_slots_cannot_be_held_directly(world):
     assert exc.value.code is ErrorCode.DROP_CONTROLLED and exc.value.rule_id == "S4_drop_slots_via_waitlist"
 
 
-def test_step_up_is_signalled_and_stores_nothing(world):
-    op = hold(world, tool=ToolName.RESERVATION_CONFIRM, mandate_covers=False)
-    with pytest.raises(StepUpRequired) as exc:
+def test_a_voice_guard_refusal_stores_no_key_and_is_audited(world):
+    op = hold(world, tool=ToolName.RESERVATION_CONFIRM, read_back_ok=False)
+    with pytest.raises(FairTableError) as exc:
         run_write(world.deps, who(world), op, KEY)
-    assert exc.value.decision.rule_ids == ("S3_confirm_needs_mandate",)
+    assert exc.value.code is ErrorCode.CONFIRMATION_REQUIRED and exc.value.rule_id == "S5a_confirm_needs_read_back"
     assert world.store.get_idempotency("dev-alice", KEY) is None and slot_of(world).status == "open"
-    assert [e["decision"] for e in audit_of(world)] == ["step_up"]
+    assert [e["decision"] for e in audit_of(world)] == ["deny"]
 
 
 def test_a_lost_race_for_the_slot_is_slot_taken_and_leaves_no_trace(world):

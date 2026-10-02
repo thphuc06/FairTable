@@ -23,10 +23,10 @@ from server.domain.fairdrop import (
 )
 from server.domain.models import Identity, Slot
 from server.domain.output import success
-from server.domain.slot_token import SlotClaims
+from server.domain.offers import SlotClaims
 from server.domain.tool_names import ToolName
 from server.kernel import Decision, PolicyContext, VenueRef
-from server.ops.common import counter_value
+from server.ops.common import NO_READ_BACK, counter_value
 from server.ops.hold import HoldOperation
 from server.pipeline import WriteFacts, WritePlan
 from server.store import Store, TransactionCancelled, TxOp, keys
@@ -37,7 +37,7 @@ from server.tools.present import say_date, say_time
 def drop_closed() -> FairTableError:
     return FairTableError(
         ErrorCode.DROP_CLOSED, "This drop is closed for new entries.",
-        hint="The draw has been (or is being) run. Use waitlist_status with your ticket, or look for other slots.",
+        hint="The draw has been (or is being) run. Check the ticket's status, or look for other slots.",
     )
 
 
@@ -75,9 +75,9 @@ class DropEntryOperation:
                 agent_tier=identity.agent_tier or "none",
                 active_holds_user_venue=counter_value(store, keys.active_holds_counter(identity.sub, venue.venue_id)),
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(venue.venue_id, drop.date)),
-                party_size=self.party_size, mandate_covers_booking=True,
+                party_size=self.party_size,
                 slot_is_drop_controlled=False,  # entering is not holding: S4 guards direct holds only
-                cancel_fee_cents=0, cancel_fee_acknowledged=False,
+                **NO_READ_BACK,
             ),
         )
 
@@ -131,6 +131,7 @@ class DropWinHoldOperation(HoldOperation):
         super().__init__(deps, claims)
         self.drop, self.entry = drop, entry
         self.drop_exempt = True
+        self.ttl_s = deps.settings.drop_hold_ttl_s  # the winner is not in a conversation at draw time (D-054)
 
     def params(self) -> dict:
         return {**super().params(), "entry_id": self.entry.entry_id}

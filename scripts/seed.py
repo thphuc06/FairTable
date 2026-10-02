@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     data = seed_store(Store(client, config.table_name), SystemClock(), subs_for_env())
     print(
         f"{'created' if created else 'reused'} table {config.table_name}: "
-        f"{len(data.venues)} venues, {len(data.slots)} slots, {len(data.mandates)} mandates, {len(data.drops)} drops"
+        f"{len(data.venues)} venues, {len(data.slots)} slots, {len(data.drops)} drops"
     )
     return 0
 
