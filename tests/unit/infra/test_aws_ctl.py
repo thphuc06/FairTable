@@ -105,6 +105,9 @@ class FakeClient:
     def get_caller_identity(self):
         return {"Account": "123456789012"}
 
+    def list_buckets(self):
+        return {"Buckets": self.pages.get("buckets", [])}
+
     def get_trace_segment_destination(self):
         return self.pages.get("destination", {"Destination": "XRay"})
 
@@ -154,8 +157,10 @@ def test_the_inventory_lists_ours_and_ignores_everything_else():
         budgets=FakeClient(describe_budgets=[{"Budgets": [{"BudgetName": "fairtable-cap-150usd"},
                                                           {"BudgetName": "fairtable-5usd"}]}]),
         sts=FakeClient(),
+        s3=FakeClient(buckets=[{"Name": "fairtable-audit-123456789012-us-east-1"}, {"Name": "someone-elses-bucket"}]),
     )
     names = sorted(i.name for i in acct.inventory())
+    assert "fairtable-audit-123456789012-us-east-1" in names and "someone-elses-bucket" not in names
     assert "SomebodyElsesStack" not in names and "orders" not in names and "users" not in names
     assert "us-east-1_zzz (prod-users)" not in names and "billing-export" not in names and "prod/db" not in names
     assert "another_agent another_agent-y2" not in names and "FairTableRuntime-SlotTokenSecret-old" not in names

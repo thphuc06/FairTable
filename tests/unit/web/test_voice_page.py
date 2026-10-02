@@ -217,3 +217,21 @@ def test_a_second_call_for_the_same_account_is_refused_while_the_first_is_open()
         first.send_text('{"type": "stop"}')
         assert first.receive_json() == {"type": "closed"}
     assert not voice.is_open("sub-alice")
+
+
+def test_the_voice_page_has_lights_for_who_is_talking_and_its_script_drives_them():
+    client, _ = build(lambda token: FakeSession(token, []))
+    sign_in(client)
+    page = client.get("/voice").text
+    script = client.get("/voice/voice.js").text
+    for element in ("ind-you", "ind-bot", "level"):
+        assert f"id='{element}'" in page and f"$('{element}')" in script
+
+
+def test_the_tool_calls_sit_under_each_answer_not_in_one_list_at_the_end():
+    client, _ = build(lambda token: FakeSession(token, []))
+    sign_in(client)
+    page = client.get("/voice").text
+    script = client.get("/voice/voice.js").text
+    assert "id='steps'" not in page and ".stepsbox" in page
+    assert "turnBox" in script and "insertBefore(div, turnBox)" in script

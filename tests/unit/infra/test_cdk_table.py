@@ -54,7 +54,7 @@ def templates(tmp_path_factory):
     return {
         name: json.loads((out / f"{name}.template.json").read_text())
         for name in ("FairTableData", "FairTableBudget", "FairTableIdentity", "FairTableRuntime", "FairTableGateway",
-                     "FairTableNotify")
+                     "FairTableNotify", "FairTableWorkers")
     }
 
 
@@ -242,7 +242,8 @@ def test_the_execution_role_can_do_what_the_store_does_and_nothing_more(template
                   for s in p["Properties"]["PolicyDocument"]["Statement"]]
     actions = {a for s in statements for a in ([s["Action"]] if isinstance(s["Action"], str) else s["Action"])}
     assert "dynamodb:Scan" not in actions and "dynamodb:BatchWriteItem" not in actions
-    assert not {a for a in actions if a.startswith(("bedrock:", "s3:", "ecr:", "iam:", "secretsmanager:"))}
+    assert not {a for a in actions if a.startswith(("bedrock:", "ecr:", "iam:", "secretsmanager:"))}
+    assert {a for a in actions if a.startswith("s3:")} <= {"s3:PutObject"}  # the audit copies, write only (D-062)
     assert not {a for a in actions if a.endswith("*")}  # no wildcard actions
     (ddb,) = [s for s in statements if "dynamodb:GetItem" in s["Action"]]
     assert "dynamodb:ConditionCheckItem" in ddb["Action"]  # conditions inside TransactWriteItems need it
@@ -525,3 +526,48 @@ def test_everything_in_the_observability_stack_waits_for_transaction_search(tmp_
     search = next(k for k, v in template["Resources"].items() if v["Type"] == "AWS::XRay::TransactionSearchConfig")
     (destination,) = [v for v in template["Resources"].values() if v["Type"] == "AWS::Logs::DeliveryDestination"]
     assert search in destination["DependsOn"]
+
+
+def resources_of(template, kind):
+    return {k: v for k, v in template["Resources"].items() if v["Type"] == kind}
+
+
+def test_the_audit_bucket_is_private_encrypted_tls_only_and_named_by_the_account_at_deploy_time(templates):
+    (bucket,) = [v for v in resources_of(templates["FairTableData"], "AWS::S3::Bucket").values()]
+    props = bucket["Properties"]
+    assert props["PublicAccessBlockConfiguration"] == {
+        "BlockPublicAcls": True, "BlockPublicPolicy": True, "IgnorePublicAcls": True, "RestrictPublicBuckets": True}
+    assert props["BucketEncryption"]["ServerSideEncryptionConfiguration"][0]["ServerSideEncryptionByDefault"][
+        "SSEAlgorithm"] == "AES256"
+    # the name is built from the account and region of the deployment (the test's made-up ones), not written in the code
+    assert props["BucketName"] == "fairtable-audit-123456789012-us-east-1"
+    policy = json.dumps(resources_of(templates["FairTableData"], "AWS::S3::BucketPolicy"))
+    assert '"aws:SecureTransport": "false"' in policy or '"aws:SecureTransport":"false"' in policy
+    assert bucket["DeletionPolicy"] == "Delete"
+
+
+def test_the_runtime_may_only_put_audit_objects_under_the_drops_prefix(templates):
+    role = json.dumps(resources_of(templates["FairTableRuntime"], "AWS::IAM::Policy"))
+    assert "s3:PutObject" in role and "/drops/*" in role
+    runtime = next(iter(resources_of(templates["FairTableRuntime"], "AWS::BedrockAgentCore::Runtime").values()))
+    assert "AUDIT_BUCKET" in runtime["Properties"]["EnvironmentVariables"]
+
+
+def test_the_workers_run_every_minute_on_arm_with_one_instance_and_a_least_privilege_role(templates):
+    workers = templates["FairTableWorkers"]
+    (function,) = [v for v in resources_of(workers, "AWS::Lambda::Function").values()
+                   if v["Properties"].get("Handler") == "workers.handler.handler"]
+    props = function["Properties"]
+    assert props["Runtime"] == "python3.12" and props["Architectures"] == ["arm64"]
+    assert props["Timeout"] == 55 and "ReservedConcurrentExecutions" not in props  # the account limit is 10
+    env = props["Environment"]["Variables"]
+    assert {"TABLE_NAME", "SLOT_TOKEN_SECRET", "NOTIFY_TOPIC_ARN", "AUDIT_BUCKET"} <= set(env)
+    assert "AWS_REGION" not in env and "MCP_ALLOWED_HOSTS" not in env  # Lambda reserves the region
+    (schedule,) = resources_of(workers, "AWS::Scheduler::Schedule").values()
+    assert schedule["Properties"]["ScheduleExpression"] == "rate(1 minute)"
+    assert schedule["Properties"]["FlexibleTimeWindow"] == {"Mode": "OFF"}
+    actions = {a for p in resources_of(workers, "AWS::IAM::Policy").values()
+               for st in p["Properties"]["PolicyDocument"]["Statement"] for a in
+               ([st["Action"]] if isinstance(st["Action"], str) else st["Action"])}
+    assert "s3:PutObject" in actions and "sns:Publish" in actions and "dynamodb:Scan" not in actions
+    assert not any(a.endswith(":*") or a == "*" for a in actions)

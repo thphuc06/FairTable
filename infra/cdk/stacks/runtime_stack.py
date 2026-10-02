@@ -15,6 +15,7 @@ from aws_cdk import CfnOutput, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_bedrockagentcore as agentcore
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_s3_assets as s3_assets
 from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_sns as sns
@@ -40,6 +41,7 @@ class RuntimeStack(Stack):
         allowed_hosts: str | None = None,
         stateless: bool = True,
         notify_topic: sns.ITopic | None = None,
+        audit_bucket: s3.IBucket | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -100,6 +102,11 @@ class RuntimeStack(Stack):
         if notify_topic is not None:  # waitlist and Fair Drop notices (P3-12): publish only, to this one topic
             role.add_to_policy(iam.PolicyStatement(actions=["sns:Publish"], resources=[notify_topic.topic_arn]))
             environment["NOTIFY_TOPIC_ARN"] = notify_topic.topic_arn
+        if audit_bucket is not None:  # a copy of each Fair Drop audit (D-062): write only, under one prefix
+            role.add_to_policy(iam.PolicyStatement(actions=["s3:PutObject"], resources=[audit_bucket.arn_for_objects("drops/*")]))
+            environment["AUDIT_BUCKET"] = audit_bucket.bucket_name
+        self.worker_environment = dict(environment)  # what the background workers need as well (without the allowed hosts)
+        self.slot_secret = slot_secret
         if allowed_hosts:
             environment["MCP_ALLOWED_HOSTS"] = allowed_hosts
         if not stateless:

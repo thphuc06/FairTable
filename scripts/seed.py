@@ -2,6 +2,7 @@
 
     python scripts/seed.py            # uses TABLE_NAME / DDB_ENDPOINT_URL / AWS_REGION from the env
     python scripts/seed.py --reset    # drop and recreate the table first
+    SEED_PROVIDER=kms python scripts/seed.py   # draw the Fair Drop seeds with AWS KMS GenerateRandom (AWS profile)
 
 Local profile: point DDB_ENDPOINT_URL at DynamoDB Local; no AWS account is needed. Nothing here
 hard-codes an account, ARN or region.
@@ -16,6 +17,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from devauth.accounts import USERS_BY_NAME
 from server.domain.clock import SystemClock
+from server.domain.fairdrop import KmsSeedProvider, LocalSeedProvider
 from server.store import Store, StoreConfig, delete_table, ensure_table, make_client
 from server.store.seeding import seed_store
 
@@ -35,6 +37,17 @@ def subs_for_env(env=None) -> dict[str, str]:
 
     by_name = resolve_subs(boto3.client("cognito-idp"), pool_id, list(DINERS.values()))
     return {who: by_name[name] for who, name in DINERS.items()}
+
+
+def seed_provider(env=None):
+    """Where the secret seed of each Fair Drop comes from: this machine (default) or AWS KMS GenerateRandom
+    (`SEED_PROVIDER=kms`, the AWS profile: no key to manage, the random bytes come from the KMS hardware)."""
+    env = os.environ if env is None else env
+    if env.get("SEED_PROVIDER", "local").lower() == "kms":
+        import boto3
+
+        return KmsSeedProvider(boto3.client("kms"))
+    return LocalSeedProvider()
 
 
 def wait_for_database(client, seconds: int) -> None:
@@ -63,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.reset:
         delete_table(client, config.table_name)
     created = ensure_table(client, config.table_name)
-    data = seed_store(Store(client, config.table_name), SystemClock(), subs_for_env())
+    data = seed_store(Store(client, config.table_name), SystemClock(), subs_for_env(), seed_provider())
     print(
         f"{'created' if created else 'reused'} table {config.table_name}: "
         f"{len(data.venues)} venues, {len(data.slots)} slots, {len(data.drops)} drops"

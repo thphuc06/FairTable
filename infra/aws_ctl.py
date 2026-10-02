@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CDK_DIR = ROOT / "infra" / "cdk"
 
 # Destroy order: what depends on another stack goes first.
-STACKS = ("FairTableObservability", "FairTableGateway", "FairTableRuntime", "FairTableNotify", "FairTableIdentity",
-          "FairTableData")
+STACKS = ("FairTableObservability", "FairTableGateway", "FairTableWorkers", "FairTableRuntime", "FairTableNotify",
+          "FairTableIdentity", "FairTableData")
 BUDGET_STACK = "FairTableBudget"
 BOOTSTRAP_STACK = "CDKToolkit"
 
@@ -41,6 +41,8 @@ OWNED = {
     "policy_engine_prefix": "fairtable_engine",
     "log_prefixes": ("/aws/bedrock-agentcore/runtimes/fairtable_mcp-", "/aws/lambda/FairTable"),
     "secret_marker": "SlotTokenSecret",
+    "bucket_prefix": "fairtable-audit-",  # the Fair Drop audit copies (DataStack)
+    "schedule_prefix": "FairTableWorkers",
     "span_log_groups": ("aws/spans", "/aws/application-signals/data"),  # made by CloudWatch Transaction Search
     "budget_prefix": "fairtable-cap-",  # the stack names its budget like this; the developer's own budgets differ
 }
@@ -142,6 +144,8 @@ class Account:
         for page in self.fn.get_paginator("list_functions").paginate():
             items += [Item("function", f["FunctionName"], False, "stack:FairTableIdentity")
                       for f in page["Functions"] if f["FunctionName"].startswith(OWNED["function_prefix"])]
+        items += [Item("bucket", b["Name"], True, "stack:FairTableData")
+                  for b in self.s3.list_buckets().get("Buckets", []) if b["Name"].startswith(OWNED["bucket_prefix"])]
         for page in self.sm.get_paginator("list_secrets").paginate():
             items += [Item("secret", s["Name"], True, "stack:FairTableRuntime")
                       for s in page["SecretList"] if OWNED["secret_marker"] in s["Name"] and not s.get("DeletedDate")]
@@ -229,6 +233,8 @@ def cmd_up(account: Account, with_runtime: bool) -> int:
         if rc:
             return rc
     stacks = ["FairTableData", "FairTableIdentity"] + (["FairTableRuntime", "FairTableGateway"] if with_runtime else [])
+    if with_runtime and os.environ.get("WORKERS", "true").lower() != "false":
+        stacks.append("FairTableWorkers")
     if with_runtime and os.environ.get("NOTIFY_EMAIL"):
         stacks.insert(2, "FairTableNotify")  # the topic first: the Runtime reads its ARN
     if os.environ.get("BUDGET_EMAIL"):

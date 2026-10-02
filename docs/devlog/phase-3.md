@@ -25,19 +25,68 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 | Task | Batch | Status | Date | Note |
 |---|---|---|---|---|
 | P3-1 40-task set | A | done | 2026-10-02 | generator, 40 files, tests; 40 of 40 pass under A1 with the mock model (not yet a measure of quality: A0 and A2 not run) |
-| P3-10 Voice confirmation | A2 | in progress | 2026-10-02 | code, tests and docs done locally (D-055); AWS redeploy (plan step 8) and the Docker smoke run still to do |
-| P3-11 Voice demo | B2 | in progress | 2026-10-02 | research done (PLAN 3a-ter); waits for the developer's choices and "wire Bedrock" |
-| P3-12 SNS notifications | B2 | in progress | 2026-10-02 | code, CDK stack and tests done locally (D-057); deploy and `tests/aws/test_sns_notice.py` wait for "wire SNS" |
+| P3-10 Voice confirmation | A2 | done | 2026-10-02 | built, deployed and tested for real (D-055, D-059); Docker smoke run 5 passed (2026-10-03) |
+| P3-11 Voice demo | B2 | done | 2026-10-02 | the `/voice` page works on the second account; the developer listened (D-058, D-059); playback, lights, tool calls under the answer |
+| P3-12 SNS notifications | B2 | done | 2026-10-02 | topic deployed, the developer received the e-mail; the workers send the notices too (D-057, D-062) |
 | P3-2 Full runs, report, gate | B | done | 2026-10-02 | gate + merge + red team in the report; `eval/reports/mock-k4-2026-10-02.*` committed (D-057) |
 | P3-3 Charts | B | done | 2026-10-02 | `eval/charts.py`, one SVG per report, checked in light and dark |
 | P0-5 ARCHITECTURE.md | C | done | 2026-10-02 | `docs/ARCHITECTURE.md` (English, as built); replaces the design document (D-060) |
 | P3-6 Relabel diagrams | C | done | 2026-10-02 | the developer's two files edited in place + new page 4 (D-060); the developer to open them in draw.io |
 | P3-7 Move Vietnamese docs, scans | C | done | 2026-10-02 | files moved to `FairTable-private-docs`; language/secret test added (D-060) |
-| P3-8 Freeze, pin versions | D | todo | | `pyproject.toml` leaves `joserfc`, `pydantic`, `boto3`, `httpx` and the extras (`fastapi`, `uvicorn`, `mangum`, `pyyaml`, dev tools) unpinned; no lock file exists yet |
+| P3-8 Freeze, pin versions | D | done | 2026-10-03 | D-063: exact pins, `constraints.txt`, images by digest; evaluation re-run; whole suite 1162 passed + the 2 eval tests fixed (70 pass); Docker 5 passed |
+| P3-15 Workers, S3 audit, KMS seed | E | done | 2026-10-03 | D-062: Lambda + EventBridge Scheduler, S3 copy of the audit, KMS GenerateRandom; 4 real-AWS tests passed |
+| P3-14 Fuzzy restaurant search | E | done | 2026-10-02 | D-061 |
 | P3-9 Alexa+ add-on requirements check | C2 | done | 2026-10-02 | D-056; 14 groups read raw; wording, five options, HTTP 401, plain argument errors; differences listed in `docs/alexa-plus-addon-notes.md` section 5 |
 | P3-4 Real-provider runs | D | not decided | | needs the developer's yes (Q2) |
 
+## Closing checklist (agreed 2026-10-02; the video and the form come last)
+Order of work. Tick items in the Progress table or in an entry; do not start a later group before the earlier one is done.
+1. **Voice listening test** by the developer on the deployed stack (README, "Voice demo"). Fix whatever it shows.
+2. **Optional group (only if the developer says go):** KMS seed, S3 audit file, background workers (EventBridge + Lambda). Each needs "wire X", the price from the official page, a teardown, and tests.
+3. **P3-8 freeze:** pin `joserfc`, `pydantic`, `boto3`, `httpx` and the extras, pin Docker image tags, re-run the frozen eval (mock, k = 4, A0/A1/A2 + red team) after D-059, run the gate, commit the report.
+4. **Whole suite + `ruff`**, then the `-m docker` smoke run (ask first: it stops the developer's compose stack).
+5. **Fresh-clone check** of the README (Phase 4).
+6. **Diagrams into the docs:** export PNG/SVG of both draw.io files (light theme) and embed them in `docs/ARCHITECTURE.md` and the README. Say in the text (not in the picture) which services run and which are design only.
+7. **Demo video** (under 3 minutes, English, local profile + the AWS path).
+8. **Devpost form:** repo link, video link, description, product feedback for every tool (five answers each), friction-log entries from `docs/friction-log.md`, images (AWS diagram first).
+9. **AWS cleanup** only after the developer says the footage is recorded: `python infra/aws_ctl.py down --yes --account <last4>`, then `status`.
+10. **Commit, tag `submission`**, no functional change until 2026-11-20.
+
 ## Entries (newest first)
+
+### 2026-10-02 · P3-15, P3-8 · [aws] [workers] [fair-drop] [freeze] · A clock for the lazy routines, an S3 copy of the audit, KMS for the seed, versions frozen (D-062, D-063)
+- **Asked by the developer:** wire more services and implement more features while the video waits (recording planned for 16 or 17 October).
+- **Built:** `server/workers.py` (`sweep_holds`, `allocate_due_drops`, `run_once`), `workers/handler.py` (Lambda), `server/audit_sink.py` (`S3AuditSink`, called after each draw, best effort), `SEED_PROVIDER=kms` in `scripts/seed.py`; CDK: the audit bucket in `DataStack`, `WorkersStack` (Lambda arm64 + `AWS::Scheduler::Schedule` `rate(1 minute)` + least-privilege role), `AUDIT_BUCKET` and `s3:PutObject` under `drops/*` for the Runtime; `aws_ctl.py` knows the new stack and the bucket; the Runtime zip carries `workers/`.
+- **Local tests:** `tests/integration/test_workers.py` (7: a swept hold hands the table to the waiting diner and sends the notice, the user counter goes down, the draw happens once, the audit reaches the sink, a broken sink never fails the draw), `tests/unit/test_seed_provider.py`, four CDK synthesis tests (bucket private and encrypted and TLS only, the Runtime may only put under `drops/`, the workers' schedule and role), the inventory test knows the bucket.
+- **Deployed** on the second account (1905): Data (bucket), Runtime and Gateway updated, `FairTableWorkers` created (513 s, then 150 s for the policy pass). **Real AWS tests** (`tests/aws/test_workers_aws.py`, 4 passed in 12 min 21 s): the function runs on arm64 and reports its work; the schedule produced at least three ticks about a minute apart; a ten-minute hold nobody touched was released by the clock; a due Fair Drop was drawn by the clock, the winner was told, and the audit JSON in S3 equals the one in DynamoDB and passes `verify_audit`. KMS `GenerateRandom` returned 32 bytes (HTTP 200) and the reseeded drops are open with matching commitments (`SEED_PROVIDER=kms aws_ctl.py seed`; the draw test had used the 9 October drop, so the table was reseeded).
+- **Frozen (P3-8):** every direct dependency pinned in `pyproject.toml`, `constraints.txt` with the exact version of every package (the Dockerfile and the README use it), the dev DynamoDB Local image pinned by tag and digest. Evaluation re-run after D-059 and D-061: mock, k = 4, 40 tasks, 160 trials per configuration (A1: pass@1 1.000, 0 violations, 48/48 attacks blocked, false-block rate 0.000; A0: 28 violations, 0/48 attacks blocked; A2 see the report), red team 12/12 blocked under A1; the gate passed against the previous report; `eval/reports/mock-k4-2026-10-02.*` was overwritten with this run.
+- **Also this session:** the voice page lost its choppy playback (0.3 s head start), shows lights for who is talking, puts the tool calls under each answer, and shows what the assistant is doing while it waits for a tool; `restaurant_search` finds misheard names (D-061). One negative result: a prompt sentence asking the model to say something before calling a tool had no effect on Nova 2 Sonic (it stayed silent through 3 to 4 tool calls, 14 to 19 s), so it was removed.
+- **Limits:** the sweep reads the hold index of every restaurant for 15 days each minute (fine for three restaurants); the Lambda concurrency of this account is 10, so none is reserved; DynamoDB Streams were left out on purpose (D-062).
+
+### 2026-10-02 · P3-14 · [booking-tools] [voice] · restaurant_search finds misheard names and asks for confirmation (D-061)
+- **Asked by the developer:** the search needed the exact name, but speech recognition can get it wrong. Return the best matches and, when the match is not 100 %, have the assistant read the name back.
+- **Done:** `server/domain/venue_match.py` (exact / topic / close, score, filler words, rough sound key), `server/tools/restaurant_search.py` (`match`, `match_score`, `confirm_name`, a question as the spoken summary, a `next_step` that waits for the yes), the tool description and the server instructions. Tests: `tests/unit/domain/test_venue_match.py` (30), three tool tests in `tests/integration/test_read_tools.py` (24 pass against DynamoDB Local).
+- **Calibration:** "Luna Tratoria", "Embers Grill", "Sakura Kounter", "Amber Grill", "Lena Trattoria" are close (0.91 to 0.99); "Luna", "grill", "Trattoria Luna" are exact; "italian", "riverside" are topics; "Burger Palace", "pizza", "Look at the moon" find nothing.
+- **Redeployed** on the second account (1905) with `aws_ctl.py up --runtime` (flags as in CLAUDE.md, the SNS address read from the existing subscription and not printed): Data, Identity, Notify unchanged; Runtime and Gateway updated (572 s, then 159 s for the policy pass); the Gateway target re-synced by hand with `synchronize_gateway_targets` because the tool description changed. Real AWS: `tests/aws/test_gateway.py -k misheard` (new) passes; the Gateway, Runtime, policy and token files give 30 passed, 1 failed: `test_a_header_forged_by_the_client...` hit rule S1 because `diner-alice` already holds the maximum number of live holds at Luna from manual tries (not related to this change). The two booking tests now read the diner from `AWS_TEST_DINER`.
+- **Whole local suite** (without `tests/aws` and the CDK synthesis files): 972 passed, 5 skipped, 1 failed: the language scan found accented letters in my new test (fixed: written as code points; scan and matcher tests pass). `ruff` clean.
+- **Still to do / not verified:** a call by voice with a misheard name (the model must really read the name back); the frozen eval needs a re-run (P3-8) because the tool output changed; the CDK synthesis files (`tests/unit/infra`) were not run in this pass.
+
+### 2026-10-02 · P3-11 · [voice] · Change: tool calls sit under each answer on the voice page
+- **Asked by the developer** after a booking followed by a cancel: all tool calls of the call were in one list at the end.
+- **Done:** every request now has its own small scrollable box of tool calls (about 7 rem high) placed under the assistant's answer to it; while the model is still silent the box already shows what it is doing, and the answer is inserted above it when it starts to speak. The old list "What the assistant did" is gone from the voice page (`web/static/voice.js`, `web/pages.py`).
+- **Checked:** the real script ran in headless Chrome against a fake socket and fake audio and gave the order user, assistant, tool calls, user, assistant, tool calls for a book-then-cancel exchange; web unit tests and `ruff` pass. Not looked at on the real page by a person yet.
+
+### 2026-10-02 · P3-11 · [voice] · Change: lights for who is talking on the voice page
+- **Asked by the developer:** the page should show when the diner is speaking. The list "What the assistant did" (every tool call with its arguments and result, `ok` or `refused`) already existed on the voice page and, as a folded list, under each answer on the chat page.
+- **Done:** two lights ("You", "Assistant") and a level bar under the status line. "You" is on while the microphone level is above 0.02 (and 0.4 s after); "Assistant" is on while its audio is still queued. Pure page code (`web/static/voice.js`, `web/pages.py`); the server is untouched. Test: page and script agree on the three element ids; web unit tests 70 passed (with the language scan), `ruff` clean, node syntax check.
+- **Limits:** not looked at in a browser yet. The threshold 0.02 is a guess: with a loud room or no headphones the "You" light may stay on (that would also show the echo problem).
+
+### 2026-10-02 · P3-11 · [voice] · Change: the assistant's voice was choppy; the page now plays it with a head start
+- **Found by the developer** while listening to `/voice`: the assistant's voice came out in pieces.
+- **Measured** (real AWS, account 1905, a recorded request played into the page's endpoint, arrival time of every audio piece): Nova 2 Sonic sends 80 ms pieces at about the speed of speech, in small bursts; gaps between pieces reached 0.4 s. The page started each piece 20 ms after it arrived, so every late piece left a hole. Replaying the measured arrivals through the player model: 3 audible gaps with a 20 ms head start, none with 200 ms or more.
+- **Done:** `web/static/voice.js` starts an answer, and restarts after the queue ran dry, 0.3 s ahead (`LEAD_S`). Cost: 0.3 s more before the first word. Syntax checked with node; web unit tests 64 passed; `ruff` clean. Not heard by a person yet: the developer should listen again.
+- **Also measured, not changed:** the first spoken answer came 18 to 20 s after the end of the request, because the model called 3 to 4 tools in silence. One tool call took 2.7 to 3.7 s through the Gateway and about 1 s straight to the Runtime once the session was open (the first call of a session 3.5 s direct, 4.8 s through the Gateway). Ideas: have the model say a short sentence before it calls a tool; look at why the Gateway adds about 1.8 s per call. Both wait for the developer's decision.
+- **Possible second cause, not verified:** without headphones the speaker can be heard by the microphone and the model may stop talking (barge-in).
 
 ### 2026-10-02 · P3-6, P3-7 · [docs] [diagrams] · Diagrams brought up to date in the developer's own files; Vietnamese documents moved out (D-060)
 - **Goal:** the two draw.io files must show what was built, in the developer's style; the repository must be English only.

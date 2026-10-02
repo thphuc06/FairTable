@@ -131,6 +131,9 @@ def _allocate(deps: AppDeps, drop: Drop, now_iso: str) -> None:
         condition="#st = :allocating", names={"#st": "status"},
         values={":done": DROP_ALLOCATED, ":allocating": DROP_ALLOCATING, ":now": now_iso, ":audit": audit},
     )])
+    where = deps.audit_sink.publish(drop.drop_id, audit)  # best effort: the audit is in DynamoDB either way
+    if where:
+        log.info("audit of drop %s published at %s", drop.drop_id, where)
     _tell_winners(deps, drop, final)
 
 

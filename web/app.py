@@ -127,7 +127,7 @@ def create_app(deps: WebDeps) -> FastAPI:
         turns = [(t.who, t.text, t.steps) for t in deps.chat.transcript(session.sub)]
         inbox = deps.store.list_inbox(session.sub)
         csrf = deps.sessions.csrf_token(session, "chat")
-        html = pages.chat_page(session.username, turns, inbox, csrf)
+        html = pages.chat_page(session.username, turns, inbox, csrf, voice=deps.voice is not None)
         return HTMLResponse(html, status_code=status)
 
     def chat_session(request: Request) -> tuple[Session | None, Response | None]:

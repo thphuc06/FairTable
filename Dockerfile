@@ -10,8 +10,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # The source stays in /app (an editable install) because the Cedar policies in policies/ are found
-# relative to the code. Dependencies come from pyproject.toml: the web pages and the simulator.
-COPY pyproject.toml README.md LICENSE ./
+# relative to the code. Dependencies come from pyproject.toml (exact versions) and constraints.txt (every package they pull in).
+COPY pyproject.toml constraints.txt README.md LICENSE ./
 COPY server ./server
 COPY devauth ./devauth
 COPY web ./web
@@ -19,7 +19,7 @@ COPY simulator ./simulator
 COPY eval ./eval
 COPY policies ./policies
 COPY scripts ./scripts
-RUN pip install -e ".[web,sim]"
+RUN pip install -c constraints.txt -e ".[web,sim]"
 
 RUN useradd --system --uid 10001 --no-create-home fairtable
 USER fairtable

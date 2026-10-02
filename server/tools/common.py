@@ -2,7 +2,7 @@
 
 import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastmcp.server.dependencies import get_http_headers
 
@@ -11,6 +11,7 @@ from server.domain.clock import Clock
 from server.domain.models import Identity
 from server.domain.readback import ReadBackCodec
 from server.domain.tool_names import ToolName
+from server.audit_sink import AuditSink, NullAuditSink
 from server.identity import TokenVerifier
 from server.offers import OfferBook
 from server.kernel import TrustKernel, deny_to_error
@@ -38,6 +39,7 @@ class AppDeps:
     # Called with (venue_id, date, time, table_group) after a table is freed; the waitlist matcher
     # plugs in here (server/matcher.py). Default: nothing.
     slot_released: Callable[[str, str, str, str], None] = lambda *_: None
+    audit_sink: AuditSink = field(default_factory=NullAuditSink)  # a copy of each Fair Drop audit (S3 on AWS)
 
     def __post_init__(self) -> None:
         if self.notifier is None:

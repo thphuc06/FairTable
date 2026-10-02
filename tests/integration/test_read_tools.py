@@ -237,3 +237,29 @@ async def test_expected_refusals_do_not_produce_error_logs_but_real_bugs_do(worl
         await call(world.as_("alice"), "availability_check", restaurant_id="luna-trattoria", date="2026-10-03",
                    party_size=2)
     assert [r for r in bug.records if r.levelno >= 40]
+
+
+# ---------------------------------------------------------------- restaurant_search: names heard a little wrong
+async def test_search_finds_a_misheard_name_and_asks_for_confirmation(world):
+    r = await call(world.as_("alice"), "restaurant_search", query="Luna Tratoria")
+    assert not r.isError
+    body = r.structuredContent
+    assert body["confirm_name"] is True
+    assert [x["name"] for x in body["restaurants"]] == ["Luna Trattoria"]
+    assert body["restaurants"][0]["match"] == "close" and 0.72 <= body["restaurants"][0]["match_score"] < 1
+    assert body["spoken_summary"] == "I did not find that exact name. The closest is Luna Trattoria. Is that the restaurant you mean?"
+    assert "restaurant_id" in body["restaurants"][0] and "luna-trattoria" not in body["spoken_summary"]
+    assert "read" not in body["next_step"]["why"].lower() or "yes" in body["next_step"]["why"].lower()
+
+
+async def test_search_by_exact_name_or_cuisine_does_not_ask(world):
+    for query, name, kind in (("luna trattoria", "Luna Trattoria", "exact"), ("Ember", "Ember Grill", "exact"),
+                              ("italian", "Luna Trattoria", "topic")):
+        body = (await call(world.as_("alice"), "restaurant_search", query=query)).structuredContent
+        assert body["confirm_name"] is False and body["restaurants"][0]["name"] == name
+        assert body["restaurants"][0]["match"] == kind and "match_score" not in body["restaurants"][0]
+
+
+async def test_search_for_something_unrelated_still_finds_nothing(world):
+    body = (await call(world.as_("alice"), "restaurant_search", query="Burger Palace")).structuredContent
+    assert body["restaurants"] == [] and body["spoken_summary"].startswith("I could not find")

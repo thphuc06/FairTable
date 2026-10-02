@@ -82,3 +82,8 @@ def test_the_chat_page_puts_the_steps_under_the_assistant_answer_only():
     page = chat_page("alice", [("you", "book", ()), ("assistant", "Booked.", (OK, HOLD))], [], "csrf")
     assert re.findall(r"<div class=.(you|bot).>", page) == ["you", "bot"]
     assert page.count("<details class='steps'>") == 1 and page.index("Booked.") < page.index("<details")
+
+
+def test_the_chat_page_links_to_the_voice_page_only_when_voice_is_on():
+    assert "/voice" not in chat_page("alice", [], [], "csrf")
+    assert "href='/voice'" in chat_page("alice", [], [], "csrf", voice=True)

@@ -1,7 +1,8 @@
-"""The single DynamoDB table, same key schema as `server/store/table.py`."""
+"""The single DynamoDB table, same key schema as `server/store/table.py`, and the bucket for Fair Drop audits."""
 
 from aws_cdk import RemovalPolicy, Stack, Tags
 from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 GSI_NAMES = ("GSI1", "GSI2")
@@ -32,6 +33,18 @@ class DataStack(Stack):
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
                 point_in_time_recovery_enabled=False
             ),
+        )
+        # A copy of each Fair Drop audit (D-062): private, encrypted, TLS only. Destroyed with the stack, objects
+        # included (a small custom resource empties it first). The name carries the account and region at deploy time.
+        self.audit_bucket = s3.Bucket(
+            self,
+            "AuditBucket",
+            bucket_name=f"fairtable-audit-{self.account}-{self.region}",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
         )
         for index in GSI_NAMES:
             self.table.add_global_secondary_index(

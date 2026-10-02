@@ -193,8 +193,16 @@ def steps_html(steps: tuple[Step, ...]) -> str:
 VOICE_STYLE = """
 .status{padding:.6rem .8rem;border-radius:8px;background:#eef;margin:.8rem 0}
 .status.live{background:#e4f5e6}.status.bad{background:#fde3e3}
-#talk{max-height:16rem;overflow:auto;margin:.8rem 0}
-#steps{padding-left:1.2rem;font-size:.9rem}
+.status.work{background:#fff4d6;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.55}}
+.meters{display:flex;align-items:center;gap:.6rem;margin:.6rem 0;flex-wrap:wrap}
+.pill{padding:.3rem .8rem;border-radius:999px;background:#e6e6e6;color:#666;font-weight:600;transition:background .15s,color .15s}
+.pill.on{background:#1a7f37;color:#fff}.pill.bot.on{background:#3b5bdb}
+.bar{flex:1;min-width:8rem;height:.6rem;border-radius:999px;background:#e6e6e6;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:#1a7f37;transition:width .08s}
+#talk{max-height:26rem;overflow:auto;margin:.8rem 0}
+.stepsbox{margin:.1rem 0 .9rem 1rem;padding:.3rem .6rem;border-left:3px solid #c9c9d6;font-size:.85rem;max-height:7.5rem;overflow:auto}
+.stepsbox ol{margin:.2rem 0 0;padding-left:1.1rem}
 .badge{font-size:.75rem;padding:.1rem .4rem;border-radius:6px;background:#ddd}
 .badge.ok{background:#cfe9d2}.badge.no{background:#f4cccc}
 button:disabled{opacity:.5;cursor:default}
@@ -211,15 +219,17 @@ def voice_page(username: str) -> str:
         "<button id='start' class='approve' type='button'>Start the call</button>"
         "<button id='stop' class='decline' type='button' disabled>End the call</button>"
         "<div id='status' class='status' role='status'>Not connected.</div>"
+        "<div class='meters' aria-hidden='true'><span id='ind-you' class='pill'>You</span>"
+        "<span id='ind-bot' class='pill bot'>Assistant</span><span class='bar'><i id='level'></i></span></div>"
         "<div id='talk' aria-live='polite'></div>"
-        "<h2>What the assistant did</h2><ol id='steps'></ol>"
         "<p class='muted'>Usage: <span id='usage'>none yet</span>. "
         "<a href='/chat'>Text chat</a></p>"
         f"<style>{VOICE_STYLE}</style><script src='/voice/voice.js' defer></script>",
     )
 
 
-def chat_page(username: str, turns: list[tuple[str, str, tuple]], inbox: list[dict[str, Any]], csrf: str) -> str:
+def chat_page(username: str, turns: list[tuple[str, str, tuple]], inbox: list[dict[str, Any]], csrf: str,
+              voice: bool = False) -> str:
     """The demo chat: what the diner said, what the assistant answered (with the tool calls behind it), and
     the dev inbox."""
     talk = "".join(
@@ -233,9 +243,11 @@ def chat_page(username: str, turns: list[tuple[str, str, tuple]], inbox: list[di
         for m in inbox[-5:]
     ) or "<li class='muted'>Nothing yet.</li>"
     token = escape(csrf, quote=True)
+    voice_link = "<p><a href='/voice'>Talk to the assistant by voice instead</a></p>" if voice else ""
     return layout(
         "Chat",
         f"<h1>Your assistant</h1><p class='muted'>Signed in as {escape(username)}. This is a simulated voice assistant.</p>"
+        f"{voice_link}"
         f"{talk}"
         "<form method='post' action='/chat'>"
         f"<input type='hidden' name='csrf' value='{token}'>"

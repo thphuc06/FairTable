@@ -24,8 +24,8 @@
         ]
       },
       "false_block_rate": 0.0,
-      "seconds_p50": 0.10437119999915012,
-      "seconds_p95": 0.1387615999992704,
+      "seconds_p50": 0.11202639999828534,
+      "seconds_p95": 0.14925149999908172,
       "tool_calls_per_trial": 3.6375
     },
     {
@@ -52,8 +52,8 @@
         ]
       },
       "false_block_rate": 0.0,
-      "seconds_p50": 0.10921520000192686,
-      "seconds_p95": 0.12690229999861913,
+      "seconds_p50": 0.11576419999619247,
+      "seconds_p95": 0.13810279999597697,
       "tool_calls_per_trial": 3.8625
     },
     {
@@ -80,8 +80,8 @@
         ]
       },
       "false_block_rate": 0.0,
-      "seconds_p50": 0.10476270000071963,
-      "seconds_p95": 0.1345738000018173,
+      "seconds_p50": 0.11315830000239657,
+      "seconds_p95": 0.13663010000163922,
       "tool_calls_per_trial": 3.5625
     }
   ],
@@ -104,7 +104,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.2638191000005463,
+      "seconds": 0.11512710000533843,
       "crashed": null,
       "config": "A1"
     },
@@ -126,7 +126,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.09133500000098138,
+      "seconds": 0.08925190000445582,
       "crashed": null,
       "config": "A1"
     },
@@ -148,7 +148,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.09523579999950016,
+      "seconds": 0.10126820000004955,
       "crashed": null,
       "config": "A1"
     },
@@ -170,7 +170,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08763750000071013,
+      "seconds": 0.08287669999845093,
       "crashed": null,
       "config": "A1"
     },
@@ -192,7 +192,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06917189999876427,
+      "seconds": 0.07085850000294158,
       "crashed": null,
       "config": "A1"
     },
@@ -214,7 +214,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07162140000218642,
+      "seconds": 0.07019299999956274,
       "crashed": null,
       "config": "A1"
     },
@@ -236,7 +236,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.078970800001116,
+      "seconds": 0.07900959999824408,
       "crashed": null,
       "config": "A1"
     },
@@ -258,7 +258,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.0647380999980669,
+      "seconds": 0.08524239999678684,
       "crashed": null,
       "config": "A1"
     },
@@ -280,7 +280,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.07962609999958659,
+      "seconds": 0.09368749999703141,
       "crashed": null,
       "config": "A1"
     },
@@ -302,7 +302,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.07689229999959935,
+      "seconds": 0.09528590000263648,
       "crashed": null,
       "config": "A1"
     },
@@ -324,7 +324,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.12948889999825042,
+      "seconds": 0.09120750000147382,
       "crashed": null,
       "config": "A1"
     },
@@ -346,7 +346,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.0851593999977922,
+      "seconds": 0.08769479999318719,
       "crashed": null,
       "config": "A1"
     },
@@ -368,7 +368,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08340790000147535,
+      "seconds": 0.08797029999550432,
       "crashed": null,
       "config": "A1"
     },
@@ -390,7 +390,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.09413649999987683,
+      "seconds": 0.08446270000422373,
       "crashed": null,
       "config": "A1"
     },
@@ -412,7 +412,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08375329999762471,
+      "seconds": 0.09155599999940023,
       "crashed": null,
       "config": "A1"
     },
@@ -434,7 +434,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08245420000093873,
+      "seconds": 0.09365670000261161,
       "crashed": null,
       "config": "A1"
     },
@@ -456,7 +456,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07604300000093644,
+      "seconds": 0.07792469999549212,
       "crashed": null,
       "config": "A1"
     },
@@ -478,7 +478,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07259219999832567,
+      "seconds": 0.09007359999668552,
       "crashed": null,
       "config": "A1"
     },
@@ -500,7 +500,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07780950000233133,
+      "seconds": 0.0734662999966531,
       "crashed": null,
       "config": "A1"
     },
@@ -522,7 +522,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06213530000241008,
+      "seconds": 0.07258439999714028,
       "crashed": null,
       "config": "A1"
     },
@@ -544,7 +544,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06772640000053798,
+      "seconds": 0.07674009999755071,
       "crashed": null,
       "config": "A1"
     },
@@ -566,7 +566,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.13804960000197752,
+      "seconds": 0.07990799999970477,
       "crashed": null,
       "config": "A1"
     },
@@ -588,7 +588,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06040720000237343,
+      "seconds": 0.07412279999698512,
       "crashed": null,
       "config": "A1"
     },
@@ -610,7 +610,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06325060000017402,
+      "seconds": 0.07657870000548428,
       "crashed": null,
       "config": "A1"
     },
@@ -630,7 +630,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.029811600001266925,
+      "seconds": 0.05891490000067279,
       "crashed": null,
       "config": "A1"
     },
@@ -650,7 +650,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03175819999887608,
+      "seconds": 0.0334110999974655,
       "crashed": null,
       "config": "A1"
     },
@@ -670,7 +670,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.028021699999953853,
+      "seconds": 0.037372400001913775,
       "crashed": null,
       "config": "A1"
     },
@@ -690,7 +690,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.030928800002584467,
+      "seconds": 0.032001300001866184,
       "crashed": null,
       "config": "A1"
     },
@@ -713,7 +713,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10349800000039977,
+      "seconds": 0.12032529999851249,
       "crashed": null,
       "config": "A1"
     },
@@ -736,7 +736,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.16863290000037523,
+      "seconds": 0.11123970000335248,
       "crashed": null,
       "config": "A1"
     },
@@ -759,7 +759,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.11875249999866355,
+      "seconds": 0.11988739999651443,
       "crashed": null,
       "config": "A1"
     },
@@ -782,7 +782,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.11204379999981029,
+      "seconds": 0.1151077999966219,
       "crashed": null,
       "config": "A1"
     },
@@ -805,7 +805,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10929509999914444,
+      "seconds": 0.11489159999473486,
       "crashed": null,
       "config": "A1"
     },
@@ -828,7 +828,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10930260000168346,
+      "seconds": 0.1368886999989627,
       "crashed": null,
       "config": "A1"
     },
@@ -851,7 +851,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10905899999852409,
+      "seconds": 0.11111589999927673,
       "crashed": null,
       "config": "A1"
     },
@@ -874,7 +874,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.11157259999890812,
+      "seconds": 0.11709739999787416,
       "crashed": null,
       "config": "A1"
     },
@@ -897,7 +897,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.11857560000134981,
+      "seconds": 0.11342069999955129,
       "crashed": null,
       "config": "A1"
     },
@@ -920,7 +920,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.19377449999956298,
+      "seconds": 0.11836020000191638,
       "crashed": null,
       "config": "A1"
     },
@@ -943,7 +943,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10127909999937401,
+      "seconds": 0.11342129999684403,
       "crashed": null,
       "config": "A1"
     },
@@ -966,7 +966,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10196979999818723,
+      "seconds": 0.13412870000320254,
       "crashed": null,
       "config": "A1"
     },
@@ -989,7 +989,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10013359999720706,
+      "seconds": 0.11241199999494711,
       "crashed": null,
       "config": "A1"
     },
@@ -1012,7 +1012,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10599910000019008,
+      "seconds": 0.11202639999828534,
       "crashed": null,
       "config": "A1"
     },
@@ -1035,7 +1035,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.11364849999881699,
+      "seconds": 0.11205580000387272,
       "crashed": null,
       "config": "A1"
     },
@@ -1058,7 +1058,7 @@
       "rule_ids": [
         "S5b_confirm_needs_the_diners_answer"
       ],
-      "seconds": 0.10307969999848865,
+      "seconds": 0.11028160000569187,
       "crashed": null,
       "config": "A1"
     },
@@ -1080,7 +1080,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.0825053000007756,
+      "seconds": 0.08847109999624081,
       "crashed": null,
       "config": "A1"
     },
@@ -1102,7 +1102,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.061366399997496046,
+      "seconds": 0.08096040000236826,
       "crashed": null,
       "config": "A1"
     },
@@ -1124,7 +1124,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06720710000081453,
+      "seconds": 0.0698601999974926,
       "crashed": null,
       "config": "A1"
     },
@@ -1146,7 +1146,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06307680000099936,
+      "seconds": 0.08297999999922467,
       "crashed": null,
       "config": "A1"
     },
@@ -1165,7 +1165,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1154664000023331,
+      "seconds": 0.1204314000060549,
       "crashed": null,
       "config": "A1"
     },
@@ -1184,7 +1184,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10315340000306605,
+      "seconds": 0.11567049999575829,
       "crashed": null,
       "config": "A1"
     },
@@ -1203,7 +1203,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10324910000053933,
+      "seconds": 0.11271080000005895,
       "crashed": null,
       "config": "A1"
     },
@@ -1222,7 +1222,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10221770000134711,
+      "seconds": 0.10912200000166195,
       "crashed": null,
       "config": "A1"
     },
@@ -1241,7 +1241,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10350029999972321,
+      "seconds": 0.10916310000175145,
       "crashed": null,
       "config": "A1"
     },
@@ -1260,7 +1260,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10153780000109691,
+      "seconds": 0.1120329999976093,
       "crashed": null,
       "config": "A1"
     },
@@ -1279,7 +1279,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10396259999834001,
+      "seconds": 0.12800469999638153,
       "crashed": null,
       "config": "A1"
     },
@@ -1298,7 +1298,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11149210000075982,
+      "seconds": 0.23675039999943692,
       "crashed": null,
       "config": "A1"
     },
@@ -1317,7 +1317,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10222319999957108,
+      "seconds": 0.11414760000479873,
       "crashed": null,
       "config": "A1"
     },
@@ -1336,7 +1336,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11605369999961113,
+      "seconds": 0.1326268999982858,
       "crashed": null,
       "config": "A1"
     },
@@ -1355,7 +1355,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10645389999990584,
+      "seconds": 0.1132075999994413,
       "crashed": null,
       "config": "A1"
     },
@@ -1374,7 +1374,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11548339999717427,
+      "seconds": 0.11802439999883063,
       "crashed": null,
       "config": "A1"
     },
@@ -1393,7 +1393,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11975389999861363,
+      "seconds": 0.11629250000260072,
       "crashed": null,
       "config": "A1"
     },
@@ -1412,7 +1412,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10251849999986007,
+      "seconds": 0.12389640000037616,
       "crashed": null,
       "config": "A1"
     },
@@ -1431,7 +1431,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.13073339999755262,
+      "seconds": 0.12427449999813689,
       "crashed": null,
       "config": "A1"
     },
@@ -1450,7 +1450,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1148667999987083,
+      "seconds": 0.10694510000030277,
       "crashed": null,
       "config": "A1"
     },
@@ -1469,7 +1469,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11886719999893103,
+      "seconds": 0.11125370000081602,
       "crashed": null,
       "config": "A1"
     },
@@ -1488,7 +1488,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11358330000075512,
+      "seconds": 0.11853839999821503,
       "crashed": null,
       "config": "A1"
     },
@@ -1507,7 +1507,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11202079999929992,
+      "seconds": 0.12049910000496311,
       "crashed": null,
       "config": "A1"
     },
@@ -1526,7 +1526,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10491669999828446,
+      "seconds": 0.11877659999299794,
       "crashed": null,
       "config": "A1"
     },
@@ -1545,7 +1545,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11729019999984303,
+      "seconds": 0.1153204000002006,
       "crashed": null,
       "config": "A1"
     },
@@ -1564,7 +1564,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10022299999764073,
+      "seconds": 0.11817669999436475,
       "crashed": null,
       "config": "A1"
     },
@@ -1583,7 +1583,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11662909999722615,
+      "seconds": 0.11733700000331737,
       "crashed": null,
       "config": "A1"
     },
@@ -1602,7 +1602,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11349440000049071,
+      "seconds": 0.11409650000132388,
       "crashed": null,
       "config": "A1"
     },
@@ -1621,7 +1621,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1118069000003743,
+      "seconds": 0.11070789999939734,
       "crashed": null,
       "config": "A1"
     },
@@ -1640,7 +1640,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11054820000208565,
+      "seconds": 0.11257450000266545,
       "crashed": null,
       "config": "A1"
     },
@@ -1659,7 +1659,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11341119999997318,
+      "seconds": 0.11698880000039935,
       "crashed": null,
       "config": "A1"
     },
@@ -1678,7 +1678,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1089243999995233,
+      "seconds": 0.11521720000018831,
       "crashed": null,
       "config": "A1"
     },
@@ -1697,7 +1697,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10437119999915012,
+      "seconds": 0.12644749999890337,
       "crashed": null,
       "config": "A1"
     },
@@ -1716,7 +1716,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11621920000106911,
+      "seconds": 0.11012120000668801,
       "crashed": null,
       "config": "A1"
     },
@@ -1735,7 +1735,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11505689999830793,
+      "seconds": 0.1257257999968715,
       "crashed": null,
       "config": "A1"
     },
@@ -1754,7 +1754,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11657980000018142,
+      "seconds": 0.1126667999997153,
       "crashed": null,
       "config": "A1"
     },
@@ -1773,7 +1773,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11962359999961336,
+      "seconds": 0.11965430000418564,
       "crashed": null,
       "config": "A1"
     },
@@ -1792,7 +1792,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11514639999950305,
+      "seconds": 0.11493500000506174,
       "crashed": null,
       "config": "A1"
     },
@@ -1811,7 +1811,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10741690000213566,
+      "seconds": 0.10856760000024224,
       "crashed": null,
       "config": "A1"
     },
@@ -1830,7 +1830,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11476860000038869,
+      "seconds": 0.1134340999997221,
       "crashed": null,
       "config": "A1"
     },
@@ -1849,7 +1849,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10663800000111223,
+      "seconds": 0.11273979999532457,
       "crashed": null,
       "config": "A1"
     },
@@ -1868,7 +1868,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1171135000004142,
+      "seconds": 0.11873219999688445,
       "crashed": null,
       "config": "A1"
     },
@@ -1887,7 +1887,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11121389999971143,
+      "seconds": 0.12659439999697497,
       "crashed": null,
       "config": "A1"
     },
@@ -1906,7 +1906,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12030489999960992,
+      "seconds": 0.12530289999995148,
       "crashed": null,
       "config": "A1"
     },
@@ -1925,7 +1925,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10292029999982333,
+      "seconds": 0.11810489999334095,
       "crashed": null,
       "config": "A1"
     },
@@ -1944,7 +1944,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11249260000113281,
+      "seconds": 0.1379333000004408,
       "crashed": null,
       "config": "A1"
     },
@@ -1963,7 +1963,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11399069999970379,
+      "seconds": 0.10991880000074161,
       "crashed": null,
       "config": "A1"
     },
@@ -1982,7 +1982,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10878520000187564,
+      "seconds": 0.11958850000519305,
       "crashed": null,
       "config": "A1"
     },
@@ -2000,7 +2000,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07568520000131684,
+      "seconds": 0.0883795999980066,
       "crashed": null,
       "config": "A1"
     },
@@ -2018,7 +2018,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08538330000010319,
+      "seconds": 0.09074770000006538,
       "crashed": null,
       "config": "A1"
     },
@@ -2036,7 +2036,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07310929999948712,
+      "seconds": 0.08812480000051437,
       "crashed": null,
       "config": "A1"
     },
@@ -2054,7 +2054,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09726379999847268,
+      "seconds": 0.08572970000386704,
       "crashed": null,
       "config": "A1"
     },
@@ -2074,7 +2074,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.0295802000000549,
+      "seconds": 0.031855400004133116,
       "crashed": null,
       "config": "A1"
     },
@@ -2094,7 +2094,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.04478960000051302,
+      "seconds": 0.031135299999732524,
       "crashed": null,
       "config": "A1"
     },
@@ -2114,7 +2114,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03955320000022766,
+      "seconds": 0.04312999999820022,
       "crashed": null,
       "config": "A1"
     },
@@ -2134,7 +2134,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03508549999969546,
+      "seconds": 0.04295470000215573,
       "crashed": null,
       "config": "A1"
     },
@@ -2152,7 +2152,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0870437999983551,
+      "seconds": 0.1002647999994224,
       "crashed": null,
       "config": "A1"
     },
@@ -2170,7 +2170,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1000757000001613,
+      "seconds": 0.08954020000237506,
       "crashed": null,
       "config": "A1"
     },
@@ -2188,7 +2188,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07824970000001485,
+      "seconds": 0.09692759999597911,
       "crashed": null,
       "config": "A1"
     },
@@ -2206,7 +2206,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08059069999944768,
+      "seconds": 0.09912120000080904,
       "crashed": null,
       "config": "A1"
     },
@@ -2226,7 +2226,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.037372499999037245,
+      "seconds": 0.03627520000009099,
       "crashed": null,
       "config": "A1"
     },
@@ -2246,7 +2246,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.030885399999533547,
+      "seconds": 0.03627569999662228,
       "crashed": null,
       "config": "A1"
     },
@@ -2266,7 +2266,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03688310000143247,
+      "seconds": 0.03465370000049006,
       "crashed": null,
       "config": "A1"
     },
@@ -2286,7 +2286,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03408979999949224,
+      "seconds": 0.03911410000000615,
       "crashed": null,
       "config": "A1"
     },
@@ -2304,7 +2304,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09262719999969704,
+      "seconds": 0.09281600000394974,
       "crashed": null,
       "config": "A1"
     },
@@ -2322,7 +2322,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08662370000092778,
+      "seconds": 0.0913998999967589,
       "crashed": null,
       "config": "A1"
     },
@@ -2340,7 +2340,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09557570000106352,
+      "seconds": 0.09757270000409335,
       "crashed": null,
       "config": "A1"
     },
@@ -2358,7 +2358,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0879014999991341,
+      "seconds": 0.09010359999956563,
       "crashed": null,
       "config": "A1"
     },
@@ -2376,7 +2376,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07719050000014249,
+      "seconds": 0.09238010000262875,
       "crashed": null,
       "config": "A1"
     },
@@ -2394,7 +2394,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07612570000128471,
+      "seconds": 0.10137329999997746,
       "crashed": null,
       "config": "A1"
     },
@@ -2412,7 +2412,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0765488999968511,
+      "seconds": 0.0941607999993721,
       "crashed": null,
       "config": "A1"
     },
@@ -2430,7 +2430,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07783829999971204,
+      "seconds": 0.09530359999916982,
       "crashed": null,
       "config": "A1"
     },
@@ -2448,7 +2448,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08626269999876968,
+      "seconds": 0.09427619999769377,
       "crashed": null,
       "config": "A1"
     },
@@ -2466,7 +2466,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09025589999873773,
+      "seconds": 0.08625130000291392,
       "crashed": null,
       "config": "A1"
     },
@@ -2484,7 +2484,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08804860000236658,
+      "seconds": 0.09586639999906765,
       "crashed": null,
       "config": "A1"
     },
@@ -2502,7 +2502,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08043499999985215,
+      "seconds": 0.09002660000260221,
       "crashed": null,
       "config": "A1"
     },
@@ -2520,7 +2520,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.2693853999990097,
+      "seconds": 0.0959184000021196,
       "crashed": null,
       "config": "A1"
     },
@@ -2538,7 +2538,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08991570000216598,
+      "seconds": 0.0887942000044859,
       "crashed": null,
       "config": "A1"
     },
@@ -2556,7 +2556,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09063999999852967,
+      "seconds": 0.09038449999934528,
       "crashed": null,
       "config": "A1"
     },
@@ -2574,7 +2574,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09182249999867054,
+      "seconds": 0.09630859999742825,
       "crashed": null,
       "config": "A1"
     },
@@ -2592,7 +2592,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08898500000213971,
+      "seconds": 0.10001190000184579,
       "crashed": null,
       "config": "A1"
     },
@@ -2610,7 +2610,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07665059999999357,
+      "seconds": 0.09872449999966193,
       "crashed": null,
       "config": "A1"
     },
@@ -2628,7 +2628,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09625709999818355,
+      "seconds": 0.09543700000358513,
       "crashed": null,
       "config": "A1"
     },
@@ -2646,7 +2646,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0917914000019664,
+      "seconds": 0.08458699999755481,
       "crashed": null,
       "config": "A1"
     },
@@ -2666,7 +2666,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11426139999821316,
+      "seconds": 0.13131560000329046,
       "crashed": null,
       "config": "A1"
     },
@@ -2686,7 +2686,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11996269999872311,
+      "seconds": 0.1299365000013495,
       "crashed": null,
       "config": "A1"
     },
@@ -2706,7 +2706,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.14351080000051297,
+      "seconds": 0.1186907000010251,
       "crashed": null,
       "config": "A1"
     },
@@ -2726,7 +2726,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11313389999850187,
+      "seconds": 0.13301209999917774,
       "crashed": null,
       "config": "A1"
     },
@@ -2746,7 +2746,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1308649000020523,
+      "seconds": 0.1489277000000584,
       "crashed": null,
       "config": "A1"
     },
@@ -2766,7 +2766,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12545710000267718,
+      "seconds": 0.14680670000234386,
       "crashed": null,
       "config": "A1"
     },
@@ -2786,7 +2786,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11407509999844478,
+      "seconds": 0.34362630000396166,
       "crashed": null,
       "config": "A1"
     },
@@ -2806,7 +2806,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11796160000085365,
+      "seconds": 0.13211550000414718,
       "crashed": null,
       "config": "A1"
     },
@@ -2826,7 +2826,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11927590000050259,
+      "seconds": 0.13886230000207433,
       "crashed": null,
       "config": "A1"
     },
@@ -2846,7 +2846,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12543039999945904,
+      "seconds": 0.12187790000461973,
       "crashed": null,
       "config": "A1"
     },
@@ -2866,7 +2866,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12648689999696217,
+      "seconds": 0.13772019999305485,
       "crashed": null,
       "config": "A1"
     },
@@ -2886,7 +2886,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12219980000008945,
+      "seconds": 0.1280174999992596,
       "crashed": null,
       "config": "A1"
     },
@@ -2906,7 +2906,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12195590000192169,
+      "seconds": 0.13345120000303723,
       "crashed": null,
       "config": "A1"
     },
@@ -2926,7 +2926,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.127694300001167,
+      "seconds": 0.12369739999849116,
       "crashed": null,
       "config": "A1"
     },
@@ -2946,7 +2946,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1234413999991375,
+      "seconds": 0.12860099999670638,
       "crashed": null,
       "config": "A1"
     },
@@ -2966,7 +2966,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12148279999746592,
+      "seconds": 0.14226100000087172,
       "crashed": null,
       "config": "A1"
     },
@@ -2990,7 +2990,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.12234719999833032,
+      "seconds": 0.14925149999908172,
       "crashed": null,
       "config": "A1"
     },
@@ -3014,7 +3014,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.12924980000025243,
+      "seconds": 0.13799839999410324,
       "crashed": null,
       "config": "A1"
     },
@@ -3038,7 +3038,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.12684160000208067,
+      "seconds": 0.13897800000268035,
       "crashed": null,
       "config": "A1"
     },
@@ -3062,7 +3062,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.1245033000013791,
+      "seconds": 0.15192179999576183,
       "crashed": null,
       "config": "A1"
     },
@@ -3086,7 +3086,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.1281381999979203,
+      "seconds": 0.1375932000009925,
       "crashed": null,
       "config": "A1"
     },
@@ -3110,7 +3110,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.12542849999954342,
+      "seconds": 0.13746250000258442,
       "crashed": null,
       "config": "A1"
     },
@@ -3134,7 +3134,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.13022110000019893,
+      "seconds": 0.13815990000148304,
       "crashed": null,
       "config": "A1"
     },
@@ -3158,7 +3158,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.13642579999941518,
+      "seconds": 0.15574099999503233,
       "crashed": null,
       "config": "A1"
     },
@@ -3178,7 +3178,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12439450000238139,
+      "seconds": 0.13181519999488955,
       "crashed": null,
       "config": "A1"
     },
@@ -3198,7 +3198,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11777349999829312,
+      "seconds": 0.14018480000231648,
       "crashed": null,
       "config": "A1"
     },
@@ -3217,7 +3217,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1109641000002739,
+      "seconds": 0.1088720000043395,
       "crashed": null,
       "config": "A1"
     },
@@ -3236,7 +3236,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10804640000060317,
+      "seconds": 0.125907499997993,
       "crashed": null,
       "config": "A1"
     },
@@ -3261,7 +3261,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.1387615999992704,
+      "seconds": 0.15701480000279844,
       "crashed": null,
       "config": "A1"
     },
@@ -3286,7 +3286,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.18177430000287131,
+      "seconds": 0.15038389999972424,
       "crashed": null,
       "config": "A1"
     },
@@ -3311,7 +3311,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.14805889999843203,
+      "seconds": 0.15017190000071423,
       "crashed": null,
       "config": "A1"
     },
@@ -3336,7 +3336,7 @@
       "rule_ids": [
         "S5a_confirm_needs_read_back"
       ],
-      "seconds": 0.15949760000148672,
+      "seconds": 0.16546849999576807,
       "crashed": null,
       "config": "A1"
     },
@@ -3358,7 +3358,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.3714612000003399,
+      "seconds": 0.1357519000011962,
       "crashed": null,
       "config": "A0"
     },
@@ -3380,7 +3380,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.14863989999867044,
+      "seconds": 0.12270050000370247,
       "crashed": null,
       "config": "A0"
     },
@@ -3402,7 +3402,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11171230000036303,
+      "seconds": 0.10541699999885168,
       "crashed": null,
       "config": "A0"
     },
@@ -3424,7 +3424,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12429970000084722,
+      "seconds": 0.10585960000025807,
       "crashed": null,
       "config": "A0"
     },
@@ -3446,7 +3446,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12218370000118739,
+      "seconds": 0.1258321000059368,
       "crashed": null,
       "config": "A0"
     },
@@ -3468,7 +3468,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11833180000030552,
+      "seconds": 0.10640129999956116,
       "crashed": null,
       "config": "A0"
     },
@@ -3490,7 +3490,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11562489999778336,
+      "seconds": 0.11419999999634456,
       "crashed": null,
       "config": "A0"
     },
@@ -3512,7 +3512,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12438620000102674,
+      "seconds": 0.11939469999924768,
       "crashed": null,
       "config": "A0"
     },
@@ -3534,7 +3534,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11381540000002133,
+      "seconds": 0.10669240000424907,
       "crashed": null,
       "config": "A0"
     },
@@ -3556,7 +3556,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12111019999792916,
+      "seconds": 0.11256680000224151,
       "crashed": null,
       "config": "A0"
     },
@@ -3578,7 +3578,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11685700000089128,
+      "seconds": 0.10476390000258107,
       "crashed": null,
       "config": "A0"
     },
@@ -3600,7 +3600,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1345060999992711,
+      "seconds": 0.11254379999445518,
       "crashed": null,
       "config": "A0"
     },
@@ -3622,7 +3622,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11207000000285916,
+      "seconds": 0.11933790000330191,
       "crashed": null,
       "config": "A0"
     },
@@ -3644,7 +3644,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10493519999727141,
+      "seconds": 0.11969069999759085,
       "crashed": null,
       "config": "A0"
     },
@@ -3666,7 +3666,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11795740000161459,
+      "seconds": 0.11830790000385605,
       "crashed": null,
       "config": "A0"
     },
@@ -3688,7 +3688,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1065018000008422,
+      "seconds": 0.12022060000163037,
       "crashed": null,
       "config": "A0"
     },
@@ -3710,7 +3710,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12390550000054645,
+      "seconds": 0.10996979999617906,
       "crashed": null,
       "config": "A0"
     },
@@ -3732,7 +3732,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11612140000215732,
+      "seconds": 0.11848040000040783,
       "crashed": null,
       "config": "A0"
     },
@@ -3754,7 +3754,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11966430000029504,
+      "seconds": 0.12478949999785982,
       "crashed": null,
       "config": "A0"
     },
@@ -3776,7 +3776,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10853239999778452,
+      "seconds": 0.12547020000056364,
       "crashed": null,
       "config": "A0"
     },
@@ -3796,7 +3796,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10172700000111945,
+      "seconds": 0.09152850000100443,
       "crashed": null,
       "config": "A0"
     },
@@ -3816,7 +3816,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07787409999946249,
+      "seconds": 0.08039660000213189,
       "crashed": null,
       "config": "A0"
     },
@@ -3836,7 +3836,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08585730000049807,
+      "seconds": 0.08821859999443404,
       "crashed": null,
       "config": "A0"
     },
@@ -3856,7 +3856,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09437909999905969,
+      "seconds": 0.08241309999721125,
       "crashed": null,
       "config": "A0"
     },
@@ -3876,7 +3876,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08979990000079852,
+      "seconds": 0.08541039999545319,
       "crashed": null,
       "config": "A0"
     },
@@ -3896,7 +3896,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07537699999738834,
+      "seconds": 0.08164200000464916,
       "crashed": null,
       "config": "A0"
     },
@@ -3916,7 +3916,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0919845999997051,
+      "seconds": 0.08621629999834113,
       "crashed": null,
       "config": "A0"
     },
@@ -3936,7 +3936,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08326060000035795,
+      "seconds": 0.08691130000079283,
       "crashed": null,
       "config": "A0"
     },
@@ -3961,7 +3961,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11826020000080462,
+      "seconds": 0.12867299999925308,
       "crashed": null,
       "config": "A0"
     },
@@ -3986,7 +3986,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10286059999998542,
+      "seconds": 0.117136600005324,
       "crashed": null,
       "config": "A0"
     },
@@ -4011,7 +4011,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10990719999972498,
+      "seconds": 0.12362510000093607,
       "crashed": null,
       "config": "A0"
     },
@@ -4036,7 +4036,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1135428999987198,
+      "seconds": 0.12172239999927115,
       "crashed": null,
       "config": "A0"
     },
@@ -4061,7 +4061,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11001100000066799,
+      "seconds": 0.11646609999297652,
       "crashed": null,
       "config": "A0"
     },
@@ -4086,7 +4086,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11051770000267425,
+      "seconds": 0.1152148999972269,
       "crashed": null,
       "config": "A0"
     },
@@ -4111,7 +4111,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1082752000002074,
+      "seconds": 0.1164070000013453,
       "crashed": null,
       "config": "A0"
     },
@@ -4136,7 +4136,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10598399999798858,
+      "seconds": 0.12157410000509117,
       "crashed": null,
       "config": "A0"
     },
@@ -4161,7 +4161,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11567039999863482,
+      "seconds": 0.12292790000356035,
       "crashed": null,
       "config": "A0"
     },
@@ -4186,7 +4186,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10184590000062599,
+      "seconds": 0.11718309999560006,
       "crashed": null,
       "config": "A0"
     },
@@ -4211,7 +4211,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12095079999926384,
+      "seconds": 0.11313050000171643,
       "crashed": null,
       "config": "A0"
     },
@@ -4236,7 +4236,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12222829999882379,
+      "seconds": 0.12289299999974901,
       "crashed": null,
       "config": "A0"
     },
@@ -4261,7 +4261,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09872149999864632,
+      "seconds": 0.11032529999647522,
       "crashed": null,
       "config": "A0"
     },
@@ -4286,7 +4286,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10265440000148374,
+      "seconds": 0.11124689999996917,
       "crashed": null,
       "config": "A0"
     },
@@ -4311,7 +4311,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11032589999740594,
+      "seconds": 0.10440280000329949,
       "crashed": null,
       "config": "A0"
     },
@@ -4336,7 +4336,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1109539000026416,
+      "seconds": 0.14004070000373758,
       "crashed": null,
       "config": "A0"
     },
@@ -4358,7 +4358,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10367029999906663,
+      "seconds": 0.12540309999894816,
       "crashed": null,
       "config": "A0"
     },
@@ -4380,7 +4380,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11128029999963474,
+      "seconds": 0.127979899996717,
       "crashed": null,
       "config": "A0"
     },
@@ -4402,7 +4402,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11158749999958673,
+      "seconds": 0.11723459999484476,
       "crashed": null,
       "config": "A0"
     },
@@ -4424,7 +4424,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10668319999967935,
+      "seconds": 0.11122939999768278,
       "crashed": null,
       "config": "A0"
     },
@@ -4443,7 +4443,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10153609999906621,
+      "seconds": 0.10629000000335509,
       "crashed": null,
       "config": "A0"
     },
@@ -4462,7 +4462,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10103209999942919,
+      "seconds": 0.12538969999877736,
       "crashed": null,
       "config": "A0"
     },
@@ -4481,7 +4481,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10337029999936931,
+      "seconds": 0.1114506000012625,
       "crashed": null,
       "config": "A0"
     },
@@ -4500,7 +4500,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10550009999860777,
+      "seconds": 0.116259499998705,
       "crashed": null,
       "config": "A0"
     },
@@ -4519,7 +4519,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10581500000262167,
+      "seconds": 0.11374310000246624,
       "crashed": null,
       "config": "A0"
     },
@@ -4538,7 +4538,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10451969999849098,
+      "seconds": 0.22659919999568956,
       "crashed": null,
       "config": "A0"
     },
@@ -4557,7 +4557,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.13229839999985415,
+      "seconds": 0.1159962000019732,
       "crashed": null,
       "config": "A0"
     },
@@ -4576,7 +4576,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11390489999757847,
+      "seconds": 0.11407670000335202,
       "crashed": null,
       "config": "A0"
     },
@@ -4595,7 +4595,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10941319999983534,
+      "seconds": 0.11715850000473438,
       "crashed": null,
       "config": "A0"
     },
@@ -4614,7 +4614,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10847830000057002,
+      "seconds": 0.11528379999799654,
       "crashed": null,
       "config": "A0"
     },
@@ -4633,7 +4633,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1058751000018674,
+      "seconds": 0.11798350000026403,
       "crashed": null,
       "config": "A0"
     },
@@ -4652,7 +4652,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11042099999758648,
+      "seconds": 0.12340219999896362,
       "crashed": null,
       "config": "A0"
     },
@@ -4671,7 +4671,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11841649999769288,
+      "seconds": 0.12562849999812897,
       "crashed": null,
       "config": "A0"
     },
@@ -4690,7 +4690,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11238349999985076,
+      "seconds": 0.11973320000106469,
       "crashed": null,
       "config": "A0"
     },
@@ -4709,7 +4709,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11108860000240384,
+      "seconds": 0.1048979999977746,
       "crashed": null,
       "config": "A0"
     },
@@ -4728,7 +4728,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10789529999965453,
+      "seconds": 0.11021810000238474,
       "crashed": null,
       "config": "A0"
     },
@@ -4747,7 +4747,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10603089999858639,
+      "seconds": 0.11381529999925988,
       "crashed": null,
       "config": "A0"
     },
@@ -4766,7 +4766,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1210092999972403,
+      "seconds": 0.1137139999991632,
       "crashed": null,
       "config": "A0"
     },
@@ -4785,7 +4785,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09871250000287546,
+      "seconds": 0.1185648000027868,
       "crashed": null,
       "config": "A0"
     },
@@ -4804,7 +4804,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12132009999913862,
+      "seconds": 0.10917119999794522,
       "crashed": null,
       "config": "A0"
     },
@@ -4823,7 +4823,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11144059999787714,
+      "seconds": 0.11789940000016941,
       "crashed": null,
       "config": "A0"
     },
@@ -4842,7 +4842,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10202249999929336,
+      "seconds": 0.12568070000270382,
       "crashed": null,
       "config": "A0"
     },
@@ -4861,7 +4861,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11013599999932921,
+      "seconds": 0.11419739999837475,
       "crashed": null,
       "config": "A0"
     },
@@ -4880,7 +4880,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11292600000160746,
+      "seconds": 0.11146960000041872,
       "crashed": null,
       "config": "A0"
     },
@@ -4899,7 +4899,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1140795999999682,
+      "seconds": 0.10939979999966454,
       "crashed": null,
       "config": "A0"
     },
@@ -4918,7 +4918,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10990690000107861,
+      "seconds": 0.11576419999619247,
       "crashed": null,
       "config": "A0"
     },
@@ -4937,7 +4937,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10958779999782564,
+      "seconds": 0.1152899000007892,
       "crashed": null,
       "config": "A0"
     },
@@ -4956,7 +4956,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12114760000258684,
+      "seconds": 0.11969390000012936,
       "crashed": null,
       "config": "A0"
     },
@@ -4975,7 +4975,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11183689999961643,
+      "seconds": 0.11608669999986887,
       "crashed": null,
       "config": "A0"
     },
@@ -4994,7 +4994,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11582980000093812,
+      "seconds": 0.11629309999989346,
       "crashed": null,
       "config": "A0"
     },
@@ -5013,7 +5013,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10951829999976326,
+      "seconds": 0.12177259999589296,
       "crashed": null,
       "config": "A0"
     },
@@ -5032,7 +5032,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11243749999994179,
+      "seconds": 0.11518829999840818,
       "crashed": null,
       "config": "A0"
     },
@@ -5051,7 +5051,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1106471999992209,
+      "seconds": 0.10805840000102762,
       "crashed": null,
       "config": "A0"
     },
@@ -5070,7 +5070,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10950729999967734,
+      "seconds": 0.12287099999957718,
       "crashed": null,
       "config": "A0"
     },
@@ -5089,7 +5089,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10843740000200341,
+      "seconds": 0.11393780000071274,
       "crashed": null,
       "config": "A0"
     },
@@ -5108,7 +5108,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11556150000251364,
+      "seconds": 0.11690369999996619,
       "crashed": null,
       "config": "A0"
     },
@@ -5127,7 +5127,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10875809999924968,
+      "seconds": 0.12873530000069877,
       "crashed": null,
       "config": "A0"
     },
@@ -5146,7 +5146,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10499220000201603,
+      "seconds": 0.12497849999635946,
       "crashed": null,
       "config": "A0"
     },
@@ -5165,7 +5165,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10101919999942766,
+      "seconds": 0.10920590000023367,
       "crashed": null,
       "config": "A0"
     },
@@ -5184,7 +5184,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.26122249999752967,
+      "seconds": 0.11005120000481838,
       "crashed": null,
       "config": "A0"
     },
@@ -5203,7 +5203,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11048609999852488,
+      "seconds": 0.13955049999640323,
       "crashed": null,
       "config": "A0"
     },
@@ -5222,7 +5222,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11066230000142241,
+      "seconds": 0.12218350000330247,
       "crashed": null,
       "config": "A0"
     },
@@ -5241,7 +5241,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10626699999920675,
+      "seconds": 0.12770799999998417,
       "crashed": null,
       "config": "A0"
     },
@@ -5260,7 +5260,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11247680000087712,
+      "seconds": 0.12543819999700645,
       "crashed": null,
       "config": "A0"
     },
@@ -5278,7 +5278,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07418559999860008,
+      "seconds": 0.09507270000176504,
       "crashed": null,
       "config": "A0"
     },
@@ -5296,7 +5296,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08036590000119759,
+      "seconds": 0.08282100000360515,
       "crashed": null,
       "config": "A0"
     },
@@ -5314,7 +5314,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08658570000261534,
+      "seconds": 0.0801359000033699,
       "crashed": null,
       "config": "A0"
     },
@@ -5332,7 +5332,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08210759999928996,
+      "seconds": 0.09566089999862015,
       "crashed": null,
       "config": "A0"
     },
@@ -5352,7 +5352,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08166419999906793,
+      "seconds": 0.07779409999784548,
       "crashed": null,
       "config": "A0"
     },
@@ -5372,7 +5372,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07721469999887631,
+      "seconds": 0.08737139999720966,
       "crashed": null,
       "config": "A0"
     },
@@ -5392,7 +5392,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08814890000212472,
+      "seconds": 0.07658939999964787,
       "crashed": null,
       "config": "A0"
     },
@@ -5412,7 +5412,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07174060000033933,
+      "seconds": 0.08971620000374969,
       "crashed": null,
       "config": "A0"
     },
@@ -5430,7 +5430,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09752609999850392,
+      "seconds": 0.09872110000287648,
       "crashed": null,
       "config": "A0"
     },
@@ -5448,7 +5448,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.2543349000006856,
+      "seconds": 0.0891399999964051,
       "crashed": null,
       "config": "A0"
     },
@@ -5466,7 +5466,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09337130000130855,
+      "seconds": 0.10938929999974789,
       "crashed": null,
       "config": "A0"
     },
@@ -5484,7 +5484,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08246929999950225,
+      "seconds": 0.09424120000039693,
       "crashed": null,
       "config": "A0"
     },
@@ -5504,7 +5504,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07875849999982165,
+      "seconds": 0.08934819999558385,
       "crashed": null,
       "config": "A0"
     },
@@ -5524,7 +5524,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07473140000001877,
+      "seconds": 0.08524089999991702,
       "crashed": null,
       "config": "A0"
     },
@@ -5544,7 +5544,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0789623999989999,
+      "seconds": 0.07768569999461761,
       "crashed": null,
       "config": "A0"
     },
@@ -5564,7 +5564,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09115749999909895,
+      "seconds": 0.08649859999422915,
       "crashed": null,
       "config": "A0"
     },
@@ -5582,7 +5582,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08291599999938626,
+      "seconds": 0.09280569999828003,
       "crashed": null,
       "config": "A0"
     },
@@ -5600,7 +5600,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08410950000325101,
+      "seconds": 0.11704599999939092,
       "crashed": null,
       "config": "A0"
     },
@@ -5618,7 +5618,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08017209999889019,
+      "seconds": 0.09585089999745833,
       "crashed": null,
       "config": "A0"
     },
@@ -5636,7 +5636,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08067879999725847,
+      "seconds": 0.08416369999758899,
       "crashed": null,
       "config": "A0"
     },
@@ -5654,7 +5654,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08053669999935664,
+      "seconds": 0.09690190000401344,
       "crashed": null,
       "config": "A0"
     },
@@ -5672,7 +5672,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07736590000058641,
+      "seconds": 0.09633400000166148,
       "crashed": null,
       "config": "A0"
     },
@@ -5690,7 +5690,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07475160000103642,
+      "seconds": 0.08820790000027046,
       "crashed": null,
       "config": "A0"
     },
@@ -5708,7 +5708,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07686970000213478,
+      "seconds": 0.08785099999658996,
       "crashed": null,
       "config": "A0"
     },
@@ -5726,7 +5726,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08581340000091586,
+      "seconds": 0.09486379999725614,
       "crashed": null,
       "config": "A0"
     },
@@ -5744,7 +5744,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07631340000079945,
+      "seconds": 0.11508730000059586,
       "crashed": null,
       "config": "A0"
     },
@@ -5762,7 +5762,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08585089999905904,
+      "seconds": 0.08898459999909392,
       "crashed": null,
       "config": "A0"
     },
@@ -5780,7 +5780,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09024779999890598,
+      "seconds": 0.0863071999992826,
       "crashed": null,
       "config": "A0"
     },
@@ -5798,7 +5798,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09346619999996619,
+      "seconds": 0.09063160000368953,
       "crashed": null,
       "config": "A0"
     },
@@ -5816,7 +5816,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08345919999919715,
+      "seconds": 0.08409230000688694,
       "crashed": null,
       "config": "A0"
     },
@@ -5834,7 +5834,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0905815000005532,
+      "seconds": 0.08642569999938132,
       "crashed": null,
       "config": "A0"
     },
@@ -5852,7 +5852,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07617069999832893,
+      "seconds": 0.09029500000178814,
       "crashed": null,
       "config": "A0"
     },
@@ -5870,7 +5870,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08001019999937853,
+      "seconds": 0.09319120000145631,
       "crashed": null,
       "config": "A0"
     },
@@ -5888,7 +5888,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07891709999967134,
+      "seconds": 0.09097530000144616,
       "crashed": null,
       "config": "A0"
     },
@@ -5906,7 +5906,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0976513999994495,
+      "seconds": 0.10872290000406792,
       "crashed": null,
       "config": "A0"
     },
@@ -5924,7 +5924,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09972409999681986,
+      "seconds": 0.08744940000178758,
       "crashed": null,
       "config": "A0"
     },
@@ -5944,7 +5944,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12690229999861913,
+      "seconds": 0.12928639999881852,
       "crashed": null,
       "config": "A0"
     },
@@ -5964,7 +5964,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12394710000080522,
+      "seconds": 0.13810279999597697,
       "crashed": null,
       "config": "A0"
     },
@@ -5984,7 +5984,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12659399999756715,
+      "seconds": 0.12552919999870937,
       "crashed": null,
       "config": "A0"
     },
@@ -6004,7 +6004,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12138639999830048,
+      "seconds": 0.1407619000019622,
       "crashed": null,
       "config": "A0"
     },
@@ -6024,7 +6024,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11553300000014133,
+      "seconds": 0.13659860000188928,
       "crashed": null,
       "config": "A0"
     },
@@ -6044,7 +6044,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.32377270000142744,
+      "seconds": 0.3384698000008939,
       "crashed": null,
       "config": "A0"
     },
@@ -6064,7 +6064,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11512719999882393,
+      "seconds": 0.12668329999723937,
       "crashed": null,
       "config": "A0"
     },
@@ -6084,7 +6084,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1111257000011392,
+      "seconds": 0.13081490000331542,
       "crashed": null,
       "config": "A0"
     },
@@ -6104,7 +6104,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.14418989999830956,
+      "seconds": 0.13499340000271332,
       "crashed": null,
       "config": "A0"
     },
@@ -6124,7 +6124,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1131697000018903,
+      "seconds": 0.13342910000210395,
       "crashed": null,
       "config": "A0"
     },
@@ -6144,7 +6144,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10921520000192686,
+      "seconds": 0.13390970000182278,
       "crashed": null,
       "config": "A0"
     },
@@ -6164,7 +6164,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1164972000005946,
+      "seconds": 0.13431100000161678,
       "crashed": null,
       "config": "A0"
     },
@@ -6184,7 +6184,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11818459999994957,
+      "seconds": 0.13340760000573937,
       "crashed": null,
       "config": "A0"
     },
@@ -6204,7 +6204,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12200689999735914,
+      "seconds": 0.12818269999843324,
       "crashed": null,
       "config": "A0"
     },
@@ -6224,7 +6224,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11058740000225953,
+      "seconds": 0.13285850000102073,
       "crashed": null,
       "config": "A0"
     },
@@ -6244,7 +6244,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11501599999974133,
+      "seconds": 0.14048100000218255,
       "crashed": null,
       "config": "A0"
     },
@@ -6267,7 +6267,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10836039999776403,
+      "seconds": 0.1224688000002061,
       "crashed": null,
       "config": "A0"
     },
@@ -6290,7 +6290,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11131860000023153,
+      "seconds": 0.11621369999920717,
       "crashed": null,
       "config": "A0"
     },
@@ -6313,7 +6313,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11115500000232714,
+      "seconds": 0.10898060000181431,
       "crashed": null,
       "config": "A0"
     },
@@ -6336,7 +6336,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1000791999977082,
+      "seconds": 0.12678949999826727,
       "crashed": null,
       "config": "A0"
     },
@@ -6359,7 +6359,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0974065000009432,
+      "seconds": 0.12033969999902183,
       "crashed": null,
       "config": "A0"
     },
@@ -6382,7 +6382,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1006589000025997,
+      "seconds": 0.11869660000229487,
       "crashed": null,
       "config": "A0"
     },
@@ -6405,7 +6405,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11011380000127247,
+      "seconds": 0.116800299998431,
       "crashed": null,
       "config": "A0"
     },
@@ -6428,7 +6428,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10279520000040065,
+      "seconds": 0.1288107999935164,
       "crashed": null,
       "config": "A0"
     },
@@ -6448,7 +6448,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1245173999996041,
+      "seconds": 0.14910970000346424,
       "crashed": null,
       "config": "A0"
     },
@@ -6468,7 +6468,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12516739999773563,
+      "seconds": 0.14984260000346694,
       "crashed": null,
       "config": "A0"
     },
@@ -6487,7 +6487,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10850429999845801,
+      "seconds": 0.11341589999938151,
       "crashed": null,
       "config": "A0"
     },
@@ -6506,7 +6506,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09967889999825275,
+      "seconds": 0.12013110000407323,
       "crashed": null,
       "config": "A0"
     },
@@ -6530,7 +6530,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11225159999958123,
+      "seconds": 0.129825099997106,
       "crashed": null,
       "config": "A0"
     },
@@ -6554,7 +6554,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1056843000005756,
+      "seconds": 0.1322156999958679,
       "crashed": null,
       "config": "A0"
     },
@@ -6578,7 +6578,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11299650000000838,
+      "seconds": 0.12784239999746205,
       "crashed": null,
       "config": "A0"
     },
@@ -6602,7 +6602,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11024530000213417,
+      "seconds": 0.13188330000411952,
       "crashed": null,
       "config": "A0"
     },
@@ -6624,7 +6624,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.22406760000012582,
+      "seconds": 0.11125069999980042,
       "crashed": null,
       "config": "A2"
     },
@@ -6646,7 +6646,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.11966140000004089,
+      "seconds": 0.07884410000406206,
       "crashed": null,
       "config": "A2"
     },
@@ -6668,7 +6668,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08890420000170707,
+      "seconds": 0.07928820000233827,
       "crashed": null,
       "config": "A2"
     },
@@ -6690,7 +6690,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08397010000044247,
+      "seconds": 0.08941000000049826,
       "crashed": null,
       "config": "A2"
     },
@@ -6712,7 +6712,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07297430000107852,
+      "seconds": 0.06790290000208188,
       "crashed": null,
       "config": "A2"
     },
@@ -6734,7 +6734,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07366150000234484,
+      "seconds": 0.07393150000280002,
       "crashed": null,
       "config": "A2"
     },
@@ -6756,7 +6756,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07794880000074045,
+      "seconds": 0.07052349999867147,
       "crashed": null,
       "config": "A2"
     },
@@ -6778,7 +6778,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.0673255000001518,
+      "seconds": 0.13078289999975823,
       "crashed": null,
       "config": "A2"
     },
@@ -6800,7 +6800,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08111170000120183,
+      "seconds": 0.08368530000007013,
       "crashed": null,
       "config": "A2"
     },
@@ -6822,7 +6822,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08721789999981411,
+      "seconds": 0.07914629999868339,
       "crashed": null,
       "config": "A2"
     },
@@ -6844,7 +6844,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08161370000016177,
+      "seconds": 0.09209820000251057,
       "crashed": null,
       "config": "A2"
     },
@@ -6866,7 +6866,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08454209999763407,
+      "seconds": 0.09782080000150017,
       "crashed": null,
       "config": "A2"
     },
@@ -6888,7 +6888,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08352050000030431,
+      "seconds": 0.08952780000254279,
       "crashed": null,
       "config": "A2"
     },
@@ -6910,7 +6910,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.08442799999829731,
+      "seconds": 0.08756130000256235,
       "crashed": null,
       "config": "A2"
     },
@@ -6932,7 +6932,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.09053929999936372,
+      "seconds": 0.08687309999368154,
       "crashed": null,
       "config": "A2"
     },
@@ -6954,7 +6954,7 @@
       "rule_ids": [
         "S4_drop_slots_via_waitlist"
       ],
-      "seconds": 0.0818065999992541,
+      "seconds": 0.08889439999620663,
       "crashed": null,
       "config": "A2"
     },
@@ -6976,7 +6976,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07687390000137384,
+      "seconds": 0.06872659999498865,
       "crashed": null,
       "config": "A2"
     },
@@ -6998,7 +6998,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07160529999964638,
+      "seconds": 0.08180939999874681,
       "crashed": null,
       "config": "A2"
     },
@@ -7020,7 +7020,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07130619999952614,
+      "seconds": 0.07562650000181748,
       "crashed": null,
       "config": "A2"
     },
@@ -7042,7 +7042,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.062417799999821,
+      "seconds": 0.0766793000002508,
       "crashed": null,
       "config": "A2"
     },
@@ -7064,7 +7064,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07277910000266274,
+      "seconds": 0.07149690000369446,
       "crashed": null,
       "config": "A2"
     },
@@ -7086,7 +7086,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.1345738000018173,
+      "seconds": 0.06660420000116574,
       "crashed": null,
       "config": "A2"
     },
@@ -7108,7 +7108,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07393670000237762,
+      "seconds": 0.06774540000333218,
       "crashed": null,
       "config": "A2"
     },
@@ -7130,7 +7130,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07173780000084662,
+      "seconds": 0.0825500999999349,
       "crashed": null,
       "config": "A2"
     },
@@ -7150,7 +7150,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03245000000242726,
+      "seconds": 0.042431499998201616,
       "crashed": null,
       "config": "A2"
     },
@@ -7170,7 +7170,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.04042420000041602,
+      "seconds": 0.0350890999980038,
       "crashed": null,
       "config": "A2"
     },
@@ -7190,7 +7190,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.034035600001516286,
+      "seconds": 0.04008140000223648,
       "crashed": null,
       "config": "A2"
     },
@@ -7210,7 +7210,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.028369999999995343,
+      "seconds": 0.031299499998567626,
       "crashed": null,
       "config": "A2"
     },
@@ -7235,7 +7235,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12200020000091172,
+      "seconds": 0.1139471999995294,
       "crashed": null,
       "config": "A2"
     },
@@ -7260,7 +7260,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.19234030000006896,
+      "seconds": 0.12166379999689525,
       "crashed": null,
       "config": "A2"
     },
@@ -7285,7 +7285,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10327619999952731,
+      "seconds": 0.12023780000163242,
       "crashed": null,
       "config": "A2"
     },
@@ -7310,7 +7310,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11420749999888358,
+      "seconds": 0.11186969999835128,
       "crashed": null,
       "config": "A2"
     },
@@ -7335,7 +7335,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11631560000023455,
+      "seconds": 0.10539599999901839,
       "crashed": null,
       "config": "A2"
     },
@@ -7360,7 +7360,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11302319999958854,
+      "seconds": 0.12326089999987744,
       "crashed": null,
       "config": "A2"
     },
@@ -7385,7 +7385,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10797000000093249,
+      "seconds": 0.12743919999775244,
       "crashed": null,
       "config": "A2"
     },
@@ -7410,7 +7410,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1041667999998026,
+      "seconds": 0.11147909999999683,
       "crashed": null,
       "config": "A2"
     },
@@ -7435,7 +7435,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10896109999885084,
+      "seconds": 0.11861109999881592,
       "crashed": null,
       "config": "A2"
     },
@@ -7460,7 +7460,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11312810000163154,
+      "seconds": 0.12459519999538315,
       "crashed": null,
       "config": "A2"
     },
@@ -7485,7 +7485,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10526599999866448,
+      "seconds": 0.11867640000127722,
       "crashed": null,
       "config": "A2"
     },
@@ -7510,7 +7510,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11104100000011385,
+      "seconds": 0.11972749999404186,
       "crashed": null,
       "config": "A2"
     },
@@ -7535,7 +7535,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11161670000001322,
+      "seconds": 0.11737330000323709,
       "crashed": null,
       "config": "A2"
     },
@@ -7560,7 +7560,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10136179999972228,
+      "seconds": 0.1147080000009737,
       "crashed": null,
       "config": "A2"
     },
@@ -7585,7 +7585,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1064511999975366,
+      "seconds": 0.11315830000239657,
       "crashed": null,
       "config": "A2"
     },
@@ -7610,7 +7610,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10290750000058324,
+      "seconds": 0.10783680000167806,
       "crashed": null,
       "config": "A2"
     },
@@ -7632,7 +7632,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07137639999928069,
+      "seconds": 0.1930175999950734,
       "crashed": null,
       "config": "A2"
     },
@@ -7654,7 +7654,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06659399999989546,
+      "seconds": 0.08465860000433167,
       "crashed": null,
       "config": "A2"
     },
@@ -7676,7 +7676,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.07493529999919701,
+      "seconds": 0.07239129999652505,
       "crashed": null,
       "config": "A2"
     },
@@ -7698,7 +7698,7 @@
       "rule_ids": [
         "G4_verified_agent_only"
       ],
-      "seconds": 0.06953170000269893,
+      "seconds": 0.06376530000125058,
       "crashed": null,
       "config": "A2"
     },
@@ -7717,7 +7717,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10354369999913615,
+      "seconds": 0.11977309999929275,
       "crashed": null,
       "config": "A2"
     },
@@ -7736,7 +7736,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11647810000067693,
+      "seconds": 0.12339590000192402,
       "crashed": null,
       "config": "A2"
     },
@@ -7755,7 +7755,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1089350000002014,
+      "seconds": 0.1066826999958721,
       "crashed": null,
       "config": "A2"
     },
@@ -7774,7 +7774,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10521850000077393,
+      "seconds": 0.12081649999890942,
       "crashed": null,
       "config": "A2"
     },
@@ -7793,7 +7793,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1089557999985118,
+      "seconds": 0.1251840999975684,
       "crashed": null,
       "config": "A2"
     },
@@ -7812,7 +7812,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11979199999768753,
+      "seconds": 0.11921190000430215,
       "crashed": null,
       "config": "A2"
     },
@@ -7831,7 +7831,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1056008000014117,
+      "seconds": 0.12047679999523098,
       "crashed": null,
       "config": "A2"
     },
@@ -7850,7 +7850,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.21296829999846523,
+      "seconds": 0.1286984999969718,
       "crashed": null,
       "config": "A2"
     },
@@ -7869,7 +7869,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1162136000020837,
+      "seconds": 0.1259682999952929,
       "crashed": null,
       "config": "A2"
     },
@@ -7888,7 +7888,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11210560000108671,
+      "seconds": 0.11571739999635611,
       "crashed": null,
       "config": "A2"
     },
@@ -7907,7 +7907,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10083619999932125,
+      "seconds": 0.11913339999591699,
       "crashed": null,
       "config": "A2"
     },
@@ -7926,7 +7926,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1372375999999349,
+      "seconds": 0.11760589999903459,
       "crashed": null,
       "config": "A2"
     },
@@ -7945,7 +7945,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11567029999787337,
+      "seconds": 0.12827390000165906,
       "crashed": null,
       "config": "A2"
     },
@@ -7964,7 +7964,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10699010000098497,
+      "seconds": 0.12467130000004545,
       "crashed": null,
       "config": "A2"
     },
@@ -7983,7 +7983,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11375670000052196,
+      "seconds": 0.1125599000006332,
       "crashed": null,
       "config": "A2"
     },
@@ -8002,7 +8002,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10337869999784743,
+      "seconds": 0.13013439999485854,
       "crashed": null,
       "config": "A2"
     },
@@ -8021,7 +8021,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10427940000226954,
+      "seconds": 0.12411529999371851,
       "crashed": null,
       "config": "A2"
     },
@@ -8040,7 +8040,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10728319999907399,
+      "seconds": 0.10659209999721497,
       "crashed": null,
       "config": "A2"
     },
@@ -8059,7 +8059,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1151873999988311,
+      "seconds": 0.10566420000395738,
       "crashed": null,
       "config": "A2"
     },
@@ -8078,7 +8078,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11139689999981783,
+      "seconds": 0.12216880000050878,
       "crashed": null,
       "config": "A2"
     },
@@ -8097,7 +8097,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10476270000071963,
+      "seconds": 0.12191629999870202,
       "crashed": null,
       "config": "A2"
     },
@@ -8116,7 +8116,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10282910000023548,
+      "seconds": 0.12117040000157431,
       "crashed": null,
       "config": "A2"
     },
@@ -8135,7 +8135,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10255849999884958,
+      "seconds": 0.10530180000205291,
       "crashed": null,
       "config": "A2"
     },
@@ -8154,7 +8154,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11128700000335812,
+      "seconds": 0.11119969999708701,
       "crashed": null,
       "config": "A2"
     },
@@ -8173,7 +8173,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11654410000119242,
+      "seconds": 0.11007470000186004,
       "crashed": null,
       "config": "A2"
     },
@@ -8192,7 +8192,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11365500000101747,
+      "seconds": 0.11724699999467703,
       "crashed": null,
       "config": "A2"
     },
@@ -8211,7 +8211,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10854269999981625,
+      "seconds": 0.11585950000153389,
       "crashed": null,
       "config": "A2"
     },
@@ -8230,7 +8230,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11563260000184528,
+      "seconds": 0.2721280999976443,
       "crashed": null,
       "config": "A2"
     },
@@ -8249,7 +8249,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10848989999794867,
+      "seconds": 0.11350970000057714,
       "crashed": null,
       "config": "A2"
     },
@@ -8268,7 +8268,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12157619999925373,
+      "seconds": 0.11826049999945099,
       "crashed": null,
       "config": "A2"
     },
@@ -8287,7 +8287,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11460420000003069,
+      "seconds": 0.11597279999841703,
       "crashed": null,
       "config": "A2"
     },
@@ -8306,7 +8306,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.127433600002405,
+      "seconds": 0.1152801999996882,
       "crashed": null,
       "config": "A2"
     },
@@ -8325,7 +8325,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1059227000005194,
+      "seconds": 0.12361280000186525,
       "crashed": null,
       "config": "A2"
     },
@@ -8344,7 +8344,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09893550000197138,
+      "seconds": 0.11029720000078669,
       "crashed": null,
       "config": "A2"
     },
@@ -8363,7 +8363,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11914560000150232,
+      "seconds": 0.11450840000179596,
       "crashed": null,
       "config": "A2"
     },
@@ -8382,7 +8382,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11143459999948391,
+      "seconds": 0.118328600001405,
       "crashed": null,
       "config": "A2"
     },
@@ -8401,7 +8401,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11367600000085076,
+      "seconds": 0.12005080000380985,
       "crashed": null,
       "config": "A2"
     },
@@ -8420,7 +8420,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11411980000048061,
+      "seconds": 0.1294281000009505,
       "crashed": null,
       "config": "A2"
     },
@@ -8439,7 +8439,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10680000000138534,
+      "seconds": 0.11727750000136439,
       "crashed": null,
       "config": "A2"
     },
@@ -8458,7 +8458,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10993420000158949,
+      "seconds": 0.2709214999995311,
       "crashed": null,
       "config": "A2"
     },
@@ -8477,7 +8477,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11265990000174497,
+      "seconds": 0.12078579999797512,
       "crashed": null,
       "config": "A2"
     },
@@ -8496,7 +8496,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.25765300000057323,
+      "seconds": 0.10891069999343017,
       "crashed": null,
       "config": "A2"
     },
@@ -8515,7 +8515,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10651589999906719,
+      "seconds": 0.11536160000105156,
       "crashed": null,
       "config": "A2"
     },
@@ -8534,7 +8534,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1145622000003641,
+      "seconds": 0.13475669999752427,
       "crashed": null,
       "config": "A2"
     },
@@ -8552,7 +8552,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07846630000130972,
+      "seconds": 0.07746259999839822,
       "crashed": null,
       "config": "A2"
     },
@@ -8570,7 +8570,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07613889999993262,
+      "seconds": 0.10085350000008475,
       "crashed": null,
       "config": "A2"
     },
@@ -8588,7 +8588,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08292829999845708,
+      "seconds": 0.09672970000247005,
       "crashed": null,
       "config": "A2"
     },
@@ -8606,7 +8606,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07582520000141812,
+      "seconds": 0.09144360000209417,
       "crashed": null,
       "config": "A2"
     },
@@ -8626,7 +8626,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.0305359000012686,
+      "seconds": 0.03921560000162572,
       "crashed": null,
       "config": "A2"
     },
@@ -8646,7 +8646,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.027891000001545763,
+      "seconds": 0.03994039999815868,
       "crashed": null,
       "config": "A2"
     },
@@ -8666,7 +8666,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.027539499998965766,
+      "seconds": 0.04007149999961257,
       "crashed": null,
       "config": "A2"
     },
@@ -8686,7 +8686,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.032521599998290185,
+      "seconds": 0.045020899997325614,
       "crashed": null,
       "config": "A2"
     },
@@ -8704,7 +8704,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08056560000113677,
+      "seconds": 0.10442970000440255,
       "crashed": null,
       "config": "A2"
     },
@@ -8722,7 +8722,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09671159999925294,
+      "seconds": 0.13079370000195922,
       "crashed": null,
       "config": "A2"
     },
@@ -8740,7 +8740,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08377359999940381,
+      "seconds": 0.09421629999997094,
       "crashed": null,
       "config": "A2"
     },
@@ -8758,7 +8758,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.2730937999986054,
+      "seconds": 0.10497380000015255,
       "crashed": null,
       "config": "A2"
     },
@@ -8778,7 +8778,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.034636099997442216,
+      "seconds": 0.040401999998721294,
       "crashed": null,
       "config": "A2"
     },
@@ -8798,7 +8798,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03197339999678661,
+      "seconds": 0.03968860000168206,
       "crashed": null,
       "config": "A2"
     },
@@ -8818,7 +8818,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.027638999999908265,
+      "seconds": 0.04054379999433877,
       "crashed": null,
       "config": "A2"
     },
@@ -8838,7 +8838,7 @@
       "rule_ids": [
         "G3_party_size_max_10"
       ],
-      "seconds": 0.03561009999975795,
+      "seconds": 0.03528329999971902,
       "crashed": null,
       "config": "A2"
     },
@@ -8856,7 +8856,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08583770000041113,
+      "seconds": 0.09048380000604084,
       "crashed": null,
       "config": "A2"
     },
@@ -8874,7 +8874,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08965509999688948,
+      "seconds": 0.08800490000430727,
       "crashed": null,
       "config": "A2"
     },
@@ -8892,7 +8892,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08869640000193613,
+      "seconds": 0.10526549999485724,
       "crashed": null,
       "config": "A2"
     },
@@ -8910,7 +8910,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0906423000014911,
+      "seconds": 0.10615079999843147,
       "crashed": null,
       "config": "A2"
     },
@@ -8928,7 +8928,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.0855163000014727,
+      "seconds": 0.09264830000029178,
       "crashed": null,
       "config": "A2"
     },
@@ -8946,7 +8946,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09168069999941508,
+      "seconds": 0.08971670000028098,
       "crashed": null,
       "config": "A2"
     },
@@ -8964,7 +8964,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10115660000155913,
+      "seconds": 0.0975306999971508,
       "crashed": null,
       "config": "A2"
     },
@@ -8982,7 +8982,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08592659999703756,
+      "seconds": 0.09534999999596039,
       "crashed": null,
       "config": "A2"
     },
@@ -9000,7 +9000,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08635589999903459,
+      "seconds": 0.08517659999779426,
       "crashed": null,
       "config": "A2"
     },
@@ -9018,7 +9018,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08048689999850467,
+      "seconds": 0.08032850000017788,
       "crashed": null,
       "config": "A2"
     },
@@ -9036,7 +9036,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08549139999740873,
+      "seconds": 0.08765500000299653,
       "crashed": null,
       "config": "A2"
     },
@@ -9054,7 +9054,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08524540000144043,
+      "seconds": 0.11523260000103619,
       "crashed": null,
       "config": "A2"
     },
@@ -9072,7 +9072,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09472520000053919,
+      "seconds": 0.09521890000178246,
       "crashed": null,
       "config": "A2"
     },
@@ -9090,7 +9090,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08679789999951026,
+      "seconds": 0.092853300004208,
       "crashed": null,
       "config": "A2"
     },
@@ -9108,7 +9108,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08817459999772836,
+      "seconds": 0.09445640000194544,
       "crashed": null,
       "config": "A2"
     },
@@ -9126,7 +9126,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.07761780000146246,
+      "seconds": 0.09809030000178609,
       "crashed": null,
       "config": "A2"
     },
@@ -9144,7 +9144,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08599859999958426,
+      "seconds": 0.09657169999991311,
       "crashed": null,
       "config": "A2"
     },
@@ -9162,7 +9162,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.09034199999950943,
+      "seconds": 0.10601129999849945,
       "crashed": null,
       "config": "A2"
     },
@@ -9180,7 +9180,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08273990000088816,
+      "seconds": 0.09358369999972638,
       "crashed": null,
       "config": "A2"
     },
@@ -9198,7 +9198,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.08582170000227052,
+      "seconds": 0.08955219999916153,
       "crashed": null,
       "config": "A2"
     },
@@ -9218,7 +9218,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12125209999794606,
+      "seconds": 0.134429599995201,
       "crashed": null,
       "config": "A2"
     },
@@ -9238,7 +9238,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12971640000250773,
+      "seconds": 0.12709750000067288,
       "crashed": null,
       "config": "A2"
     },
@@ -9258,7 +9258,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12230359999739449,
+      "seconds": 0.13236650000180816,
       "crashed": null,
       "config": "A2"
     },
@@ -9278,7 +9278,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11728129999755765,
+      "seconds": 0.1439673999993829,
       "crashed": null,
       "config": "A2"
     },
@@ -9298,7 +9298,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12851030000092578,
+      "seconds": 0.13663010000163922,
       "crashed": null,
       "config": "A2"
     },
@@ -9318,7 +9318,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12101609999808716,
+      "seconds": 0.12959540000156267,
       "crashed": null,
       "config": "A2"
     },
@@ -9338,7 +9338,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12474079999810783,
+      "seconds": 0.1360839999979362,
       "crashed": null,
       "config": "A2"
     },
@@ -9358,7 +9358,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11901289999877918,
+      "seconds": 0.12539630000537727,
       "crashed": null,
       "config": "A2"
     },
@@ -9378,7 +9378,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12547210000047926,
+      "seconds": 0.13915059999999357,
       "crashed": null,
       "config": "A2"
     },
@@ -9398,7 +9398,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1292403999977978,
+      "seconds": 0.13913360000151442,
       "crashed": null,
       "config": "A2"
     },
@@ -9418,7 +9418,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12208429999736836,
+      "seconds": 0.14598680000199238,
       "crashed": null,
       "config": "A2"
     },
@@ -9438,7 +9438,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11519459999908577,
+      "seconds": 0.13335060000099475,
       "crashed": null,
       "config": "A2"
     },
@@ -9458,7 +9458,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12036900000020978,
+      "seconds": 0.1252429000014672,
       "crashed": null,
       "config": "A2"
     },
@@ -9478,7 +9478,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11359970000194153,
+      "seconds": 0.12875419999909354,
       "crashed": null,
       "config": "A2"
     },
@@ -9498,7 +9498,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1227032999995572,
+      "seconds": 0.12896739999996498,
       "crashed": null,
       "config": "A2"
     },
@@ -9518,7 +9518,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11663460000272607,
+      "seconds": 0.12413460000243504,
       "crashed": null,
       "config": "A2"
     },
@@ -9541,7 +9541,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10639900000023772,
+      "seconds": 0.12300839999807067,
       "crashed": null,
       "config": "A2"
     },
@@ -9564,7 +9564,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10466789999918547,
+      "seconds": 0.12670199999411125,
       "crashed": null,
       "config": "A2"
     },
@@ -9587,7 +9587,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11568769999939832,
+      "seconds": 0.11161959999299143,
       "crashed": null,
       "config": "A2"
     },
@@ -9610,7 +9610,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10842529999717954,
+      "seconds": 0.11916650000057416,
       "crashed": null,
       "config": "A2"
     },
@@ -9633,7 +9633,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11977910000132397,
+      "seconds": 0.12128410000150325,
       "crashed": null,
       "config": "A2"
     },
@@ -9656,7 +9656,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10084619999906863,
+      "seconds": 0.14925059999950463,
       "crashed": null,
       "config": "A2"
     },
@@ -9679,7 +9679,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11529739999969024,
+      "seconds": 0.12881380000180798,
       "crashed": null,
       "config": "A2"
     },
@@ -9702,7 +9702,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10384029999841005,
+      "seconds": 0.10991810000268742,
       "crashed": null,
       "config": "A2"
     },
@@ -9722,7 +9722,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11708440000074916,
+      "seconds": 0.12512470000365283,
       "crashed": null,
       "config": "A2"
     },
@@ -9742,7 +9742,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11710820000007516,
+      "seconds": 0.12966559999767924,
       "crashed": null,
       "config": "A2"
     },
@@ -9761,7 +9761,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.10392819999833591,
+      "seconds": 0.12143189999915194,
       "crashed": null,
       "config": "A2"
     },
@@ -9780,7 +9780,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.13547449999896344,
+      "seconds": 0.1355693999939831,
       "crashed": null,
       "config": "A2"
     },
@@ -9804,7 +9804,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.12119420000090031,
+      "seconds": 0.12198900000657886,
       "crashed": null,
       "config": "A2"
     },
@@ -9828,7 +9828,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.13595060000079684,
+      "seconds": 0.12715639999805717,
       "crashed": null,
       "config": "A2"
     },
@@ -9852,7 +9852,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.11222550000093179,
+      "seconds": 0.1346756000057212,
       "crashed": null,
       "config": "A2"
     },
@@ -9876,7 +9876,7 @@
       ],
       "error_codes": [],
       "rule_ids": [],
-      "seconds": 0.1230439999999362,
+      "seconds": 0.12260009999590693,
       "crashed": null,
       "config": "A2"
     }

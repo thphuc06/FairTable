@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from fastmcp import FastMCP
 
 from server import resources
+from server.audit_sink import S3AuditSink
 from server.config import Settings
 from server.domain.clock import Clock, SystemClock
 from server.domain.readback import ReadBackCodec
@@ -41,7 +42,9 @@ INSTRUCTIONS = (
     "On an error, follow its next_step; never retry a refused rule with the same input. "
     "Only the spoken_summary, an error's message and the read_back sentence are meant for the user: "
     "never read out tool names, parameter names, codes, ids or tokens (the booking code in a confirmed "
-    "booking is the exception). Show at most five options at a time."
+    "booking is the exception). Show at most five options at a time. A restaurant name may have been "
+    "misheard: when restaurant_search says confirm_name, say the name it found and wait for a yes before "
+    "you go on."
 )
 
 
@@ -78,15 +81,21 @@ def build_deps(
         deps.notifier = notifier
     elif settings.notify_topic_arn:  # the dev inbox keeps working; the notice also goes to the SNS topic
         deps.notifier = FanoutNotifier(deps.notifier, SnsNotifier(sns_client(settings), settings.notify_topic_arn))
+    if settings.audit_bucket:
+        deps.audit_sink = S3AuditSink(aws_client(settings, "s3"), settings.audit_bucket)
     deps.slot_released = lambda venue_id, date, time, group: safe_offer(deps, venue_id, date, time, group)
     return deps
 
 
-def sns_client(settings: Settings):
+def aws_client(settings: Settings, service: str):
     """boto3 is imported here so that the local profile never needs AWS credentials or a region."""
     import boto3
 
-    return boto3.client("sns", region_name=settings.store.region or None)
+    return boto3.client(service, region_name=settings.store.region or None)
+
+
+def sns_client(settings: Settings):
+    return aws_client(settings, "sns")
 
 
 def create_server(deps: AppDeps) -> FastMCP:

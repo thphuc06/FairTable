@@ -53,8 +53,8 @@ class FixedSeedProvider:
 
 
 class KmsSeedProvider:
-    """AWS KMS ``GenerateRandom`` (scaffold only: not used or tested against AWS until the
-    developer says "wire AWS", docs/DECISIONS.md D-016). Takes an already configured boto3 client."""
+    """AWS KMS ``GenerateRandom``: 32 random bytes from the KMS hardware, no key to create or manage (the seed script
+    uses it with ``SEED_PROVIDER=kms``, D-062). Takes an already configured boto3 client."""
 
     def __init__(self, kms_client: Any) -> None:
         self._kms = kms_client

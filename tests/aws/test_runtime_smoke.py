@@ -9,6 +9,7 @@ the header survives the runtime's allowlist, the server's Host check accepts wha
 verifier works with Cognito's keys, the execution role is enough for DynamoDB, and stateless mode works.
 """
 
+import os
 import urllib.parse
 
 import boto3
@@ -164,7 +165,7 @@ async def test_a_booking_confirmed_after_the_read_back_runs_end_to_end_and_is_ca
     """Hold, confirm and cancel through the runtime: DynamoDB transactions with the execution role."""
     from datetime import UTC, datetime, timedelta
 
-    token = tokens.sign_in(cognito, "alexa-plus-sim", "diner-alice")
+    token = tokens.sign_in(cognito, "alexa-plus-sim", os.environ.get("AWS_TEST_DINER", "diner-alice"))  # AWS_TEST_DINER: another diner avoids the limit of live holds
     day = (datetime.now(UTC).date() + timedelta(days=3)).isoformat()
     tag = datetime.now(UTC).strftime("%H%M%S")
     slots = (await call(runtime, token, "availability_check", restaurant_id="luna-trattoria", date=day,

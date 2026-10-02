@@ -13,19 +13,19 @@ dependencies = [
     "fastmcp==3.4.7",
     "mcp==1.30.0",       # do NOT upgrade to 2.x
     "cedarpy==4.12.1",
-    "joserfc",
-    "pydantic",
-    "boto3",
-    "httpx",
+    "joserfc==1.7.5",
+    "pydantic==2.13.5",
+    "boto3==1.43.104",
+    "httpx==0.28.1",
 ]
 
 [project.optional-dependencies]
-web = ["fastapi", "uvicorn", "mangum"]
-sim = ["strands-agents==1.57.1", "openai>=1.68,<3"]   # openai: only for MODEL_PROVIDER=deepseek (Strands' OpenAIModel imports it)
-eval = ["pyyaml"]   # task files for the evaluation harness (strands-agents already depends on it)
-voice = ["strands-agents[bidi]==1.57.1", "websockets"]   # the voice page (Amazon Nova 2 Sonic, D-052): AWS only, never in the Docker image
-tasks = ["pydocket>=0.20.0"]   # optional MCP Tasks view (D-010), default off
-dev = ["pytest", "pytest-asyncio", "httpx", "ruff"]
+web = ["fastapi==0.141.1", "uvicorn==0.54.0", "mangum==0.22.0", "python-multipart==0.0.32"]
+sim = ["strands-agents==1.57.1", "openai==2.54.0"]   # openai: only for MODEL_PROVIDER=deepseek (Strands' OpenAIModel imports it)
+eval = ["pyyaml==6.0.3"]   # task files for the evaluation harness (strands-agents already depends on it)
+voice = ["strands-agents[bidi]==1.57.1", "websockets==17.1"]   # the voice page (Amazon Nova 2 Sonic, D-052): AWS only, never in the Docker image
+tasks = ["pydocket==0.25.2"]   # optional MCP Tasks view (D-010), default off
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "httpx==0.28.1", "ruff==0.12.0"]
 
 [tool.setuptools.packages.find]
 include = ["server*", "devauth*", "web*", "simulator*", "eval*"]

@@ -9,6 +9,7 @@ a header the client forged is replaced, and an unauthenticated caller never gets
 Tools are named ``<target>___<tool>`` by the Gateway (the target is called ``ft``).
 """
 
+import os
 import asyncio
 from datetime import UTC, datetime, timedelta
 
@@ -148,7 +149,7 @@ async def test_the_unverified_agent_cannot_write(gateway, cognito):  # noqa: F81
 
 @pytest.mark.asyncio
 async def test_a_booking_confirmed_after_the_read_back_runs_through_the_gateway(gateway, cognito):  # noqa: F811
-    token = tokens.sign_in(cognito, "alexa-plus-sim", "diner-alice")
+    token = tokens.sign_in(cognito, "alexa-plus-sim", os.environ.get("AWS_TEST_DINER", "diner-alice"))  # AWS_TEST_DINER: another diner avoids the limit of live holds
     tag = datetime.now(UTC).strftime("%H%M%S")
     day = (datetime.now(UTC).date() + timedelta(days=4)).isoformat()
     slots = (await call(gateway, token, "availability_check", restaurant_id="luna-trattoria", date=day,
@@ -166,3 +167,15 @@ async def test_a_booking_confirmed_after_the_read_back_runs_through_the_gateway(
                            reservation_id=confirmed.structuredContent["reservation_id"],
                            idempotency_key=f"gw-cancel-{tag}")
     assert not cancelled.isError, cancelled.structuredContent
+
+
+@pytest.mark.asyncio
+async def test_a_misheard_restaurant_name_is_a_question_through_the_gateway(gateway, cognito):  # noqa: F811
+    token = tokens.sign_in(cognito, "alexa-plus-sim", "diner-alice")
+    result = await call(gateway, token, "restaurant_search", query="Amber Grill")
+    assert not result.isError, result.structuredContent
+    body = result.structuredContent
+    assert body["confirm_name"] is True and [r["name"] for r in body["restaurants"]] == ["Ember Grill"]
+    assert body["spoken_summary"].endswith("Is that the restaurant you mean?")
+    exact = (await call(gateway, token, "restaurant_search", query="Ember Grill")).structuredContent
+    assert exact["confirm_name"] is False

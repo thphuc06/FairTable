@@ -18,6 +18,7 @@ from stacks.identity_stack import IdentityStack
 from stacks.notify_stack import NotifyStack
 from stacks.observability_stack import ObservabilityStack
 from stacks.runtime_stack import RuntimeStack
+from stacks.workers_stack import WorkersStack
 
 app = cdk.App()
 env = cdk.Environment(
@@ -46,8 +47,21 @@ if package.exists():
         allowed_hosts=os.environ.get("MCP_ALLOWED_HOSTS"),
         stateless=os.environ.get("RUNTIME_STATELESS", "true").lower() != "false",
         notify_topic=notify.topic if notify else None,
+        audit_bucket=data.audit_bucket,
         env=env,
     )
+    if os.environ.get("WORKERS", "true").lower() != "false":  # the hold sweeper and the Fair Drop allocator (D-062)
+        WorkersStack(
+            app,
+            "FairTableWorkers",
+            table=data.table,
+            environment=runtime.worker_environment,
+            package_path=package,
+            notify_topic=notify.topic if notify else None,
+            audit_bucket=data.audit_bucket,
+            every_minutes=int(os.environ.get("WORKERS_EVERY_MINUTES", "1")),
+            env=env,
+        )
     gateway = GatewayStack(
         app,
         "FairTableGateway",

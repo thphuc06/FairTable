@@ -45,6 +45,7 @@ class Settings:
     cognito_client_id: str = ""  # the app client the pages sign in with (its secret is read from the environment, not kept here)
     cognito_region: str = ""
     notify_topic_arn: str = ""  # an SNS topic for waitlist and Fair Drop notices (AWS profile; empty = the dev inbox only)
+    audit_bucket: str = ""  # an S3 bucket that gets a copy of every Fair Drop audit (AWS profile; empty = DynamoDB only)
     store: StoreConfig = field(default_factory=lambda: StoreConfig("fairtable-dev"))
 
     def __post_init__(self) -> None:
@@ -94,5 +95,6 @@ class Settings:
             cognito_client_id=env.get("COGNITO_CLIENT_ID", ""),
             cognito_region=env.get("COGNITO_REGION") or env.get("AWS_REGION", ""),
             notify_topic_arn=env.get("NOTIFY_TOPIC_ARN", "").strip(),
+            audit_bucket=env.get("AUDIT_BUCKET", "").strip(),
             store=StoreConfig.from_env(env),
         )

@@ -63,7 +63,7 @@ In both profiles the **server re-verifies the user token itself** (`joserfc`, sa
 
 | Tool | Kind | What it does |
 |---|---|---|
-| `restaurant_search` | read | restaurants by words; at most five at a time (`offset`) |
+| `restaurant_search` | read | restaurants by name, cuisine or city; a misheard name still finds the closest ones and asks the assistant to confirm it (`confirm_name`, D-061); at most five at a time (`offset`) |
 | `availability_check` | read | free slots for a restaurant, day, party; at most five, each with a short `offer_id` |
 | `reservation_hold` | write | holds one offered slot (10 minutes) and returns the read-back sentence and code |
 | `reservation_confirm` | write | books a held table after the read-back, the pause and the explicit yes |
@@ -96,7 +96,7 @@ flowchart TD
 * **PEP-2 (stateful, `policies/p0, s*.cedar`).** P0 the base permit (a diner acting through a verified agent, on a restaurant); S1 at most two live holds per diner and restaurant; S2 the restaurant's cap on the share of covers agents may book per day (the owner changes it in the console); S4 Fair Drop seats are not bookable directly; S5a to S5c the spoken confirmation (section 5). Order of decisions: deny beats permit; no matching permit is `POLICY_DENIED`. cedarpy's `policyN` reasons are mapped to the rules through the `@id` and `@on_deny` annotations, never by position.
 * **The database has the last word.** Counters and the slot are updated in one `TransactWriteItems` with conditions, so two simultaneous callers cannot both win (RT9: 20 parallel holds, exactly one succeeds). DynamoDB TTL is never used for business logic: an expired hold is treated as released when it is read; the `ttl` attribute on offers only cleans up.
 * **Idempotency.** The key is scoped to the user. The same parameters return the stored result (`idempotent_replay`); other parameters give `IDEMPOTENCY_CONFLICT`; a repeated hold whose hold is no longer live is also a conflict, because a speech model reuses keys like `hold-luna-1` in every conversation (D-059).
-* **Lazy evaluation, no background workers.** Expired holds are released when read; waitlist matching runs inside the cancel and expiry paths; the Fair Drop draw runs on the first request after the drop time. The logic is in pure functions so that Lambdas could reuse it later.
+* **Lazy evaluation first, a clock as an extra.** Expired holds are released when read; waitlist matching runs inside the cancel and expiry paths; the Fair Drop draw runs on the first request after the drop time. Every feature works this way, with nothing else running (the local profile does exactly this). On AWS one Lambda (`workers/handler.py`, started by EventBridge Scheduler every minute) runs the same pure functions (`server/workers.py`): it releases expired holds, which offers the freed table to the waiting diners and sends their notice, and draws every Fair Drop whose time has come, which tells the winners and writes a copy of the audit to S3. The routines are idempotent and use conditional writes, so the clock and the requests can run at the same time (D-062).
 
 ## 5. Spoken confirmation (D-051, D-053, D-054, D-055)
 Alexa+ declares no elicitation capability, and a requirement says a device without a screen must read the details back and get an explicit "yes" before any commitment. So the confirmation is a conversation, guarded by the server:
