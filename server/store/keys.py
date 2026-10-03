@@ -71,6 +71,11 @@ def watch(watch_id: str) -> Key:
     return Key(f"WATCH#{part(watch_id, 'watch_id')}", "META")
 
 
+def booked_day(sub: str, venue_id: str, date: str) -> Key:
+    """One confirmed reservation per person per restaurant per day is a conditional write on this key (D-066)."""
+    return Key(f"BOOKED#{part(sub, 'sub')}#{part(venue_id, 'venue_id')}#{part(date, 'date')}", "META")
+
+
 def watch_slot(sub: str, venue_id: str, date: str) -> Key:
     """One active watch per person per restaurant per day is a conditional write on this key."""
     return Key(f"WATCHKEY#{part(sub, 'sub')}#{part(venue_id, 'venue_id')}#{part(date, 'date')}", "META")

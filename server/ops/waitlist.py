@@ -54,7 +54,7 @@ class WatchOperation:
                 agent_tier=identity.agent_tier or "none",
                 active_holds_user_venue=counter_value(store, keys.active_holds_counter(identity.sub, self.venue_id)),
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(self.venue_id, self.date)),
-                party_size=self.party_size, slot_is_drop_controlled=False, **NO_READ_BACK,
+                party_size=self.party_size, slot_is_drop_controlled=False, booked_same_day=False, **NO_READ_BACK,
             ),
         )
 

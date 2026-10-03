@@ -29,6 +29,7 @@ from server.domain.models import Identity
 from server.identity.jwks import JwksProvider
 
 USER_TOKEN_HEADER = "x-ft-user-token"
+AUTHORIZATION_HEADER = "authorization"
 MAX_TOKEN_CHARS = 8192
 
 
@@ -46,6 +47,17 @@ class VerifierConfig:
     @property
     def allowed_audiences(self) -> tuple[str, ...]:
         return (self.audience,) if isinstance(self.audience, str) else tuple(self.audience)
+
+
+def token_of(headers: Mapping[str, str]) -> str | None:
+    """The caller's token: ``x-ft-user-token`` (what the AgentCore Gateway interceptor sets) wins; without it an
+    ``Authorization: Bearer <token>`` header (what MCP clients, Alexa+ included, send) is used. Either way the token
+    is verified in full by ``TokenVerifier.verify``: a header is only a place to find it (D-065)."""
+    own = headers.get(USER_TOKEN_HEADER)
+    if isinstance(own, str) and own.strip():
+        return own
+    scheme, _, value = (headers.get(AUTHORIZATION_HEADER) or "").strip().partition(" ")
+    return value.strip() if scheme.lower() == "bearer" and value.strip() else None
 
 
 def _unauthenticated(reason: str) -> FairTableError:
@@ -136,4 +148,4 @@ class TokenVerifier:
 
     def verify_headers(self, headers: Mapping[str, str]) -> Identity:
         """``headers`` must have lower-cased names (as ``get_http_headers()`` returns them)."""
-        return self.verify(headers.get(USER_TOKEN_HEADER))
+        return self.verify(token_of(headers))

@@ -198,9 +198,10 @@ def test_a_confirm_one_second_before_expiry_works_and_at_the_exact_moment_it_doe
     world.clock.set(datetime.fromisoformat(early.held_until) - timedelta(seconds=1))
     assert attempt(lambda: run_write(world.deps, alice, confirm_op(world, alice, early), "confirm-key-early")) == "ok"
 
-    late = make_hold(world, alice, time="19:30", key="setup-hold-02")
+    carol = racer(3)  # another diner: Alice's confirmed table above would make S6 refuse a second hold on the same day
+    late = make_hold(world, carol, time="19:30", key="setup-hold-02")
     world.clock.set(datetime.fromisoformat(late.held_until))  # exactly held_until: the hold is over
-    assert attempt(lambda: run_write(world.deps, alice, confirm_op(world, alice, late), "confirm-key-late")) == "HOLD_EXPIRED"
+    assert attempt(lambda: run_write(world.deps, carol, confirm_op(world, carol, late), "confirm-key-late")) == "HOLD_EXPIRED"
     # the table is free again for somebody else, with no worker involved
     assert attempt(lambda: run_write(world.deps, bob, hold_op(world, bob, "luna-trattoria", "19:30"), "bob-hold-key-01")) == "ok"
     assert_invariants(world.store, now_iso(world))

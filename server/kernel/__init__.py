@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from server.kernel.engine import Decision, DecisionKind, PolicyLoadError
-from server.kernel.guidance import deny_to_error
+from server.kernel.guidance import deny_to_error, error_for_rule
 from server.kernel.pep1 import Pep1
 from server.kernel.pep2 import Pep2, PolicyContext, VenueRef
 from server.kernel.variants import NoVoiceGuardsPep2, OpenPep1, OpenPep2
@@ -21,6 +21,7 @@ __all__ = [
     "VenueRef",
     "default_policy_dir",
     "deny_to_error",
+    "error_for_rule",
 ]
 
 

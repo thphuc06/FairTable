@@ -7,6 +7,7 @@ Used by the concurrency tests now and by the eval graders later (design section 
   I3  a cancellation fee is charged only after the fee was read back
   I4  one Fair Drop ticket per person, and an allocated drop's audit verifies
   I5  no write without a verified identity
+  I6  at most one confirmed table per person, restaurant and day (D-066)
   plus the bookkeeping that makes the rules trustworthy:
   COUNTER  the S1 / S2 counters equal what the holds and reservations add up to
   SLOT     a slot's status agrees with the hold or reservation that owns it
@@ -129,6 +130,16 @@ def check_invariants(store: Store, now_iso: str) -> list[Violation]:
     for r in reservations.values():
         if r.status == RES_CANCELLED and (r.cancel_fee_cents or 0) > 0 and not r.cancel_read_back_at:
             out.append(Violation("I3", f"reservation {r.reservation_id} paid a fee that was not read back"))
+
+    # ---- I6: one confirmed table per person, restaurant and day
+    booked: dict[tuple[str, str, str], str] = {}
+    for r in reservations.values():
+        if r.status != RES_CONFIRMED:
+            continue
+        day = (r.sub, r.venue_id, r.date)
+        if day in booked:
+            out.append(Violation("I6", f"{r.sub} has two tables at {r.venue_id} on {r.date}: {booked[day]} and {r.reservation_id}"))
+        booked[day] = r.reservation_id
 
     # ---- I4: one ticket per person per drop; an allocated drop is consistent and verifiable
     drops = {d.drop_id: d for d in map(item_to_drop, by_entity["drop"])}

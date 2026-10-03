@@ -39,6 +39,7 @@ class Settings:
     web_session_secret: str = DEV_SESSION_SECRET
     token_url: str = ""  # where the web pages sign diners in; empty = AUTH_ISSUER + /token (docker: the issuer's service name)
     mcp_url: str = "http://127.0.0.1:8000/mcp"  # where the chat page's assistant reaches the MCP server
+    mcp_public_url: str = "http://localhost:8000/mcp"  # how clients name this server: the `resource` of the OAuth metadata (D-065)
     mcp_via_gateway: bool = False  # MCP_URL is an AgentCore Gateway: bearer token in, tools named <target>___<tool>
     mcp_tool_prefix: str = ""  # "ft___" via the gateway, otherwise empty
     auth_provider: str = "dev"  # how the web pages sign people in: "dev" (the dev issuer) or "cognito"
@@ -89,6 +90,7 @@ class Settings:
             web_session_secret=env.get("WEB_SESSION_SECRET", DEV_SESSION_SECRET),
             token_url=env.get("AUTH_TOKEN_URL") or issuer.rstrip("/") + "/token",
             mcp_url=env.get("MCP_URL", cls.mcp_url),
+            mcp_public_url=env.get("MCP_PUBLIC_URL", cls.mcp_public_url).strip(),
             mcp_via_gateway=via_gateway,
             mcp_tool_prefix=(env.get("MCP_TOOL_PREFIX") or "ft___") if via_gateway else "",
             auth_provider=env.get("AUTH_PROVIDER", cls.auth_provider),

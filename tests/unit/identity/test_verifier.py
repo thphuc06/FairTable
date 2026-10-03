@@ -11,6 +11,7 @@ from token_env import AUDIENCE, ISSUER
 from server.domain.errors import ErrorCode, FairTableError
 from server.domain.models import Identity
 from server.identity import TokenVerifier, VerifierConfig
+from server.identity.verifier import token_of
 
 
 def rejected(verifier: TokenVerifier, token) -> FairTableError:
@@ -96,8 +97,27 @@ def test_whitespace_around_the_token_is_ignored(verifier, mint):
 def test_headers_helper_reads_x_ft_user_token(verifier, mint):
     assert verifier.verify_headers({"x-ft-user-token": mint()}).sub == "user-1"
     assert rejected(verifier, None).reason == "missing"
+
+
+# ---------------------------------------------------------------- where the token is found (D-065)
+def test_a_bearer_header_is_used_when_there_is_no_x_ft_user_token(verifier, mint):
+    assert verifier.verify_headers({"authorization": "Bearer " + mint()}).sub == "user-1"
+    assert verifier.verify_headers({"authorization": "bearer   " + mint() + " "}).sub == "user-1"  # scheme is case-insensitive
+
+
+def test_x_ft_user_token_wins_over_the_bearer_header(verifier, mint):
+    """The gateway interceptor's header is the one that was verified upstream, so it is never overridden."""
+    assert verifier.verify_headers({"x-ft-user-token": mint(sub="from-gateway"),
+                                    "authorization": "Bearer " + mint(sub="from-bearer")}).sub == "from-gateway"
+    with pytest.raises(FairTableError):  # a bad x-ft-user-token is not rescued by a good bearer header
+        verifier.verify_headers({"x-ft-user-token": "garbage", "authorization": "Bearer " + mint()})
+
+
+@pytest.mark.parametrize("value", ["", "Bearer", "Bearer   ", "Basic dXNlcjpwYXNz", "AWS4-HMAC-SHA256 Credential=x", "token-only"])
+def test_other_authorization_values_are_not_a_token(verifier, value):
+    assert token_of({"authorization": value}) is None  # the Runtime's SigV4 header, Basic auth, a bare token
     with pytest.raises(FairTableError):
-        verifier.verify_headers({"authorization": "Bearer " + mint()})  # wrong header: ignored
+        verifier.verify_headers({"authorization": value})
 
 
 # ---------------------------------------------------------------- time

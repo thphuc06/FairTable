@@ -1,4 +1,4 @@
-"""PEP-2: stateful rules P0, S1, S2, S4 and the spoken-confirmation rules S5a-c (D-051). Counters and the
+"""PEP-2: stateful rules P0, S1, S2, S4, S6 and the spoken-confirmation rules S5a-c (D-051). Counters and the
 read-back facts are worked out by the caller and passed in; Cedar only compares numbers and booleans."""
 
 from dataclasses import asdict, dataclass, fields
@@ -24,6 +24,7 @@ class PolicyContext:
     agent_covers_booked: int
     party_size: int
     slot_is_drop_controlled: bool
+    booked_same_day: bool  # the diner already has a confirmed table at this restaurant on this day (S6)
     read_back_required: bool  # a confirm, or a cancel that costs money (S5a-c apply)
     read_back_matches: bool  # the read-back token fits these terms, this user, this hold or reservation
     pause_elapsed: bool  # long enough since the read-back for the diner to have answered

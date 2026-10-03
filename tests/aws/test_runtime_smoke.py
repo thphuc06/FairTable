@@ -148,7 +148,14 @@ async def a_real_offer_id(runtime, token):
 async def test_a_machine_token_without_agent_claims_cannot_write(runtime, cognito):
     token = tokens.machine_token(cognito, "bot-m2m")
     slot = await a_real_offer_id(runtime, token)  # allowed: a read
-    result = await call(runtime, token, "reservation_hold", offer_id=slot, idempotency_key="smoke-bot-00001")
+    # Since D-065 the server answers HTTP 403 to a write tool called with a token that has no diner behind it (the status
+    # code that makes Alexa+ start account linking). What the Runtime passes on is checked at the first deploy of this
+    # version: an HTTP error naming 403, or (if the Runtime wraps it) the tool-level POLICY_DENIED.
+    try:
+        result = await call(runtime, token, "reservation_hold", offer_id=slot, idempotency_key="smoke-bot-00001")
+    except Exception as e:  # noqa: BLE001 - the transport raises its own error types
+        assert "403" in str(e) or "orbidden" in str(e), e
+        return
     assert result.isError and result.structuredContent["error"] == "POLICY_DENIED"
 
 

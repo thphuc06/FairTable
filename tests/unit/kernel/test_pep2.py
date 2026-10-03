@@ -14,7 +14,7 @@ BASE = PolicyContext(
     active_holds_user_venue=0,
     agent_covers_booked=0,
     party_size=2,
-    slot_is_drop_controlled=False,
+    slot_is_drop_controlled=False, booked_same_day=False,
     read_back_required=False,
     read_back_matches=False,
     pause_elapsed=False,
@@ -63,6 +63,11 @@ CASES = [
      ("S5a_confirm_needs_read_back",)),
     ("s5-free-cancel-needs-no-read-back", MANAGE, {}, "allow", ("P0_base",)),
     ("s5-hold-is-not-covered", HOLD, {"read_back_required": True}, "allow", ("P0_base",)),
+    # S6 (D-066): one confirmed table per diner, restaurant and day; it guards a hold and nothing else
+    ("s6-already-booked-that-day", HOLD, {"booked_same_day": True}, "deny", ("S6_one_booking_per_restaurant_day",)),
+    ("s6-does-not-block-the-confirm-of-a-hold", CONFIRM, {**SPOKEN, "booked_same_day": True}, "allow", ("P0_base",)),
+    ("s6-does-not-block-a-cancel", MANAGE, {"booked_same_day": True}, "allow", ("P0_base",)),
+    ("s6-does-not-block-a-watch", WATCH, {"booked_same_day": True}, "allow", ("P0_base",)),
     ("s4-drop-slot", HOLD, {"slot_is_drop_controlled": True}, "deny", ("S4_drop_slots_via_waitlist",)),
     ("p0-unverified-agent", HOLD, {"agent_tier": "unverified"}, "deny", (NO_PERMIT,)),
     ("p0-empty-tier", CONFIRM, {"agent_tier": ""}, "deny", (NO_PERMIT,)),
@@ -86,7 +91,7 @@ def test_pep2_cases(pep2: Pep2, case):
     assert d.errors == ()
 
 
-def test_all_seven_rules_are_loaded(pep2: Pep2):
+def test_all_eight_rules_are_loaded(pep2: Pep2):
     assert pep2.bundle.rule_ids == {
         "P0_base",
         "S1_max_active_holds",
@@ -95,6 +100,7 @@ def test_all_seven_rules_are_loaded(pep2: Pep2):
         "S5a_confirm_needs_read_back",
         "S5b_confirm_needs_the_diners_answer",
         "S5c_confirm_needs_an_explicit_yes",
+        "S6_one_booking_per_restaurant_day",
     }
 
 

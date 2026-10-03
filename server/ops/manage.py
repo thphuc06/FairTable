@@ -71,6 +71,7 @@ class _ManageBase:
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(res.venue_id, res.date)),
                 party_size=res.party_size,
                 slot_is_drop_controlled=False,
+                booked_same_day=False,  # S6 guards a hold; the database condition guards the confirm
                 **{**NO_READ_BACK, **read_back},
             ),
         )
@@ -124,6 +125,7 @@ class CancelOperation(_ManageBase):
         rkey = keys.reservation(res.reservation_id)
         slot_key = keys.slot(res.venue_id, res.date, res.time, res.table_group)
         s2 = keys.agent_covers_counter(res.venue_id, res.date)
+        booked_key = keys.booked_day(identity.sub, res.venue_id, res.date)
         ops = [
             TxOp(
                 "Update", key={"PK": rkey.pk, "SK": rkey.sk},
@@ -143,6 +145,8 @@ class CancelOperation(_ManageBase):
                 "Update", key={"PK": s2.pk, "SK": s2.sk}, update="ADD n :neg",
                 condition="n >= :party", values={":neg": -res.party_size, ":party": res.party_size},
             ),
+            # Free the day for a new booking. No condition: a reservation made before D-066 has no marker.
+            TxOp("Delete", key={"PK": booked_key.pk, "SK": booked_key.sk}),
         ]
         when = f"{say_date(res.date)} at {say_time(res.time)}"
         fee_text = "There was no cancellation fee." if fee == 0 else f"The cancellation fee is {say_money(fee)}."

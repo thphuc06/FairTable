@@ -77,6 +77,7 @@ class DropEntryOperation:
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(venue.venue_id, drop.date)),
                 party_size=self.party_size,
                 slot_is_drop_controlled=False,  # entering is not holding: S4 guards direct holds only
+                booked_same_day=False,  # S6 guards a hold, not an entry in the draw
                 **NO_READ_BACK,
             ),
         )

@@ -40,6 +40,8 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 | P3-4 Real-provider runs | D | done | 2026-10-03 | D-064: DeepSeek flash A0/A1/A2 k = 2, Claude Haiku 4.5 A1 k = 1 and Nova Lite A0/A1/A2 k = 1 committed |
 | P3-16 Fault-injection tests | E | done | 2026-10-03 | 14 tests of the failure branches found by the coverage run (91 % overall) |
 | P3-17 Demo preflight | E | done | 2026-10-03 | `scripts/demo_preflight.py` + tests; run read-only against the real account |
+| P3-18 OAuth discovery, Bearer, 403 (D) | F | done (local) | 2026-10-03 | D-065; 81 tests in the three touched files; real-AWS check of the 403 through the Runtime at the next deploy |
+| P3-19 Duplicate-booking guard (C) | F | done (local) | 2026-10-03 | D-066: Cedar S6 + `BOOKED#` marker + invariant I6; 8 new tests |
 
 ## Closing checklist (agreed 2026-10-02; the video and the form come last)
 Order of work. Tick items in the Progress table or in an entry; do not start a later group before the earlier one is done.
@@ -55,6 +57,19 @@ Order of work. Tick items in the Progress table or in an entry; do not start a l
 10. **Commit, tag `submission`**, no functional change until 2026-11-20.
 
 ## Entries (newest first)
+
+### 2026-10-03 · P3-19 · [kernel] [dynamodb] · One confirmed table per diner, restaurant and day (D-066)
+- **Asked by the developer:** the duplicate-booking guard, simple version.
+- **Built:** Cedar rule S6 (new required context field `booked_same_day`, computed from the diner's reservations at `reservation_hold`), a `BOOKED#` marker written in the confirm transaction with `attribute_not_exists` and deleted in the cancel transaction, `error_for_rule` to give the database-condition failure the same error as the rule, invariant I6.
+- **Tests:** `tests/integration/test_duplicate_booking.py` (refusal before anything is held, other day / restaurant / diner fine, two holds to compare still allowed, second confirm refused and the hold left to expire, two confirms at the same moment make one booking, cancel frees the day, a booking without a marker is still seen and still cancels, a cancelled booking does not count), S6 cases in the PEP-2 table, I6. Older tests that booked two tables on one day were moved to another day.
+- **Limits:** lunch and dinner at one restaurant on one day are blocked; two tables at the same time in different restaurants are not detected.
+
+### 2026-10-03 · P3-18 · [auth] [alexa] · OAuth discovery, Bearer header and HTTP 403 (D-065)
+- **Asked by the developer:** research D on the internet, decide, then build it (with the 403 for the service-level token).
+- **Research:** Alexa+ account-linking and authentication pages, MCP 2025-11-25 "Authorization", AgentCore Gateway inbound authorization (notes section 8). Finding: on AWS the Gateway already serves the metadata and the challenge, so D matters for the self-hosted server.
+- **Built:** the metadata document at both well-known paths, `WWW-Authenticate` on 401 and 403, the bearer fallback behind `x-ft-user-token`, `request_headers()` as the default header provider, HTTP 403 for a write tool called with a token without a diner. Setting `MCP_PUBLIC_URL`.
+- **Tests:** `tests/unit/test_http_auth.py` (metadata paths, challenge, 403 cases, batch, no kernel), `tests/unit/identity/test_verifier.py` (header order and other schemes), `tests/integration/test_server_http.py` over real HTTP (bearer works, gateway header wins, metadata public, 401 points to it, bot token reads and gets 403 on a write). One design fix on the way: the first idea (look for rule G2 in the PEP-1 decision) was wrong because a bot token is refused by G4 first; the criterion is now "PEP-1 refuses a write tool and the token has no diner".
+- **Not verified:** the 403 through the real Runtime and Gateway (the Gateway enforces its own Cedar policy first); any real Alexa+ client.
 
 ### 2026-10-03 · P3-4 · [eval] [bedrock] · Evaluation with real models (D-064)
 - **Asked by the developer:** run the evaluation with a real model (option A).

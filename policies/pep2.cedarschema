@@ -1,4 +1,4 @@
-// Schema for the PEP-2 policies (P0, S1, S2, S4, S5a-c). Used only to validate the policy files at load
+// Schema for the PEP-2 policies (P0, S1, S2, S4, S5a-c, S6). Used only to validate the policy files at load
 // time; requests are not validated against it. Every context field is required so that a missing
 // value can never make a forbid rule silently skip (see docs/PLAN.md section 3a, cedarpy).
 entity Diner;
@@ -10,6 +10,7 @@ type Ctx = {
   agent_covers_booked: Long,
   party_size: Long,
   slot_is_drop_controlled: Bool,
+  booked_same_day: Bool,
   read_back_required: Bool,
   read_back_matches: Bool,
   pause_elapsed: Bool,

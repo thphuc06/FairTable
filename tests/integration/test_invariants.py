@@ -33,7 +33,7 @@ def codes(world: World) -> set[str]:
 async def test_a_fresh_table_and_a_normal_history_are_clean(world):
     assert problems(world) == []
     kept = await book(world, "alice", "luna-trattoria", "19:00", tag="1")
-    cancelled = await book(world, "alice", "luna-trattoria", "19:30", tag="2")
+    cancelled = await book(world, "alice", "luna-trattoria", "19:30", offset=3, tag="2")  # another day (S6, D-066)
     await call(world.as_("alice"), "reservation_manage", action="cancel",
                reservation_id=cancelled["reservation_id"], idempotency_key="key-cancel-01")
     await hold_table(world, "bob", "ember-grill", "18:00", key="key-hold-bob1")  # a hold in flight
@@ -46,7 +46,7 @@ async def test_a_booking_made_after_a_read_back_is_fine_but_one_written_without_
     assert problems(world) == []
 
     # A reservation that skipped the read-back entirely (written straight into the table) is flagged (I1).
-    hold = world.store.get_hold((await hold_table(world, "bob", "luna-trattoria", "19:30", key="key-hold-bob2"))["hold_id"])
+    hold = world.store.get_hold((await hold_table(world, "bob", "luna-trattoria", "19:30", offset=3, key="key-hold-bob2"))["hold_id"])
     sneaky = Reservation("res-sneaky", "LUN-0000", hold.hold_id, "dev-bob", "alexa-plus-sim", "luna-trattoria",
                          hold.date, hold.time, hold.table_group, 2, "confirmed", hold.terms, iso_z(world.clock.now()))
     world.store.put_item(reservation_to_item(sneaky))
@@ -146,3 +146,13 @@ def fd_item_to_drop(item):
     from server.store.mappers import item_to_drop
 
     return item_to_drop(item)
+
+
+async def test_two_confirmed_tables_for_one_person_at_one_restaurant_on_one_day_are_flagged(world):
+    """I6 (D-066). The server cannot produce this any more, so the second reservation is written straight into the table."""
+    first = await book(world, "alice", "luna-trattoria", "19:00", tag="1")
+    assert problems(world) == []
+    original = world.store.get_reservation(first["reservation_id"])
+    twin = replace(original, reservation_id="res-twin", code="LUN-9999")
+    world.store.put_item(reservation_to_item(twin))
+    assert "I6" in codes(world)

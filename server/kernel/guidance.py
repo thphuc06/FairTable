@@ -45,6 +45,15 @@ GUIDANCE: dict[str, Guidance] = {
             "Confirm or cancel an existing hold first.", ToolName.RESERVATION_MANAGE
         ),
     ),
+    "S6_one_booking_per_restaurant_day": Guidance(
+        ErrorCode.POLICY_DENIED,
+        "The user already has a confirmed table at this restaurant on that day.",
+        NextStep(
+            "Tell the user they already have a table there that day; offer to look at it or cancel it first.",
+            ToolName.RESERVATION_MANAGE,
+        ),
+        "You already have a table at this restaurant that day.",
+    ),
     "S2_agent_share_of_covers": Guidance(
         ErrorCode.POLICY_DENIED,
         "Agent bookings for that day are full. Suggest calling the restaurant or joining the waitlist.",
@@ -88,6 +97,19 @@ SAFE_FAILURE = Guidance(
     "The rule check could not be completed, so the request was refused to be safe.",
     CALL_THE_RESTAURANT,
 )
+
+
+def error_for_rule(rule_id: str) -> FairTableError:
+    """The error of a rule that a database condition enforced after the policy check passed (the race the rule cannot see)."""
+    guidance = GUIDANCE[rule_id]
+    return FairTableError(
+        guidance.code,
+        guidance.message or "The request is not allowed by the restaurant's booking rules.",
+        hint=guidance.hint,
+        rule_id=rule_id,
+        next_step=guidance.next_step,
+        reason=f"{rule_id}:database_condition",
+    )
 
 
 def deny_to_error(decision: Decision) -> FairTableError:

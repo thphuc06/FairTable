@@ -13,6 +13,7 @@ from server.domain.availability import MAX_SLOTS_RETURNED  # noqa: F401  (docume
 from server.domain.booking import (
     HOLD_HELD,
     MAX_ACTIVE_HOLDS,
+    RES_CONFIRMED,
     Hold,
     starts_at,
     terms_for,
@@ -38,6 +39,13 @@ from server.pipeline import WriteFacts, WritePlan
 from server.store import Store, TransactionCancelled, TxOp, keys
 from server.tools.common import AppDeps
 from server.tools.present import read_back_confirm
+
+
+def has_booking_that_day(store: Store, sub: str, venue_id: str, date: str) -> bool:
+    """True when the diner has a confirmed reservation at this restaurant on this day (rule S6, D-066)."""
+    return any(
+        r.status == RES_CONFIRMED and r.venue_id == venue_id and r.date == date for r in store.reservations_of_user(sub)
+    )
 
 
 class HoldOperation:
@@ -95,6 +103,7 @@ class HoldOperation:
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(c.restaurant_id, c.date)),
                 party_size=c.party_size,
                 slot_is_drop_controlled=slot.drop_controlled and not self.drop_exempt,
+                booked_same_day=has_booking_that_day(store, identity.sub, c.restaurant_id, c.date),
                 **NO_READ_BACK,
             ),
         )

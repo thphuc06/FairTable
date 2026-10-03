@@ -10,6 +10,7 @@ Transaction (plus idempotency record and audit from the pipeline):
   1. slot -> confirmed       (still owned by this hold)
   2. S1 counter - 1          (a confirmed hold is no longer an active hold; S2 covers stay)
   3. reservation record      (new, with how it was confirmed)
+  4. BOOKED# marker          (new: one confirmed table per diner, restaurant and day, D-066)
 """
 
 from datetime import UTC, datetime
@@ -28,7 +29,7 @@ from server.domain.models import SLOT_CONFIRMED, SLOT_HELD, Identity
 from server.domain.output import success
 from server.domain.readback import KIND_CONFIRM, min_pause_s, pause_elapsed
 from server.domain.tool_names import ToolName
-from server.kernel import Decision, PolicyContext, VenueRef
+from server.kernel import Decision, PolicyContext, VenueRef, error_for_rule
 from server.lifecycle import release_expired
 from server.ops.common import counter_value
 from server.pipeline import WriteFacts, WritePlan
@@ -103,6 +104,7 @@ class ConfirmOperation:
                 agent_covers_booked=counter_value(store, keys.agent_covers_counter(hold.venue_id, hold.date)),
                 party_size=hold.party_size,
                 slot_is_drop_controlled=slot.drop_controlled,
+                booked_same_day=False,  # S6 guards a hold; the database condition guards the confirm
                 read_back_required=True,
                 read_back_matches=check.matches,
                 pause_elapsed=waited,
@@ -124,6 +126,7 @@ class ConfirmOperation:
         hold_key = keys.hold(hold.hold_id)
         slot_key = keys.slot(hold.venue_id, hold.date, hold.time, hold.table_group)
         s1 = keys.active_holds_counter(identity.sub, hold.venue_id)
+        booked_key = keys.booked_day(identity.sub, hold.venue_id, hold.date)
         ops = [
             TxOp(
                 "Update", key={"PK": hold_key.pk, "SK": hold_key.sk},
@@ -145,6 +148,11 @@ class ConfirmOperation:
                 condition="n >= :one", values={":neg": -1, ":one": 1},
             ),
             store.reservation_put_op(reservation),
+            TxOp(
+                "Put", condition="attribute_not_exists(PK)",
+                item={"PK": booked_key.pk, "SK": booked_key.sk, "entity": "booked_day", "sub": identity.sub,
+                      "venue_id": hold.venue_id, "date": hold.date, "reservation_id": reservation_id},
+            ),
         ]
         card = {
             "title": f"Table at {venue.name}", "code": code, "restaurant": venue.name,
@@ -162,4 +170,7 @@ class ConfirmOperation:
                                        "confirmation": "spoken", "read_back_at": self.read_back_at})
 
     def explain_cancel(self, failed: list[int], exc: TransactionCancelled) -> FairTableError:
+        marker = 4  # the BOOKED# write; when it is the only one that failed, the diner already has a table that day
+        if failed == [marker]:
+            return error_for_rule("S6_one_booking_per_restaurant_day")
         return hold_expired()

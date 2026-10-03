@@ -69,6 +69,7 @@ BASE_CTX = {
     "agent_covers_booked": 0,
     "party_size": 2,
     "slot_is_drop_controlled": False,
+    "booked_same_day": False,
     "read_back_required": False,
     "read_back_matches": False,
     "pause_elapsed": False,
@@ -98,7 +99,7 @@ def test_api_surface_exists():
 
 def test_policy_ids_are_policyN_and_annotations_survive_json_export(pep2):
     table = rule_table(pep2)
-    assert len(table) == 7
+    assert len(table) == 8
     assert all(k.startswith("policy") for k in table)
     assert sorted(v[0] for v in table.values()) == [
         "P0_base",
@@ -108,6 +109,7 @@ def test_policy_ids_are_policyN_and_annotations_survive_json_export(pep2):
         "S5a_confirm_needs_read_back",
         "S5b_confirm_needs_the_diners_answer",
         "S5c_confirm_needs_an_explicit_yes",
+        "S6_one_booking_per_restaurant_day",
     ]
     assert {v[0]: v[1] for v in table.values()} == {
         "P0_base": None,
@@ -117,6 +119,7 @@ def test_policy_ids_are_policyN_and_annotations_survive_json_export(pep2):
         "S5a_confirm_needs_read_back": "deny",
         "S5b_confirm_needs_the_diners_answer": "deny",
         "S5c_confirm_needs_an_explicit_yes": "deny",
+        "S6_one_booking_per_restaurant_day": "deny",
     }
 
 

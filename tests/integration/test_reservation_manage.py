@@ -156,7 +156,7 @@ async def test_a_read_back_of_a_different_fee_is_worthless(world):
     """The fee was read back while it was $25; if the free window has passed and the terms differ, the token is stale."""
     rid = await fee_booking(world)
     offer = await first_cancel(world, rid)
-    other = await book(world, "bob", "ember-grill", "18:30", offset=1, tag="2")  # another booking, same fee
+    other = await book(world, "bob", "ember-grill", "20:30", offset=0, tag="2")  # another day (S6 allows one table a day), same fee
     world.clock.advance(ANSWER_AFTER_S)
     err = error_of(await manage(world, "cancel", other["reservation_id"], read_back_token=offer["read_back_token"],
                                 user_confirmed=True), "CONFIRMATION_REQUIRED")

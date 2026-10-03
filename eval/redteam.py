@@ -62,6 +62,9 @@ async def call(env: EvalEnv, token: str | None, tool: str, **args) -> Reply:
         async with Client(StreamableHttpTransport(env.mcp_url, headers=headers)) as c:
             r = await c.call_tool_mcp(tool, args)
     except httpx.HTTPStatusError as e:
+        if e.response.status_code == 403:
+            # A token with no diner behind it calls a write tool: the transport answers 403 before any tool runs (D-065).
+            return Reply(True, {"error": "FORBIDDEN", "http_status": 403})
         if e.response.status_code != 401:
             raise
         # No valid token: the transport answers 401 before any tool runs (P3-9, D-056). Same refusal, earlier.
@@ -116,9 +119,9 @@ async def rt1(env: EvalEnv) -> Outcome:
     token = await offer_id(env, bot, LUNA, day(env), "19:00")  # reading is allowed
     r = await call(env, bot, "reservation_hold", offer_id=token, idempotency_key="rt1-machine-hold")
     # A machine token has neither `username` (G2) nor `agent_tier` (G4): both rules apply and the engine
-    # reports the forbid, G4. Either label is the right stop.
+    # reports the forbid, G4; since D-065 the transport answers HTTP 403 first (FORBIDDEN). Any of the three is the right stop.
     return outcome("RT1", "Machine client calls a write tool", "G2_writes_need_user_and_scope",
-                   r.is_error and not live_holds(env), r.code, accept=("G4_verified_agent_only",))
+                   r.is_error and not live_holds(env), r.code, accept=("G4_verified_agent_only", "FORBIDDEN"))
 
 
 async def rt2(env: EvalEnv) -> Outcome:

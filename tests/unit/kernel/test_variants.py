@@ -18,7 +18,7 @@ from server.kernel import (
 VENUE = VenueRef("luna", agent_cover_cap=20)
 BASE = PolicyContext(
     agent_tier="verified", active_holds_user_venue=0, agent_covers_booked=0, party_size=2,
-    slot_is_drop_controlled=False, read_back_required=False, read_back_matches=False, pause_elapsed=False,
+    slot_is_drop_controlled=False, booked_same_day=False, read_back_required=False, read_back_matches=False, pause_elapsed=False,
     user_confirmed=False,
 )
 # a confirm with nothing behind it: no read-back token, no pause, no yes

@@ -21,6 +21,12 @@ from server.store import Store
 from server.telemetry import annotate, annotate_caller, annotate_decision
 
 
+def request_headers() -> dict[str, str]:
+    """The headers of the current request, lower-cased. FastMCP hides ``authorization`` unless it is asked for by
+    name (verified in fastmcp 3.4.7, ``get_http_headers``): the bearer token is one of the places the caller's token can be."""
+    return get_http_headers(include={"authorization"})
+
+
 @dataclass
 class AppDeps:
     settings: Settings
@@ -32,7 +38,7 @@ class AppDeps:
     readback_codec: ReadBackCodec
     limiter: RateLimiter
     # Where request headers come from. Tests swap it to drive the tools in-process.
-    header_provider: Callable[[], Mapping[str, str]] = get_http_headers
+    header_provider: Callable[[], Mapping[str, str]] = request_headers
     # Ids for holds, reservations and audit entries. Tests swap it for a counter.
     new_id: Callable[[], str] = lambda: uuid.uuid4().hex
     notifier: Notifier | None = None  # default: the dev inbox (see server/notify.py)

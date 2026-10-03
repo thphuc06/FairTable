@@ -52,7 +52,7 @@ class FakeHold:
                 agent_tier=identity.agent_tier or "none",
                 active_holds_user_venue=int(counter["n"]) if counter else 0,
                 agent_covers_booked=0, party_size=self.party_size,
-                slot_is_drop_controlled=slot.drop_controlled,
+                slot_is_drop_controlled=slot.drop_controlled, booked_same_day=False,
                 read_back_required=self.tool is ToolName.RESERVATION_CONFIRM,
                 read_back_matches=self.read_back_ok, pause_elapsed=self.read_back_ok, user_confirmed=self.read_back_ok,
             ),

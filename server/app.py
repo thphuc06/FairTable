@@ -151,7 +151,8 @@ def create_app(deps: AppDeps):
     """ASGI app for uvicorn. Host/Origin protection is ON; hosted profiles list their hostnames
     in ``MCP_ALLOWED_HOSTS`` / ``MCP_ALLOWED_ORIGINS``."""
     s = deps.settings
-    return LogRefusedHost(RequireToken(_http_app(deps, s), deps.verifier))
+    return LogRefusedHost(RequireToken(
+        _http_app(deps, s), deps.verifier, kernel=deps.kernel, resource=s.mcp_public_url, issuer=s.issuer))
 
 
 def _http_app(deps: AppDeps, s):

@@ -89,11 +89,15 @@ async def test_one_conversation_can_make_several_different_requests(chat_env):
     sign_in(browser, "alice")
     say(browser, f"Book a table at Luna Trattoria for 2 on {day(world)} at 7pm")
     yes(world, browser)
-    say(browser, f"Book a table at Luna Trattoria for 4 on {day(world)} at 8pm")
+    say(browser, f"Book a table at Luna Trattoria for 4 on {later_day(world)} at 8pm")  # another day: one table a day (D-066)
     html = yes(world, browser)
     assert html.lower().count("booked") >= 2
     reservations = world.store.reservations_of_user(world_sub(world, "alice"))
     assert sorted((r.time, r.party_size) for r in reservations) == [("19:00", 2), ("20:00", 4)]
+
+
+def later_day(world: World) -> str:
+    return (world.clock.now().date() + timedelta(days=4)).isoformat()
 
 
 def world_sub(world: World, who: str) -> str:
