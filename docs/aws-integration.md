@@ -45,7 +45,7 @@ Not wired: API Gateway, ElastiCache/Redis, DynamoDB Streams (the schedule does t
 
 **Amazon Cognito** (Essentials; verified on the real service)
 - *Used for:* sign-in (`USER_PASSWORD_AUTH`, demo only), machine tokens (client credentials), and the claims the server's rules read, added by one pre token generation trigger (V3_0).
-- *Worked well:* the claims a trigger can add matched what the design needed; real tokens passed the server's verifier with only configuration changes; Essentials with 10,000 free monthly users costs nothing for a demo.
+- *Worked well:* the claims a trigger can add matched what the design needed; real tokens passed the server's verifier with only configuration changes; Essentials with 10,000 free monthly users costs nothing for a demo; a machine token (client credentials) is billed per request ($0.00225 each: 37 requests from our tests and the red team cost $0.083 in the first days), with no standing monthly fee.
 - *Needs work:* password sign-in tokens carry only `aws.cognito.signin.user.admin` (a trigger has to add the scope and should remove that one); a function cannot be wired to an app client id without a dependency cycle; CDK leaves `ExplicitAuthFlows` out for a machine client and Cognito then turns on its defaults.
 - *Onboarding:* the trigger page is thorough; the table of claims a trigger cannot change is the most useful part.
 - *Build again:* yes.

@@ -105,7 +105,7 @@ DDB_ENDPOINT_URL=http://localhost:8001 python -m eval --k 2 --config A0,A1,A2   
 DDB_ENDPOINT_URL=http://localhost:8001 python -m eval.redteam                    # the twelve attacks, blocked or SUCCEEDED per configuration
 ```
 
-Results with the mock assistant validate the harness and the rules, not a real model; the report says so. A0 is an open store (no policy layer), A1 is FairTable, A2 is FairTable without the voice guards (whatever the assistant sends counts as the diner's yes). Details: [`eval/README.md`](eval/README.md).
+Results with the mock assistant validate the harness and the rules, not a real model; the report says so. Runs with real models are committed too (DeepSeek flash, Claude Haiku 4.5 and Amazon Nova Lite on Bedrock; `eval/reports/`, D-064): with the rules no violation in any of them, without the rules the same models do harm. A0 is an open store (no policy layer), A1 is FairTable, A2 is FairTable without the voice guards (whatever the assistant sends counts as the diner's yes). Details: [`eval/README.md`](eval/README.md).
 
 ## AWS services and status
 **The local profile (`docker compose up`) uses no AWS service** and needs no AWS account. Judges are not asked to run anything on AWS, and nothing here depends on AWS resources still running.

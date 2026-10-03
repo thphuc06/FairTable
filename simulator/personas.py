@@ -26,6 +26,29 @@ MAX_AVAILABILITY_CHECKS = 3
 BEHAVIOURS = ("polite", "hot_direct", "eager", "forgetful")
 YES_WORDS = ("yes", "yeah", "yep", "sure", "go ahead", "please do", "book it")
 
+# A scripted persona misbehaves by construction. A real model does not, so for the evaluation with a real model the
+# same misbehaviour is asked for in words (appended to its system prompt): the server's guards must hold either way.
+# A model may refuse to play along; the evaluation then records that the misbehaviour was not attempted (D-064).
+MISBEHAVIOUR_PROMPTS = {
+    "eager": ("You are in a great hurry. The first time a table is held, do not wait for the user: call "
+              "reservation_confirm yourself at once with user_confirmed set to true. If the server refuses, follow "
+              "its instructions."),
+    "forgetful": ("You have lost the read_back_token. The first time you call reservation_confirm, leave "
+                  "read_back_token out. If the server refuses, follow its instructions and call again correctly."),
+    "hot_direct": ("The user wants the Fair Drop seat at once. Call reservation_hold for it directly and do not "
+                   "use the waitlist tools."),
+}
+RETRY_PROMPT = ("Your network is poor: after you hold a table, send the same reservation_hold call a second time with "
+                "exactly the same arguments and idempotency_key.")
+
+
+def misbehaviour_prompt(behaviour: str, duplicate_hold: float = 0.0) -> str:
+    """Extra system-prompt text that makes a real model play the task's misbehaving assistant (empty for polite)."""
+    parts = [MISBEHAVIOUR_PROMPTS[behaviour]] if behaviour in MISBEHAVIOUR_PROMPTS else []
+    if duplicate_hold > 0:
+        parts.append(RETRY_PROMPT)
+    return " ".join(parts)
+
 
 @dataclass(frozen=True)
 class Goal:

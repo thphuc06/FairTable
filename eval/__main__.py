@@ -20,6 +20,7 @@ from eval.redteam import Outcome, run_redteam
 from eval.redteam import to_markdown as redteam_markdown
 from eval.report import compare_markdown, summarize, to_markdown
 from eval.runner import TrialResult, run_all
+from simulator.model import model_label
 from eval.tasks import load_tasks
 
 
@@ -60,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         tasks = load_tasks(args.tasks)
         provider = os.environ.get("MODEL_PROVIDER", "mock")
+        label = model_label(provider)  # what the report says: the provider and its model id
 
         def show(r: TrialResult) -> None:
             mark = "CRASH" if r.crashed else ("pass " if r.passed else "FAIL ")
@@ -71,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         if unknown:
             parser.error(f"unknown configuration(s) {unknown}; use {', '.join(CONFIGS)}")
         runs = {c: run_all(tasks, args.k, config=c, provider=provider, progress=show) for c in names}
-        summaries = [summarize(rs, k=args.k, provider=provider, config=c) for c, rs in runs.items()]
+        summaries = [summarize(rs, k=args.k, provider=label, config=c) for c, rs in runs.items()]
         trials = [r for rs in runs.values() for r in rs]
         redteam = {c: asyncio.run(run_redteam(c)) for c in names} if args.redteam else {}
     text = report_text(summaries, redteam)

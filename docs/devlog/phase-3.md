@@ -37,7 +37,9 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 | P3-15 Workers, S3 audit, KMS seed | E | done | 2026-10-03 | D-062: Lambda + EventBridge Scheduler, S3 copy of the audit, KMS GenerateRandom; 4 real-AWS tests passed |
 | P3-14 Fuzzy restaurant search | E | done | 2026-10-02 | D-061 |
 | P3-9 Alexa+ add-on requirements check | C2 | done | 2026-10-02 | D-056; 14 groups read raw; wording, five options, HTTP 401, plain argument errors; differences listed in `docs/alexa-plus-addon-notes.md` section 5 |
-| P3-4 Real-provider runs | D | not decided | | needs the developer's yes (Q2) |
+| P3-4 Real-provider runs | D | done | 2026-10-03 | D-064: DeepSeek flash A0/A1/A2 k = 2, Claude Haiku 4.5 A1 k = 1 and Nova Lite A0/A1/A2 k = 1 committed |
+| P3-16 Fault-injection tests | E | done | 2026-10-03 | 14 tests of the failure branches found by the coverage run (91 % overall) |
+| P3-17 Demo preflight | E | done | 2026-10-03 | `scripts/demo_preflight.py` + tests; run read-only against the real account |
 
 ## Closing checklist (agreed 2026-10-02; the video and the form come last)
 Order of work. Tick items in the Progress table or in an entry; do not start a later group before the earlier one is done.
@@ -53,6 +55,22 @@ Order of work. Tick items in the Progress table or in an entry; do not start a l
 10. **Commit, tag `submission`**, no functional change until 2026-11-20.
 
 ## Entries (newest first)
+
+### 2026-10-03 · P3-4 · [eval] [bedrock] · Evaluation with real models (D-064)
+- **Asked by the developer:** run the evaluation with a real model (option A).
+- **Pilot first** (6 tasks, DeepSeek flash): two tasks failed for the wrong reason (the model did not attempt the attack or the "forgetting"), so the harness was changed before the full run: misbehaviour asked for in the system prompt, a missing refusal excused only when the end state is right and counted apart, model-service errors counted as failed trials. Tests: `tests/unit/simulator/test_real_mode.py`, `tests/integration/test_eval_real_mode.py` (a stand-in "real" model that declines to misbehave; a wrong end state is never excused; a model-service error is not a crash).
+- **Runs** (three processes in parallel for DeepSeek, about 15 minutes each): DeepSeek flash A0/A1/A2 k = 2, Claude Haiku 4.5 A1 k = 1 (about $1, estimated from 0.79 million tokens, not yet read from Cost Explorer: the login had expired). Numbers in D-064; the gate passes on both reports and a unit test pins them.
+- **Found on the way:** four jobs against Bedrock at once were very slow (Nova Lite A1 at 18 trials in 40 minutes, A2 stuck at 46 of 80), alone it takes 14 s a trial; no throttling error was logged, so the cause is not confirmed. Nova Lite produced a few `modelStreamErrorException` (invalid tool call). An `aws login` session expired after a few hours and turned a run into crashes (`LoginRefreshRequired`, `ExpiredTokenException`).
+- **Nova Lite, run alone after the login was renewed** (2026-10-03, about 2 hours for three configurations, 2.31 million tokens): A1 40/40 with 0 violations; A0 pass@1 0.550 with 13 violations; A2 pass@1 0.600 with 8. Four trials ended in a model-call or agent-loop error ("maximum recursion depth exceeded" x3, "A conversation must start with a user message" x1) and were first counted as harness crashes; `is_model_error()` now covers both and the recorded trials were relabelled (D-064). Test: `test_a_tool_call_loop_and_a_badly_trimmed_conversation_are_model_errors`. Report: `eval/reports/bedrock-nova-lite-k1-2026-10-03.{md,json,svg}`; the gate passes.
+- **Cost:** Bedrock bills the model tokens (Haiku 0.79 million, Nova Lite 2.31 million); the real figure is not yet read from Cost Explorer (it lags for Bedrock).
+- **Not done:** AgentCore Evaluations (next AWS wiring, needs "wire").
+
+### 2026-10-03 · P3-16 · [tests] [docs] · Coverage measured; fault-injection tests for the failure branches; drafts for the form and the video
+- **Measured:** the whole local suite under `coverage` (line and branch; `server`, `web`, `simulator`, `eval`, `devauth`, `workers`, `scripts`): **91 %** of 5,683 statements (135 partial branches). The uncovered code is: (1) entry points that Docker and the real-AWS tests drive (`__main__` files, `scripts/healthcheck.py`, `scripts/cognito_users.py`, `workers/handler.py`, `web/voice_nova.py`); (2) failure and race branches of the core: the duplicate delivery of a request in `pipeline.py`, the rate limiter and the offer book under contention, `lifecycle.py`, the Fair Drop resume path in `dropper.py`.
+- **Done:** `tests/integration/test_fault_injection.py` (14 tests, DynamoDB Local): a repeated request whose lookup and slot read are stale gets the stored answer (and a different request under the same key a conflict, and a vanished record a retry message); a broken audit write never turns a refusal into a crash; the rate limiter gives up politely; an offer id that collides is replaced once and then fails loudly; release of holds is quiet when another caller was first; a draw that crashes is resumed by the next caller after the claim goes stale; an entry decided twice keeps its first decision.
+- **Drafts:** `docs/product-feedback.md` (five answers for each tool not yet covered in `aws-integration.md`), `docs/demo-script.md` (storyboard under 3 minutes and the day-before checklist). The Cognito note now says that machine tokens are billed per request ($0.00225), measured: 37 requests cost $0.083.
+- **Cost check (2026-10-03):** the month so far is $0.631 on the second account: AgentCore $0.479 (Runtime memory $0.352 and vCPU $0.118; Policy $0.007; Gateway $0.002), Cognito $0.083, tax $0.060, the rest under $0.01.
+- **Not covered, on purpose:** the voice code path is only driven by the real-AWS test and by the developer's ears; the Docker smoke test drives the `__main__` entry points.
 
 ### 2026-10-02 · P3-15, P3-8 · [aws] [workers] [fair-drop] [freeze] · A clock for the lazy routines, an S3 copy of the audit, KMS for the seed, versions frozen (D-062, D-063)
 - **Asked by the developer:** wire more services and implement more features while the video waits (recording planned for 16 or 17 October).

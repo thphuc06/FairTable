@@ -32,6 +32,21 @@ HELP = ("Tell me what to book, for example: book a table at Luna Trattoria for 2
         "I can also put you on a waitlist or cancel a booking.")
 
 
+def is_real(provider: str | None) -> bool:
+    """True for a model that is not the scripted one."""
+    return (provider or "mock") != "mock"
+
+
+def model_label(provider: str | None) -> str:
+    """What a report says about the model: the provider and, where it is configured, the model id."""
+    provider = provider or "mock"
+    if provider == "deepseek":
+        return f"deepseek ({os.environ.get('DEEPSEEK_MODEL') or DEEPSEEK_MODEL})"
+    if provider == "bedrock":
+        return f"bedrock ({os.environ.get('BEDROCK_MODEL_ID') or 'default model'})"
+    return provider
+
+
 class ProviderError(Exception):
     """The chosen model provider is not set up; the message says what is missing."""
 

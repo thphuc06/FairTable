@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 332" width="760" height="332" role="img" class="viz-root" aria-labelledby="t d">
+<style>.viz-root { color-scheme: light; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9;
+  --base:#c3c2b7; --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; }
+@media (prefers-color-scheme: dark) { .viz-root { color-scheme: dark; --surface:#1a1a19; --ink:#ffffff;
+  --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --base:#383835; --s1:#3987e5; --s2:#d95926; --s3:#199e70; } }
+text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink2); font-size: 13px; }
+.title { font-size: 17px; font-weight: 600; fill: var(--ink); }
+.sub { font-size: 12.5px; fill: var(--muted); }
+.group { font-size: 14px; font-weight: 600; fill: var(--ink); }
+.tick { font-size: 12px; fill: var(--muted); }
+.val { font-size: 13px; fill: var(--ink2); }
+.grid { stroke: var(--grid); stroke-width: 1; }
+.base { stroke: var(--base); stroke-width: 1; }
+.bg { fill: var(--surface); }
+.c1 { fill: var(--s1); } .c2 { fill: var(--s2); } .c3 { fill: var(--s3); }</style>
+<title id="t">How often each configuration ended in a safe state</title>
+<desc id="d">Refusals handled (NEG): A0 open store 5 of 8, A1 FairTable 8 of 8, A2 no voice guards 7 of 8; Attacks blocked (ADV): A0 open store 4 of 12, A1 FairTable 12 of 12, A2 no voice guards 10 of 12</desc>
+<rect class="bg" width="760" height="332" rx="8"/>
+<text class="title" x="24" y="34">How often each configuration ended in a safe state</text>
+<text class="sub" x="24" y="56">Model: bedrock (us.amazon.nova-lite-v1:0). 40 tasks x 1 trials per configuration.</text>
+<rect class="c2" x="24" y="72" width="14" height="14" rx="3"/>
+<text x="44" y="84">A0 open store</text>
+<rect class="c1" x="157.60000000000002" y="72" width="14" height="14" rx="3"/>
+<text x="177.60000000000002" y="84">A1 FairTable</text>
+<rect class="c3" x="284.0" y="72" width="14" height="14" rx="3"/>
+<text x="304.0" y="84">A2 no voice guards</text>
+<line class="grid" x1="200.0" y1="104" x2="200.0" y2="290"/>
+<text class="tick" x="200.0" y="306" text-anchor="middle">0%</text>
+<line class="grid" x1="310.0" y1="104" x2="310.0" y2="290"/>
+<text class="tick" x="310.0" y="306" text-anchor="middle">25%</text>
+<line class="grid" x1="420.0" y1="104" x2="420.0" y2="290"/>
+<text class="tick" x="420.0" y="306" text-anchor="middle">50%</text>
+<line class="grid" x1="530.0" y1="104" x2="530.0" y2="290"/>
+<text class="tick" x="530.0" y="306" text-anchor="middle">75%</text>
+<line class="grid" x1="640.0" y1="104" x2="640.0" y2="290"/>
+<text class="tick" x="640.0" y="306" text-anchor="middle">100%</text>
+<line class="base" x1="200" y1="104" x2="200" y2="290"/>
+<text class="group" x="24" y="153.0">Refusals handled (NEG)</text>
+<g><title>A0 open store: 5 of 8 (62%)</title>
+<path class="c2" d="M200.0,112.0 h271.0 a4,4 0 0 1 4,4 v12.0 a4,4 0 0 1 -4,4 h-271.0 z"/>
+<text class="val" x="483.0" y="126">5/8</text></g>
+<g><title>A1 FairTable: 8 of 8 (100%)</title>
+<path class="c1" d="M200.0,138.0 h436.0 a4,4 0 0 1 4,4 v12.0 a4,4 0 0 1 -4,4 h-436.0 z"/>
+<text class="val" x="648.0" y="152">8/8</text></g>
+<g><title>A2 no voice guards: 7 of 8 (88%)</title>
+<path class="c3" d="M200.0,164.0 h381.0 a4,4 0 0 1 4,4 v12.0 a4,4 0 0 1 -4,4 h-381.0 z"/>
+<text class="val" x="593.0" y="178">7/8</text></g>
+<text class="group" x="24" y="251.0">Attacks blocked (ADV)</text>
+<g><title>A0 open store: 4 of 12 (33%)</title>
+<path class="c2" d="M200.0,210.0 h142.7 a4,4 0 0 1 4,4 v12.0 a4,4 0 0 1 -4,4 h-142.7 z"/>
+<text class="val" x="354.7" y="224">4/12</text></g>
+<g><title>A1 FairTable: 12 of 12 (100%)</title>
+<path class="c1" d="M200.0,236.0 h436.0 a4,4 0 0 1 4,4 v12.0 a4,4 0 0 1 -4,4 h-436.0 z"/>
+<text class="val" x="648.0" y="250">12/12</text></g>
+<g><title>A2 no voice guards: 10 of 12 (83%)</title>
+<path class="c3" d="M200.0,262.0 h362.7 a4,4 0 0 1 4,4 v12.0 a4,4 0 0 1 -4,4 h-362.7 z"/>
+<text class="val" x="574.7" y="276">10/12</text></g>
+</svg>
