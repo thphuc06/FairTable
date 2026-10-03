@@ -34,6 +34,18 @@ def world(ddb_client, table_name, clock):
     return w
 
 
+async def test_creating_a_drop_again_removes_the_tickets_of_the_old_one(world):
+    """A reseed of a reused table draws a new seed: a ticket entered under the old commitment must not carry over."""
+    did = drop_id(world)
+    assert not (await enter(world, "alice")).isError
+    assert world.store.entries_of_drop(did)
+    old = world.store.get_drop(did)
+    create_drop(world.store, fd.FixedSeedProvider(SEED), DropSpec(
+        old.drop_id, old.venue_id, old.date, old.slot_keys, old.opens_at, old.drop_at))
+    assert world.store.entries_of_drop(did) == []
+    assert not (await enter(world, "alice", key="enter-alice-0002")).isError  # no ALREADY_ENTERED from the old table
+
+
 def friday(world: World) -> str:
     d = world.clock.now().date()
     while d.weekday() != 4:

@@ -25,7 +25,7 @@ class Facts:
     stacks: dict[str, str]  # name -> status
     users: int  # Cognito users in the pool
     venues: int
-    first_slot_day: str | None  # earliest day that has slots
+    first_slot_day: str | None  # earliest day from today on that has slots (else the earliest day, which is stale)
     open_drops: list[str]  # drops that are open, with the day of their draw time
     sns_confirmed: bool
     gateway_target: str | None  # READY | ...
@@ -79,13 +79,15 @@ def collect(session, table_name: str) -> Facts:
     slot_days = sorted({i["date"]["S"] for i in items if i.get("entity", {}).get("S") == "slot" and "date" in i})
     drops = sorted(i["drop_at"]["S"][:10] for i in items
                    if i.get("entity", {}).get("S") == "drop" and i.get("status", {}).get("S") == "open")
+    today = datetime.now(UTC).date().isoformat()
     sns = session.client("sns")
     topic = next((t["TopicArn"] for t in sns.list_topics()["Topics"] if t["TopicArn"].endswith(":fairtable-notices")), None)
     confirmed = bool(topic) and any(
         s["SubscriptionArn"].startswith("arn:") for s in sns.list_subscriptions_by_topic(TopicArn=topic)["Subscriptions"])
     return Facts(
-        today=datetime.now(UTC).date().isoformat(), stacks=stacks, users=users, venues=venues,
-        first_slot_day=(slot_days or [None])[0], open_drops=drops, sns_confirmed=confirmed,
+        today=today, stacks=stacks, users=users, venues=venues,
+        first_slot_day=next((d for d in slot_days if d >= today), (slot_days or [None])[0]), open_drops=drops,
+        sns_confirmed=confirmed,
         gateway_target=_gateway_target(session), schedule_state=_schedule(session), **_budget(session),
     )
 

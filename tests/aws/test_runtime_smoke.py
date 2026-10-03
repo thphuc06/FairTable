@@ -155,8 +155,10 @@ async def test_a_machine_token_without_agent_claims_cannot_write(runtime, cognit
         result = await call(runtime, token, "reservation_hold", offer_id=slot, idempotency_key="smoke-bot-00001")
     except Exception as e:  # noqa: BLE001 - the transport raises its own error types
         assert "403" in str(e) or "orbidden" in str(e), e
+        print("machine token writes: HTTP 403 from the Runtime")
         return
     assert result.isError and result.structuredContent["error"] == "POLICY_DENIED"
+    print("machine token writes: tool-level POLICY_DENIED")
 
 
 @pytest.mark.asyncio

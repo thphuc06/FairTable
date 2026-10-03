@@ -58,6 +58,13 @@ Order of work. Tick items in the Progress table or in an entry; do not start a l
 
 ## Entries (newest first)
 
+### 2026-10-03 · P3-18/19 · [aws] [seed] · Redeploy and real-AWS check of D and C
+- **Redeployed** the stacks Notify (kept), Runtime, Gateway, Observability and Workers on the second account (`aws_ctl.py up --runtime`, about 3 minutes of CDK after the first start, 4 demo users present), reseeded with KMS seeds, ran `demo_preflight.py` and `pytest -m aws tests/aws`.
+- **Result:** 41 passed and 1 failed on the first run, 42 passed after the fix below. The Runtime answers HTTP 403 to a write tool called with a machine token (measured, D-065); the Gateway tests, the voice booking, the real-model booking and the workers test (a due Fair Drop drawn by the clock, audit copied to S3) passed.
+- **Found: a reseed of a reused table left the old tickets of a Fair Drop in place.** The drop was created again with a new seed and commitment, but a ticket from the earlier run survived (`ALREADY_ENTERED` in the workers test): a ticket entered under an old commitment is meaningless. `create_drop` now removes the tickets of the drop first (`clear_drop_entries`); test `test_creating_a_drop_again_removes_the_tickets_of_the_old_one`. Holds, reservations and counters from earlier runs are still not cleared by a reseed: for the recording, say so and clean the table or use a fresh one (open point).
+- **Found: the preflight reported stale slots** because yesterday's slots stay in the table. It now looks at the first day from today on.
+- **Cost:** the AgentCore parts bill by use while they stay up; nothing about the price changed (budget $5, $0.63 used on 2026-10-02, later Bedrock charges not yet in Cost Explorer).
+
 ### 2026-10-03 · P3-19 · [kernel] [dynamodb] · One confirmed table per diner, restaurant and day (D-066)
 - **Asked by the developer:** the duplicate-booking guard, simple version.
 - **Built:** Cedar rule S6 (new required context field `booked_same_day`, computed from the diner's reservations at `reservation_hold`), a `BOOKED#` marker written in the confirm transaction with `attribute_not_exists` and deleted in the cancel transaction, `error_for_rule` to give the database-condition failure the same error as the rule, invariant I6.
