@@ -41,6 +41,7 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 | P3-16 Fault-injection tests | E | done | 2026-10-03 | 14 tests of the failure branches found by the coverage run (91 % overall) |
 | P3-17 Demo preflight | E | done | 2026-10-03 | `scripts/demo_preflight.py` + tests; run read-only against the real account |
 | P3-18 OAuth discovery, Bearer, 403 (D) | F | done (local) | 2026-10-03 | D-065; 81 tests in the three touched files; real-AWS check of the 403 through the Runtime at the next deploy |
+| P3-20 Diagrams: future improvements marked | F | done | 2026-10-04 | both .drawio files edited in place: italic grey labels for what is not built, stale facts fixed, one note line per page |
 | P3-19 Duplicate-booking guard (C) | F | done (local) | 2026-10-03 | D-066: Cedar S6 + `BOOKED#` marker + invariant I6; 8 new tests |
 
 ## Closing checklist (agreed 2026-10-02; the video and the form come last)
@@ -57,6 +58,19 @@ Order of work. Tick items in the Progress table or in an entry; do not start a l
 10. **Commit, tag `submission`**, no functional change until 2026-11-20.
 
 ## Entries (newest first)
+
+### 2026-10-04 · P3-20 · [docs] [diagrams] · Future improvements marked on both draw.io files
+- **Asked by the developer:** mark what is a future improvement with italic or a colour, one note line below, edit the two files in place.
+- **Done:** in `fairtable-aws-architecture (1).drawio`, italic grey labels (and legend lines) for AgentCore Evaluations, Amazon API Gateway and the owner-console Lambda (the console exists but runs locally), Automated Reasoning, AgentCore Browser, Nova Act, Secrets Manager and AgentCore Memory; the groups "Owner web" and "Owner onboarding"; note line `note_future` under the legends. In `fairtable-flows (1).drawio`: page 1 italic slot-picker and booking-card UIs; page 3 italic user simulator B, OTel traces, AgentCore Evaluations, disclosure checker, ACE loop and cadence; a note line on pages 1 to 3. Page 4 needed no change. Ids, positions, icons and colours were not touched.
+- **Facts fixed on the way:** page 1 forwarded to the Runtime with "OAuth via AgentCore Identity" (it is the Gateway service role, SigV4, D-035); S6 and the HTTP 403 added; the simulator signs in with the Cognito password flow in the demo (OAuth code + PKCE is what a real Alexa+ does); the owner console changes the agent-share cap and shows the audit, rules and drops are future; page 2: the seed is drawn when the drop is created, entries run from creation to T, the result is read with `waitlist_status` (MCP Task is future), the agent-share cap is applied at allocation, a freed table goes to standing watches; page 3: "tokens per trial" instead of "cost per booking", pass^k at the run's k instead of curves for k = 1..8.
+- **Not checked:** the pictures were not rendered here (no draw.io on this machine); both files parse as XML. The developer should open them once and look at the long labels (page 1 boxes `L2n`, page 2 boxes `s1` and `s3`).
+
+### 2026-10-04 · P3-4 · [eval] [bedrock] [cost] · The Nova Lite runs cost $4.2: tool-call loops, and the report did not show it (Change to D-064)
+- **Asked by the developer:** the AWS bill showed almost $7; find what still costs money.
+- **Found (read-only, second account):** nothing that bills by time is running (stacks Data, Identity, Notify, Budget, CDK bootstrap only). The money is spent: total $6.89 including $0.62 tax = Nova Lite $4.19, AgentCore $1.10 (Runtime memory and CPU $1.07), Claude Haiku $0.97, Cognito machine tokens $0.16, other $0.06. By day: 2026-10-01 $1.19, 10-02 $0.91, 10-03 $4.79.
+- **Cause:** about 94 million Nova Lite input tokens in CloudWatch against 2.3 million in the reports. The reports count tokens only for finished trials; the looped trials (`maximum recursion depth exceeded`) and the killed parallel jobs of the first attempt count as 0, and each loop turn re-sends the whole conversation, so the cost grows with the square of the loop length.
+- **Wrong in my earlier answers:** the estimate "under $0.5, even ten times more is $2-3" (2026-10-03). It rested on the report's token count and a remembered price, and was never checked against CloudWatch.
+- **Open:** a cap per trial (model calls and tokens) in the real-model path of the harness, and a cost line read from CloudWatch in the report. Not done yet; no real-model run until then.
 
 ### 2026-10-03 · P3-18/19 · [aws] [seed] · Redeploy and real-AWS check of D and C
 - **Redeployed** the stacks Notify (kept), Runtime, Gateway, Observability and Workers on the second account (`aws_ctl.py up --runtime`, about 3 minutes of CDK after the first start, 4 demo users present), reseeded with KMS seeds, ran `demo_preflight.py` and `pytest -m aws tests/aws`.
