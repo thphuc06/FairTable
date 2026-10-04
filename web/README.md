@@ -5,7 +5,7 @@ FastAPI pages: sign-in, the **owner console** (P1-17) and the **demo chat page**
 Run: `python -m web` (`WEB_HOST`, `WEB_PORT` default `127.0.0.1:8080`; settings shared with the server, see `server/README.md`).
 
 - `GET/POST /login`: signs in through the dev issuer (`devauth/`). The AWS profile would use Cognito's hosted login (scaffold only).
-- `GET /owner`, `POST /owner/agent-share`: owners only (group `owners` plus a venue claim). Change the share of seats agents may book (0-100) and see the rules and recent audit; the change is audited and reaches rule S2 on the next hold.
+- `GET /owner`, `POST /owner/agent-share`: owners only (group `owners` plus a venue claim). Change the share of seats agents may book (0-100) and see the rules and recent audit; the change is audited and reaches rule S2 on the next hold. `POST /owner/terms` changes the cancellation fee and the free-cancellation window (new holds use them). `POST /owner/drops` releases one open seat through a Fair Drop (D-067). Each form has its own CSRF token.
 - `GET/POST /chat`, `POST /chat/reset`: a simulated voice assistant (`simulator/`, `MODEL_PROVIDER=mock` by default) that books through the MCP server (`MCP_URL`, default `http://127.0.0.1:8000/mcp`) with the signed-in diner's own token. After a hold the assistant reads the details back and asks; the diner types yes or no. The page also shows the dev inbox (waitlist matches, Fair Drop wins). No JavaScript; the diner's token stays in server memory.
 - `GET /`: signed-in diners go to `/chat`, owners to `/owner`.
 - Security: HMAC-signed HttpOnly SameSite cookie, `X-Frame-Options: DENY`, strict CSP, `Cache-Control: no-store`, redirects only to `/owner` and `/chat`, every value HTML-escaped.

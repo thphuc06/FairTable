@@ -29,6 +29,7 @@ These rules are enforced by the FairTable server, not by the assistant. An assis
   confirm, change or cancel a booking or join a waitlist (rules G2, G4). Machine clients can only read.
 - **Groups larger than 10** must call the restaurant (G3).
 - A diner can have at most **{MAX_ACTIVE_HOLDS} active holds** here at once (S1). A hold lasts 10 minutes.
+- A diner can have **one confirmed table per day** here (S6): a second booking the same day is refused until the first is cancelled.
 - Agents can book at most **{venue.agent_cover_cap} covers per day** here ({venue.agent_share_pct}% of
   {venue.seats_per_day} seats); the rest is kept for phone and walk-in guests (S2).
 - **Hot tables** are released only through a Fair Drop lottery, never by direct booking (S4). The draw

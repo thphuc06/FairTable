@@ -17,9 +17,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from devauth.accounts import USERS_BY_NAME
 from server.domain.clock import SystemClock
-from server.domain.fairdrop import KmsSeedProvider, LocalSeedProvider
 from server.store import Store, StoreConfig, delete_table, ensure_table, make_client
-from server.store.seeding import seed_store
+from server.store.seeding import seed_provider_from_env, seed_store
 
 DINERS = {"alice": "diner-alice", "bob": "diner-bob", "carol": "diner-carol"}
 SUBS = {who: USERS_BY_NAME[name].sub for who, name in DINERS.items()}
@@ -41,13 +40,8 @@ def subs_for_env(env=None) -> dict[str, str]:
 
 def seed_provider(env=None):
     """Where the secret seed of each Fair Drop comes from: this machine (default) or AWS KMS GenerateRandom
-    (`SEED_PROVIDER=kms`, the AWS profile: no key to manage, the random bytes come from the KMS hardware)."""
-    env = os.environ if env is None else env
-    if env.get("SEED_PROVIDER", "local").lower() == "kms":
-        import boto3
-
-        return KmsSeedProvider(boto3.client("kms"))
-    return LocalSeedProvider()
+    (`SEED_PROVIDER=kms`, the AWS profile). The rule lives in `server.store.seeding` so the owner console shares it."""
+    return seed_provider_from_env(env)
 
 
 def wait_for_database(client, seconds: int) -> None:

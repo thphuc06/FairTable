@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = Path(__file__).with_name("requirements.txt")
 PLATFORMS = ("manylinux2014_aarch64", "manylinux_2_17_aarch64", "manylinux_2_28_aarch64", "manylinux_2_34_aarch64")
-APP_DIRS = ("server", "policies", "workers")
+APP_DIRS = ("server", "policies", "workers", "web", "simulator")
 APP_FILES = ("runtime_entry.py",)
 SKIP_PARTS = {"__pycache__"}
 SKIP_SUFFIXES = (".pyc", ".pyo")

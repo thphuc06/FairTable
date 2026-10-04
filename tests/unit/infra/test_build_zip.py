@@ -73,7 +73,8 @@ def test_the_application_is_added_without_bytecode(tmp_path):
         p.name for p in (ROOT / "policies").glob("*.cedar"))
     assert (staging / "policies" / "pep1.cedarschema").is_file() and (staging / "policies" / "pep2.cedarschema").is_file()
     assert not list(staging.rglob("__pycache__")) and not list(staging.rglob("*.pyc"))
-    assert not (staging / "web").exists() and not (staging / "tests").exists()  # only what the server needs
+    assert (staging / "web").is_dir() and (staging / "simulator").is_dir()  # the owner console on Lambda (D-068)
+    assert not (staging / "tests").exists() and not list(staging.rglob("strands"))  # but no tests and no agent framework
 
 
 def test_wheels_are_unpacked_into_the_root(tmp_path):
@@ -107,5 +108,7 @@ def test_the_pinned_requirements_match_pyproject():
     for name in ("fastmcp", "mcp", "cedarpy"):
         wanted = re.search(rf'"{name}==([0-9.]+)"', pyproject).group(1)
         assert pins[name] == wanted
-    for absent in ("fastapi", "strands-agents", "openai", "pytest"):
-        assert absent not in pins  # the web pages, the simulator and the tests are not part of the server
+    for name in ("fastapi", "mangum"):  # the owner console on Lambda (D-068)
+        assert pins[name] == re.search(rf'"{name}==([0-9.]+)"', pyproject).group(1)
+    for absent in ("strands-agents", "openai", "pytest"):
+        assert absent not in pins  # the simulator's framework and the tests are not part of the package

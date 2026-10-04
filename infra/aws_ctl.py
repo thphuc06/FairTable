@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CDK_DIR = ROOT / "infra" / "cdk"
 
 # Destroy order: what depends on another stack goes first.
-STACKS = ("FairTableObservability", "FairTableGateway", "FairTableWorkers", "FairTableRuntime", "FairTableNotify",
+STACKS = ("FairTableObservability", "FairTableGateway", "FairTableWorkers", "FairTableOwnerWeb", "FairTableRuntime",
+          "FairTableNotify",
           "FairTableIdentity", "FairTableData")
 BUDGET_STACK = "FairTableBudget"
 BOOTSTRAP_STACK = "CDKToolkit"
@@ -40,7 +41,7 @@ OWNED = {
     "gateway_prefix": "fairtable-gw",
     "policy_engine_prefix": "fairtable_engine",
     "log_prefixes": ("/aws/bedrock-agentcore/runtimes/fairtable_mcp-", "/aws/lambda/FairTable"),
-    "secret_marker": "SlotTokenSecret",
+    "secret_markers": {"SlotTokenSecret": "FairTableRuntime", "SessionSecret": "FairTableOwnerWeb"},
     "bucket_prefix": "fairtable-audit-",  # the Fair Drop audit copies (DataStack)
     "schedule_prefix": "FairTableWorkers",
     "span_log_groups": ("aws/spans", "/aws/application-signals/data"),  # made by CloudWatch Transaction Search
@@ -147,8 +148,9 @@ class Account:
         items += [Item("bucket", b["Name"], True, "stack:FairTableData")
                   for b in self.s3.list_buckets().get("Buckets", []) if b["Name"].startswith(OWNED["bucket_prefix"])]
         for page in self.sm.get_paginator("list_secrets").paginate():
-            items += [Item("secret", s["Name"], True, "stack:FairTableRuntime")
-                      for s in page["SecretList"] if OWNED["secret_marker"] in s["Name"] and not s.get("DeletedDate")]
+            items += [Item("secret", s["Name"], True, f"stack:{owner}")
+                      for s in page["SecretList"] if not s.get("DeletedDate")
+                      for marker, owner in OWNED["secret_markers"].items() if marker in s["Name"]]
         for page in self.ac.get_paginator("list_agent_runtimes").paginate():
             items += [Item("runtime", r["agentRuntimeName"] + " " + r["agentRuntimeId"], True, "stack:FairTableRuntime")
                       for r in page["agentRuntimes"] if r["agentRuntimeName"].startswith(OWNED["runtime_prefix"])]
@@ -235,6 +237,8 @@ def cmd_up(account: Account, with_runtime: bool) -> int:
     stacks = ["FairTableData", "FairTableIdentity"] + (["FairTableRuntime", "FairTableGateway"] if with_runtime else [])
     if with_runtime and os.environ.get("WORKERS", "true").lower() != "false":
         stacks.append("FairTableWorkers")
+    if with_runtime and os.environ.get("OWNER_WEB", "").lower() == "true":  # opt-in: the owner console on Lambda (D-068)
+        stacks.append("FairTableOwnerWeb")
     if with_runtime and os.environ.get("NOTIFY_EMAIL"):
         stacks.insert(2, "FairTableNotify")  # the topic first: the Runtime reads its ARN
     if os.environ.get("BUDGET_EMAIL"):

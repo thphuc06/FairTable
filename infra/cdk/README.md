@@ -6,6 +6,7 @@ Python CDK app. Nothing account-specific is stored here: account and region come
 |---|---|---|
 | `FairTableData` | DynamoDB table (on-demand, `GSI1`, `GSI2`, same keys as `server/store/table.py`) | destroyed with the stack; tag `project=fairtable` |
 | `FairTableBudget` | budget `fairtable-cap-<limit>usd`; default limit $150 with alerts at $50 / $100 / $140 of actual spend, credits excluded; for a small account `BUDGET_LIMIT_USD=5 BUDGET_ALERTS=1,3,4.5` | only created when `BUDGET_EMAIL` is set; free |
+| `FairTableOwnerWeb` | the owner console: one Lambda (`web.lambda_handler.handler`, same zip as the Runtime) behind an HTTP API, a generated session secret, a throttled stage (D-068) | opt-in: `OWNER_WEB=true` with `aws_ctl.py up --runtime`; about $0.01 for a few hours, the secret ($0.40 a month) being the only charge by time |
 
 ## One-time setup
 ```bash

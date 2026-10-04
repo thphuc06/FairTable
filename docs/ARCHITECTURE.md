@@ -57,7 +57,7 @@ flowchart LR
 | Notices | dev inbox shown on the chat page | dev inbox **and** an SNS topic (`NOTIFY_TOPIC_ARN`) |
 | Assistant | `MODEL_PROVIDER=mock` (default), `deepseek`, `bedrock` | same, plus the voice page |
 
-In both profiles the **server re-verifies the user token itself** (`joserfc`, same code; only issuer, JWKS URL and audience change), so the Gateway is an extra layer and not the only one (D-016). The server ignores a bare `Authorization` header on purpose; the Gateway interceptor is what turns a bearer token into the trusted header.
+In both profiles the **server re-verifies the user token itself** (`joserfc`, same code; only issuer, JWKS URL and audience change), so the Gateway is an extra layer and not the only one (D-016). The server reads the token from `x-ft-user-token` (the Gateway interceptor's header) and, when that is absent, from `Authorization: Bearer <token>` as MCP clients send it (D-065); either way the same verification runs. For a server that is reached directly it also publishes the OAuth Protected Resource Metadata at `/.well-known/oauth-protected-resource` (setting `MCP_PUBLIC_URL`), puts a `WWW-Authenticate` challenge on every 401 and 403, and answers **HTTP 403** when a write tool is called by a token that has no signed-in diner (Alexa+'s service-level token), so that Alexa+ starts account linking. On AWS the Gateway serves the metadata and the challenge for its own endpoint.
 
 ## 3. The seven tools
 
@@ -78,7 +78,7 @@ Every success carries a short `spoken_summary`; every error is `isError: true` w
 ```mermaid
 flowchart TD
   A["tools/call"] --> T{"token valid?"}
-  T -- no --> U["HTTP 401 (Alexa+ starts account linking)"]
+  T -- no --> U["HTTP 401 (Alexa+ starts account linking); a write tool with a token that has no diner: HTTP 403"]
   T -- yes --> P1{"PEP-1 Cedar: G1-G4"}
   P1 -- deny --> R1["POLICY_DENIED + rule_id + hint"]
   P1 -- permit --> I{"idempotency key seen?"}
@@ -150,7 +150,7 @@ The `Notifier` seam has three implementations: the dev inbox (a DynamoDB item th
 ## 9. The assistant, the voice page and the owner console
 * **Simulated assistant.** One Strands agent (`simulator/`) with the server's seven tools. `MODEL_PROVIDER=mock` is a scripted persona with seeded noise (no key, no cost); `deepseek` and `bedrock` are opt-in. The chat page shows the tool calls behind every answer, which is the proof that the checks happen in the server.
 * **Voice page (D-052).** `/voice` streams the microphone (16 kHz PCM) over a same-origin WebSocket to the web app, which hands it to Amazon Nova 2 Sonic through the Strands bidirectional agent; the agent calls the same seven tools with the diner's own token. The page has its own Content-Security-Policy and refuses a socket from another site. It is optional, needs the `voice` extra and an AWS deployment, and is not part of `docker compose up`.
-* **Owner console.** An owner signs in, changes the agent-share cap and reads the audit. The change takes effect on the next booking (rule S2).
+* **Owner console.** An owner signs in, changes the agent-share cap, sets the cancellation fee and window, releases a seat through a Fair Drop and reads the audit. Each change is one transaction with its audit entry and takes effect on the next booking (rule S2, new terms, rule S4); a booking keeps the terms it was made with (D-067). On AWS it runs as a Lambda behind an API Gateway HTTP API and signs owners in through Cognito (D-068); locally it is the same FastAPI app on port 8080.
 
 ## 10. AWS profile
 Seven CloudFormation stacks from a Python CDK app (`infra/cdk/`), deployed and removed by `python infra/aws_ctl.py up|seed|status|down`, which names the account it acts on and refuses a root user: Data (table), Identity (Cognito, pre-token and interceptor Lambdas), Runtime (package from `infra/runtime/build_zip.py`, secret), Gateway (target, interceptor, policy engine and six Cedar policies), Observability (CloudWatch Transaction Search and delivery of Gateway and Runtime spans), Notify (SNS topic), Budget (cost alerts). Everything is tagged `project=fairtable`; nothing account-specific is in the code. Service by service, with prices and what worked or not: [`aws-integration.md`](aws-integration.md) and [`friction-log.md`](friction-log.md). The deployment is torn down after the demo; judges are never asked to use it.

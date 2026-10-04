@@ -8,7 +8,7 @@ Every statement below comes from something we ran or read; the evidence is in [`
 | Tool or service | Where its five answers are |
 |---|---|
 | Amazon DynamoDB, Cognito, Lambda (Cognito trigger), AWS Budgets, AWS CDK, AgentCore Runtime, Gateway, Policy, Observability | [`aws-integration.md`](aws-integration.md), "Per-service notes" |
-| Amazon SNS, EventBridge Scheduler and the workers Lambda, Amazon S3, AWS KMS, Amazon Bedrock with Nova 2 Sonic | below |
+| Amazon SNS, EventBridge Scheduler and the workers Lambda, Amazon S3, AWS KMS, Amazon Bedrock with Nova 2 Sonic, the owner console on Lambda and API Gateway, the Bedrock models and the DeepSeek API of the evaluation, DynamoDB Local | below |
 | FastMCP and the MCP Python SDK, Strands Agents SDK, Cedar and `cedarpy`, MCP Inspector | below |
 
 ## Amazon Bedrock, Amazon Nova 2 Sonic (voice)
@@ -65,3 +65,20 @@ Every statement below comes from something we ran or read; the evidence is in [`
 - *Worked well:* custom headers and structured results are easy to inspect.
 - *Needs work:* in CLI mode a tool call that ends in JSON-RPC error -32042 printed nothing and never returned.
 - *Onboarding:* one `npx` line. *Build again:* yes, for manual checks.
+
+## AWS Lambda and Amazon API Gateway (HTTP API): the owner console
+- *Used for:* the restaurant owner's console (sign-in through Cognito, cancellation terms, Fair Drops, audit). One arm64 Python 3.12 Lambda runs the same FastAPI app as the local profile through Mangum; an HTTP API with a `$default` route and a throttled stage fronts it.
+- *Worked well:* the same code runs locally and on AWS with no change besides the entry point; the stack deployed in 65 seconds; the generated session secret is handed over as a dynamic reference; stage throttling is two properties.
+- *Needs work:* (1) the first request after a deploy took 7.8 s (cold start of a 95 MB package); (2) under 60 concurrent requests we saw 503 answers that we could not tell apart from the account's Lambda concurrency limit of 10 in the API's own logs; (3) the CDK property `user_pool_client_secret` adds a custom resource to the identity stack, while the L1 `GetAtt` does not; (4) the price page of API Gateway loads its numbers by script, so it cannot be read with a plain download.
+- *Onboarding:* about an hour from the synthesised stack to a working sign-in; most of it went into packaging. *Build again:* yes.
+
+## Amazon Bedrock models used by the evaluation (Claude Haiku 4.5, Amazon Nova Lite) and the DeepSeek API
+- *Used for:* the real-model runs of the evaluation (D-064): the same 40 tasks, with a model playing the diner and the assistant. Haiku and Nova Lite through Strands `BedrockModel`; DeepSeek flash through its OpenAI-compatible API.
+- *Worked well:* switching the model is one setting; every model kept the rules at zero violations; per-trial token counts are available.
+- *Needs work:* (1) Nova Lite fell into tool-call loops that ended in `maximum recursion depth exceeded`; each loop turn re-sends the whole conversation, so three loops and a few cut-short jobs cost about $4.2 (94 million input tokens) while our own report counted 2.3 million, because failed trials report no tokens; the agent loop has no default cap on model calls or tokens; (2) `modelStreamErrorException` ("invalid sequence as part of ToolUse") ends a conversation; (3) `ValidationException: A conversation must start with a user message` after a long conversation; (4) a new account's quotas and Cost Explorer lag made the real spend visible only a day later.
+- *Onboarding:* minutes to the first call; the cost control took a day to learn the hard way. *Build again:* yes, with a hard cap per trial and the cost read from CloudWatch.
+
+## Amazon DynamoDB Local (Docker)
+- *Used for:* every integration test and the local profile (`docker compose up`): the same table definition and the same `TransactWriteItems` as on AWS.
+- *Worked well:* behaves like the service for conditional writes and transaction cancellations, which is what our concurrency tests need; starts in seconds.
+- *Needs work:* nothing found beyond pinning the image by digest. *Onboarding:* minutes. *Build again:* yes.

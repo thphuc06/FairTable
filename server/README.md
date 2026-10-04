@@ -50,7 +50,7 @@ Write tools go through `pipeline.run_write`. `lifecycle.py` releases expired hol
 
 ## Alexa+ add-on requirements (P3-9, D-056)
 `docs/alexa-plus-addon-notes.md` compares the server with Amazon's functional requirements. What the code does because of them:
-- **HTTP 401 for a tool call without a valid token** (`http_auth.py`, wrapped around the MCP app): Alexa+ starts account linking on 401 or 403. `initialize` and `tools/list` need no token. The tools still verify the token themselves.
+- **HTTP 401 for a tool call without a valid token** (`http_auth.py`, wrapped around the MCP app): Alexa+ starts account linking on 401 or 403. `initialize` and `tools/list` need no token. The tools still verify the token themselves. Since D-065 the token may also come as `Authorization: Bearer` (`x-ft-user-token` wins), every 401 and 403 carries `WWW-Authenticate: Bearer resource_metadata=...`, a write tool called by a token with no signed-in diner gets 403, and `/.well-known/oauth-protected-resource` (also with `/mcp` appended) serves the metadata for `MCP_PUBLIC_URL`.
 - **Spoken parts are clean**: `spoken_summary`, an error's `message` and `read_back` name no tool, parameter, code, rule id, token or id (the booking code is the one exception). `hint` and `next_step.why` are for the assistant and may name parameters, never tools or codes. `tests/integration/test_customer_facing_text.py` scans every text of a scenario through all seven tools.
 - **At most five options**: `restaurant_search` returns five restaurants (`offset` for the next five), `availability_check` five slots (a later `time_window` for the rest).
 - **Bad arguments** give `INVALID_INPUT` with a plain sentence and the field names, not the library's text (`middleware.py`).

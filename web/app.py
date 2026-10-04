@@ -1,15 +1,17 @@
 """The demo web app: sign-in, the chat page with the simulated assistant, and the owner console.
 
 There is no consent page any more: a booking is confirmed by the diner's spoken yes (docs/DECISIONS.md D-051).
-Routes: ``GET/POST /login``, ``GET/POST /chat``, ``POST /chat/reset``, ``GET /owner``, ``POST /owner/agent-share``,
+Routes: ``GET/POST /login``, ``GET/POST /chat``, ``POST /chat/reset``, ``GET /owner``, ``POST /owner/agent-share``, ``POST /owner/terms``, ``POST /owner/drops``,
 ``GET /healthz``. Every response is ``no-store`` and cannot be framed (clickjacking).
 """
 
+from __future__ import annotations
+
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Form, Request, WebSocket
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -17,13 +19,17 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from server.config import Settings
 from server.domain.audit import AuditEntry
 from server.domain.clock import Clock, iso_z
+from server.domain.fairdrop import LocalSeedProvider, SeedProvider
 from server.store import Store, TxOp, keys
+from web import owner as owner_actions
 from web import pages
 from web.auth import Login
-from web.chat import ChatService
 from web.session import COOKIE_NAME, Session, SessionCodec
-from web.voice import VoiceService
 from web.voice_protocol import origin_ok
+
+if TYPE_CHECKING:  # imported for the annotations only: the hosted owner console has no simulator package
+    from web.chat import ChatService
+    from web.voice import VoiceService
 
 SAFE_NEXT = re.compile(r"^(/owner|/chat|/voice)$")
 HEADERS = {
@@ -56,6 +62,7 @@ class WebDeps:
     new_id: Any
     chat: ChatService | None = None  # the demo chat page; off when there is no assistant configured
     voice: VoiceService | None = None  # the voice page; off unless the voice extra and a model are configured
+    seeds: SeedProvider = field(default_factory=LocalSeedProvider)  # where a new Fair Drop gets its secret seed
 
 
 def page(status: int, title: str, text: str) -> HTMLResponse:
@@ -194,10 +201,10 @@ def create_app(deps: WebDeps) -> FastAPI:
         deps.chat.reset(session.sub)
         return RedirectResponse("/chat", status_code=303)
 
-    def csrf_subject(venue_id: str) -> str:
-        return f"owner-share:{venue_id}"
+    def csrf_subject(venue_id: str, form: str = "share") -> str:
+        return f"owner-{form}:{venue_id}"
 
-    def render_owner(session: Session, notice: str | None = None, status: int = 200) -> Response:
+    def render_owner(session: Session, notice: str | None = None, status: int = 200, draw: int = 24) -> Response:
         venue = deps.store.get_venue(session.owner_of or "")
         if venue is None:
             return page(404, "Not found", "Your restaurant is not set up yet.")
@@ -206,13 +213,17 @@ def create_app(deps: WebDeps) -> FastAPI:
         for back in range(3):
             audit += deps.store.list_audit(venue.venue_id, (today - timedelta(days=back)).isoformat())
         audit.sort(key=lambda a: str(a.get("at", "")), reverse=True)
-        csrf = deps.sessions.csrf_token(session, csrf_subject(venue.venue_id))
-        return HTMLResponse(pages.owner_page(venue, session.username, csrf, audit[:40], notice), status_code=status)
+        csrf = {form: deps.sessions.csrf_token(session, csrf_subject(venue.venue_id, form)) for form in ("share", "terms", "drops")}
+        seats = owner_actions.seat_options(deps, venue.venue_id, draw)
+        drops = owner_actions.venue_drops(deps, venue.venue_id)
+        return HTMLResponse(
+            pages.owner_page(venue, session.username, csrf, audit[:40], notice, seats=seats, drops=drops, draw=draw),
+            status_code=status)
 
     @app.get("/owner")
-    def owner(request: Request) -> Response:
+    def owner(request: Request, draw: str = "24") -> Response:
         session, problem = owner_session(request)
-        return problem if problem is not None else render_owner(session)  # type: ignore[arg-type]
+        return problem if problem is not None else render_owner(session, draw=owner_actions.draw_hours(draw))  # type: ignore[arg-type]
 
     @app.post("/owner/agent-share")
     def owner_set_share(request: Request, pct: str = Form(""), csrf: str = Form("")) -> Response:
@@ -225,6 +236,31 @@ def create_app(deps: WebDeps) -> FastAPI:
         if not re.fullmatch(r"[0-9]{1,3}", pct.strip()) or int(pct) > 100:
             return render_owner(session, "Enter a whole number from 0 to 100.", status=400)
         change_agent_share(deps, session, int(pct))
+        return RedirectResponse("/owner", status_code=303)
+
+    @app.post("/owner/terms")
+    def owner_set_terms(request: Request, fee: str = Form(""), hours: str = Form(""), csrf: str = Form("")) -> Response:
+        session, problem = owner_session(request)
+        if problem is not None:
+            return problem
+        assert session is not None and session.owner_of is not None
+        if not deps.sessions.csrf_ok(session, csrf_subject(session.owner_of, "terms"), csrf):
+            return page(403, "Not allowed", "This form is out of date. Open the page again.")
+        error = owner_actions.change_cancellation_terms(deps, session, fee, hours)
+        return render_owner(session, error, status=400) if error else RedirectResponse("/owner", status_code=303)
+
+    @app.post("/owner/drops")
+    def owner_create_drop(request: Request, seat: str = Form(""), hours_before: str = Form(""),
+                          csrf: str = Form("")) -> Response:
+        session, problem = owner_session(request)
+        if problem is not None:
+            return problem
+        assert session is not None and session.owner_of is not None
+        if not deps.sessions.csrf_ok(session, csrf_subject(session.owner_of, "drops"), csrf):
+            return page(403, "Not allowed", "This form is out of date. Open the page again.")
+        error = owner_actions.create_fair_drop(deps, session, seat, hours_before)
+        if error:
+            return render_owner(session, error, status=400, draw=owner_actions.draw_hours(hours_before))
         return RedirectResponse("/owner", status_code=303)
 
     return app

@@ -17,6 +17,7 @@ from stacks.gateway_stack import GatewayStack
 from stacks.identity_stack import IdentityStack
 from stacks.notify_stack import NotifyStack
 from stacks.observability_stack import ObservabilityStack
+from stacks.owner_web_stack import OwnerWebStack
 from stacks.runtime_stack import RuntimeStack
 from stacks.workers_stack import WorkersStack
 
@@ -60,6 +61,16 @@ if package.exists():
             notify_topic=notify.topic if notify else None,
             audit_bucket=data.audit_bucket,
             every_minutes=int(os.environ.get("WORKERS_EVERY_MINUTES", "1")),
+            env=env,
+        )
+    if os.environ.get("OWNER_WEB", "").lower() == "true":  # opt-in: the owner console on Lambda and an HTTP API (D-068)
+        OwnerWebStack(
+            app,
+            "FairTableOwnerWeb",
+            table=data.table,
+            issuer=identity.pool.user_pool_provider_url,
+            sign_in_client=identity.clients["alexa-plus-sim"],
+            package_path=package,
             env=env,
         )
     gateway = GatewayStack(

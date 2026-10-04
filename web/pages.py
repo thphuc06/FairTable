@@ -2,6 +2,7 @@
 
 import re
 from html import escape
+from itertools import groupby
 from typing import Any
 
 from server.domain.models import Venue
@@ -19,7 +20,7 @@ form{display:inline}
 button{font-size:1rem;padding:.7rem 1.4rem;border:0;border-radius:8px;cursor:pointer;margin-right:.6rem}
 .approve{background:#1a7f37;color:#fff}.decline{background:#e5e5e5}
 input{font-size:1rem;padding:.5rem;width:100%;box-sizing:border-box;margin:.3rem 0 .8rem}
-.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.steps{margin-top:.4rem;font-size:.85rem}.steps summary{cursor:pointer;color:#555}.steps ol{margin:.4rem 0;padding-left:1.3rem}.chip{display:inline-block;padding:0 .4rem;border-radius:6px;background:#e3f1e6;color:#1a5f2c}.chip.no{background:#fbe3e3;color:#8a1c1c}.chip.wait{background:#fff1d6;color:#8a5a00}.badge{font-size:.75rem;padding:0 .35rem;border-radius:6px}.badge.ok{background:#e3f1e6;color:#1a5f2c}.badge.no{background:#fbe3e3;color:#8a1c1c}.badge.wait{background:#fff1d6;color:#8a5a00}.say{color:#333;font-style:italic}.grant{background:#f6f5f2;border-radius:8px;padding:.6rem .8rem;margin:.8rem 0}.grant select{width:auto;display:inline;padding:.1rem;margin:0}.tick{width:auto;margin:0 .3rem 0 0}.perms{padding-left:1.1rem}.perms form{display:inline;margin-left:.6rem}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.muted{color:#666;font-size:.9rem}
+.you{background:#e8f0fe;border-radius:10px;padding:.5rem .8rem;margin:.4rem 0 .4rem 2rem}.bot{background:#f1f1ee;border-radius:10px;padding:.5rem .8rem;margin:.4rem 2rem .4rem 0}.bot p,.bot ul,.bot ol{margin:.3rem 0}.bot ul,.bot ol{padding-left:1.3rem}code{background:#ebebe6;padding:0 .25rem;border-radius:4px}.steps{margin-top:.4rem;font-size:.85rem}.steps summary{cursor:pointer;color:#555}.steps ol{margin:.4rem 0;padding-left:1.3rem}.chip{display:inline-block;padding:0 .4rem;border-radius:6px;background:#e3f1e6;color:#1a5f2c}.chip.no{background:#fbe3e3;color:#8a1c1c}.chip.wait{background:#fff1d6;color:#8a5a00}.badge{font-size:.75rem;padding:0 .35rem;border-radius:6px}.badge.ok{background:#e3f1e6;color:#1a5f2c}.badge.no{background:#fbe3e3;color:#8a1c1c}.badge.wait{background:#fff1d6;color:#8a5a00}.say{color:#333;font-style:italic}.grant{background:#f6f5f2;border-radius:8px;padding:.6rem .8rem;margin:.8rem 0}.grant select{width:auto;display:inline;padding:.1rem;margin:0}.tick{width:auto;margin:0 .3rem 0 0}.perms{padding-left:1.1rem}.perms form{display:inline;margin-left:.6rem}.err{color:#b00020}.ok{color:#1a7f37}pre{white-space:pre-wrap;font-size:.85rem;background:#f6f5f2;padding:.6rem;border-radius:8px}.rules{background:#f6f5f2;border-radius:8px;padding:.2rem .9rem;font-size:.92rem}.rules ul{padding-left:1.1rem}.rules li{margin:.4rem 0}.rules p{margin:.5rem 0}form.pick{display:block;margin:.4rem 0 .8rem}select{font-size:1rem;padding:.4rem;max-width:100%;margin:.3rem 0 .8rem}.muted{color:#666;font-size:.9rem}
 """
 
 
@@ -59,8 +60,46 @@ def message_page(title: str, text: str) -> str:
     return layout(title, f"<h1>{escape(title)}</h1><p>{escape(text)}</p>")
 
 
-def owner_page(venue: Venue, username: str, csrf: str, audit: list[dict[str, Any]], notice: str | None = None) -> str:
-    """The owner console: the agent-share cap, the rules as diners' assistants see them, recent audit."""
+def _seat_label(slot_key: str) -> str:
+    hhmm, _, group = slot_key.partition("#")
+    return f"{hhmm[:2]}:{hhmm[2:]} {group}"
+
+
+def rules_html(text: str) -> str:
+    """The rules text (markdown with bullets wrapped over several lines) as the console shows it: wrapped lines are
+    joined first, then the same safe renderer as the chat page (everything is escaped before any mark is applied)."""
+    joined: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("  ") and joined and joined[-1].strip():
+            joined[-1] += " " + line.strip()
+        else:
+            joined.append(line)
+    return f"<div class='rules'>{render_message(chr(10).join(joined))}</div>"
+
+
+def owner_page(venue: Venue, username: str, csrf: dict[str, str], audit: list[dict[str, Any]],
+               notice: str | None = None, *, seats: list | None = None, drops: list | None = None, draw: int = 24) -> str:
+    """The owner console: the agent-share cap, the cancellation terms, the Fair Drops, the rules as diners'
+    assistants see them, recent audit. ``csrf`` holds one token per form."""
+    seat_rows = "".join(
+        f"<optgroup label='{escape(date)}'>"
+        + "".join(f"<option value='{escape(o.value, quote=True)}'>{escape(o.label)}</option>" for o in group)
+        + "</optgroup>"
+        for date, group in groupby(seats or [], key=lambda o: o.slot.date)
+    )
+    drop_rows = "".join(
+        "<tr><td>{seat}</td><td>{draw}</td><td>{status}</td><td><code>{commit}</code></td></tr>".format(
+            seat=escape(f"{d.date} " + ", ".join(_seat_label(k) for k in d.slot_keys)),
+            draw=escape(d.drop_at.replace("T", " ").replace("Z", " UTC")[:20]), status=escape(d.status),
+            commit=escape(d.commitment[:16]),
+        )
+        for d in (drops or [])
+    ) or "<tr><td colspan='4'>No Fair Drops yet.</td></tr>"
+    fee = f"{venue.cancel_fee_cents / 100:.2f}".rstrip("0").rstrip(".") or "0"
+    draw_rows = "".join(
+        f"<option value='{h}'{' selected' if h == draw else ''}>{h} hours before the seat</option>" for h in (24, 12, 6, 2)
+    )
+    seat_rows = seat_rows or "<option value=''>No seat is far enough away</option>"
     note = f"<p class='ok'>{escape(notice)}</p>" if notice else ""
     rows = "".join(
         "<tr><td>{at}</td><td>{tool}</td><td>{decision}</td><td>{rules}</td></tr>".format(
@@ -76,11 +115,37 @@ def owner_page(venue: Venue, username: str, csrf: str, audit: list[dict[str, Any
         f"<p>Assistants may book <b>{venue.agent_share_pct}%</b> of {venue.seats_per_day} seats a day "
         f"(<b>{venue.agent_cover_cap}</b> covers). The rest stays for phone and walk-in guests.</p>"
         "<form method='post' action='/owner/agent-share'>"
-        f"<input type='hidden' name='csrf' value='{escape(csrf, quote=True)}'>"
+        f"<input type='hidden' name='csrf' value='{escape(csrf['share'], quote=True)}'>"
         "<label>New share, percent (0-100)<input name='pct' type='number' min='0' max='100' required></label>"
         "<button class='approve' type='submit'>Save</button></form>"
+        "<h2>Cancellation terms</h2>"
+        f"<p>Cancelling less than <b>{venue.free_cancel_hours} hours</b> before the table costs <b>${escape(fee)}</b>. "
+        "New holds use the new terms; a booking keeps the terms it was made with.</p>"
+        "<form method='post' action='/owner/terms'>"
+        f"<input type='hidden' name='csrf' value='{escape(csrf['terms'], quote=True)}'>"
+        "<label>Fee, dollars (0-200)<input name='fee' inputmode='decimal' required></label>"
+        "<label>Free cancellation up to, hours before (0-168)<input name='hours' type='number' min='0' max='168' required></label>"
+        "<button class='approve' type='submit'>Save</button></form>"
+        "<h2>Fair Drops</h2>"
+        "<p>A hot seat can be given out by a lottery that anyone can check instead of first come, first served. "
+        "A secret seed is drawn now and only its fingerprint is published; entries stay open until the draw.</p>"
+        "<p><b>1.</b> Choose when the draw happens. The list below shows the seats that are far enough away for it.</p>"
+        "<form class='pick' method='get' action='/owner'>"
+        f"<select name='draw'>{draw_rows}</select><button class='decline' type='submit'>Show seats</button></form>"
+        f"<p><b>2.</b> Choose the seat (draw {draw} hours before it).</p>"
+        "<form method='post' action='/owner/drops'>"
+        f"<input type='hidden' name='csrf' value='{escape(csrf['drops'], quote=True)}'>"
+        f"<input type='hidden' name='hours_before' value='{int(draw)}'>"
+        f"<select name='seat' required>{seat_rows}</select>"
+        "<button class='approve' type='submit'>Create Fair Drop</button></form>"
+        f"<table><tr><td>Seat</td><td>Draw (UTC)</td><td>Status</td><td>Commitment</td></tr>{drop_rows}</table>"
         "<h2>Rules assistants must follow</h2>"
-        f"<pre>{escape(policy_text(venue))}</pre>"
+        "<p class='muted'>These rules are checked with Cedar policies (<code>policies/*.cedar</code>): G1 to G4 at the "
+        "AgentCore Gateway on AWS and again in the server, all the others in the server. "
+        f"The same text is published as the public MCP resource <code>fairtable://restaurants/{escape(venue.venue_id)}/policies</code> "
+        "(not a tool). Any MCP client can read it; whether a given assistant does is up to that assistant. "
+        "It is only a description: the server enforces these rules whether or not the assistant reads it.</p>"
+        f"{rules_html(policy_text(venue))}"
         "<h2>Recent activity</h2>"
         f"<table><tr><td>Time (UTC)</td><td>Tool</td><td>Decision</td><td>Rule</td></tr>{rows}</table>"
         f"<p class='muted'>Signed in as {escape(username)}.</p>",

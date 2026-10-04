@@ -41,6 +41,8 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 | P3-16 Fault-injection tests | E | done | 2026-10-03 | 14 tests of the failure branches found by the coverage run (91 % overall) |
 | P3-17 Demo preflight | E | done | 2026-10-03 | `scripts/demo_preflight.py` + tests; run read-only against the real account |
 | P3-18 OAuth discovery, Bearer, 403 (D) | F | done (local) | 2026-10-03 | D-065; 81 tests in the three touched files; real-AWS check of the 403 through the Runtime at the next deploy |
+| P3-22 Owner console on Lambda + HTTP API | F | done, deployed | 2026-10-04 | D-068: handler, stack `FairTableOwnerWeb` (opt-in), zip; 13 tests; deployed and checked through the real URL (14 steps) |
+| P3-21 Owner console: terms and Fair Drop | F | done (local) | 2026-10-04 | D-067: fee and window, one seat per drop; 25 new tests |
 | P3-20 Diagrams: future improvements marked | F | done | 2026-10-04 | both .drawio files edited in place: italic grey labels for what is not built, stale facts fixed, one note line per page |
 | P3-19 Duplicate-booking guard (C) | F | done (local) | 2026-10-03 | D-066: Cedar S6 + `BOOKED#` marker + invariant I6; 8 new tests |
 
@@ -58,6 +60,31 @@ Order of work. Tick items in the Progress table or in an entry; do not start a l
 10. **Commit, tag `submission`**, no functional change until 2026-11-20.
 
 ## Entries (newest first)
+
+### 2026-10-04 · P3-21 · [web] · Owner page polish: formatted rules, draw-time step, honest notes (Change to D-067)
+- **Asked by the developer** after opening the hosted page: show the rules text properly, filter the seats by draw time, say what the text is.
+- **Done:** `rules_html` (wrapped bullets joined, the chat's safe renderer), a two-step Fair Drop form (`?draw=`), seats grouped by day with the cap raised from 60 to 600 (found by a test: the cap hid every seat after the first days), notes on Cedar and the MCP resource, S6 in the rules text. Tests: 125 passed in the owner and web files with the database.
+- **Not on AWS yet:** the hosted page still shows the old version until `FairTableOwnerWeb` is deployed again (together with the proposed timeout 29 s / memory 1024 MB change, not yet approved).
+
+### 2026-10-04 · P3-22 · [aws] [verified] · The owner console on Lambda behind an HTTP API is deployed and checked (D-068)
+- **Asked by the developer:** wire it after the tests.
+- **Before the deploy:** the whole suite showed one failure, `test_an_allowed_host_is_not_logged_as_refused`. Cause: `web/lambda_handler.py` set the root logger to INFO at import, which made `caplog` collect INFO lines of other libraries in later tests. Now only the `fairtable.web` logger is set (pair run: 19 passed; the whole suite had 1269 passed + this one).
+- **Deploy:** `FairTableOwnerWeb` only (Data unchanged, Identity gained an export), 65 s. Result of the real check: 14 steps passed (D-068 lists them); cold start 7.8 s; a burst of 60 concurrent requests: 34 ok, 1 x 429 from the stage, 25 x 503 (probably the Lambda concurrency limit of 10, not confirmed). The check script is not in the repository (it writes to the demo table and undoes its own changes).
+- **Left up on purpose** for the developer to try; the README's public dev logins make the console open to anyone who finds the URL (warning in D-068).
+- **Next:** the diagram's API Gateway and Lambda are no longer grey; README row and product feedback updated.
+
+### 2026-10-04 · P3-22 · [aws] [web] · The owner console on Lambda behind an HTTP API: built, not deployed (D-068)
+- **Asked by the developer:** integrate it (after the question why it had not been done); cost questions answered first.
+- **Built:** `web/lambda_handler.py`, `infra/cdk/stacks/owner_web_stack.py`, the opt-in switch in `infra/cdk/app.py` and `aws_ctl.py`, `web` and `simulator` in the zip with `fastapi`, `mangum`, `annotated-doc`; `web/app.py` no longer imports Strands for its type annotations.
+- **Tests:** `tests/unit/web/test_lambda_handler.py` (8: Cognito only, no chat or voice, health check, redirect to sign-in, security headers, a form without a session refused, built once per container), five synthesis tests in `tests/unit/infra/test_cdk_table.py` (arm64 Lambda, HTTP API with `$default` and a throttled stage, secret as a dynamic reference, a least-privilege role, tag and opt-in). Four older infra tests changed. The real zip builds (38.7 MB).
+- **Found on the way:** the L2 `user_pool_client_secret` of CDK adds a custom resource to the identity stack (friction log); the L1 `GetAtt` does not.
+- **Not done:** the deploy and a real sign-in as `owner-luna` through the `execute-api` URL; the diagrams stay "future" until then.
+
+### 2026-10-04 · P3-21 · [web] [fairdrop] · The owner console sets the cancellation terms and creates a Fair Drop (D-067)
+- **Asked by the developer:** the first of the two cheap owner features (the owner invites agents in with their own rules).
+- **Built:** `web/owner.py` (validation and transactions), two forms and a table of the restaurant's drops on the owner page, one CSRF token per form, `seed_provider_from_env` shared with the seed script, `WebDeps.seeds`.
+- **Tests:** `tests/integration/test_owner_terms_and_drops.py` (terms audited and in cents, ten bad inputs refused, another form's token refused, a diner refused, a new hold reads the new terms while an old booking keeps its own, a drop marks the seat and publishes only the commitment, the seat cannot be booked directly (S4) or released twice, a draw time that has passed is refused, a seat a diner holds meanwhile is refused).
+- **Not done:** hosting the console on Lambda and API Gateway (the second owner feature). Reason in D-067: the console already runs against the AWS table and Cognito from a local web app, so it would add a deployment and a risk, not a feature. The developer decides.
 
 ### 2026-10-04 · P3-20 · [docs] [diagrams] · Future improvements marked on both draw.io files
 - **Asked by the developer:** mark what is a future improvement with italic or a colour, one note line below, edit the two files in place.

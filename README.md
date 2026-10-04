@@ -2,10 +2,10 @@
 
 > Bots scalp tables; restaurants ban agents. FairTable is the Alexa+ front door that lets agents book fairly, with verified identity, scoped consent, and rules owners control.
 
-**Status:** 🚧 in progress: Amazon Developer Hackathon "Build, Ship, Shape"
+**Status:** feature complete, demo video and submission form still to do: Amazon Developer Hackathon "Build, Ship, Shape"
 **Track:** Alexa+ · **Mini challenge:** AWS Builder
 
-**What works today:** all 7 MCP tools, both rule layers (Cedar), identity checks, DynamoDB storage, booking confirmed by the diner's spoken yes (read-back, pause, explicit yes), standing waitlists, the verifiable Fair Drop lottery, an owner console, a chat page with a simulated assistant, a 40-task evaluation set with an A0/A1/A2 comparison, a regression gate and a 12-attack red-team suite, all runnable with `docker compose up`. The same server also runs on AWS (AgentCore Runtime and Gateway, Cognito, DynamoDB, SNS; see [AWS](#aws-services-and-status)), where an optional **voice page** books a table by talking to it (see [Voice demo](#voice-demo-optional-needs-an-aws-deployment)). **Still to do:** the demo video and the submission form. Progress is tracked in [`docs/devlog/`](docs/devlog/).
+**What works today:** all 7 MCP tools, both rule layers (Cedar), identity checks, DynamoDB storage, booking confirmed by the diner's spoken yes (read-back, pause, explicit yes), standing waitlists, one table per diner, restaurant and day, the verifiable Fair Drop lottery, an owner console (agent share, cancellation terms, Fair Drops, audit), a chat page with a simulated assistant, a 40-task evaluation set with an A0/A1/A2 comparison, a regression gate and a 12-attack red-team suite, all runnable with `docker compose up`. The same server also runs on AWS (AgentCore Runtime and Gateway, Cognito, DynamoDB, SNS, and the owner console on Lambda behind an API Gateway HTTP API; see [AWS](#aws-services-and-status)), where an optional **voice page** books a table by talking to it (see [Voice demo](#voice-demo-optional-needs-an-aws-deployment)). **Still to do:** the demo video and the submission form (judges do not need any AWS account: the local profile runs everything with `docker compose up`). Progress is tracked in [`docs/devlog/`](docs/devlog/).
 
 ## What it does
 FairTable is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) that independent restaurants publish so AI agents such as Alexa+ can book tables safely:
@@ -22,7 +22,7 @@ The 7 MCP tools are deterministic; there is no LLM inside them: `restaurant_sear
 The local profile is what judges run. It needs **Docker only**: no AWS account and no model account.
 
 ```bash
-git clone <this repo>
+git clone https://github.com/thphuc06/FairTable.git
 cd FairTable
 docker compose up --build
 ```
@@ -32,7 +32,7 @@ The first build takes about a minute. When it finishes everything is running and
 | URL | What it is |
 |---|---|
 | http://localhost:8080 | **Start here.** Chat with the simulated assistant and the owner console |
-| http://localhost:8000/mcp | The MCP server (Streamable HTTP; identity in the `x-ft-user-token` header) |
+| http://localhost:8000/mcp | The MCP server (Streamable HTTP; identity in the `x-ft-user-token` header or `Authorization: Bearer`; OAuth metadata at `/.well-known/oauth-protected-resource`) |
 | http://localhost:9000 | Dev token issuer standing in for Cognito (`/token`, `/.well-known/jwks.json`) |
 | http://localhost:8001 | DynamoDB Local (used by the evaluation and by `pytest -m ddb`) |
 
@@ -42,7 +42,7 @@ Stop with `docker compose down`. Data is in memory, so every `up` starts from th
 1. **Book by saying yes.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 on <a date in the next two weeks> at 7pm` (use `YYYY-MM-DD`, or "tomorrow"). The assistant holds a table and reads the details back; nothing is booked yet. Wait a few seconds, then type `Yes, please`: the table is booked. Typing `No, thanks` books nothing and the hold ends by itself.
 2. **See what the server decided.** Under each assistant answer, click **N steps** to see the tool calls behind it: which tools were called with which arguments, and what the server decided (ok, refused with the rule id, or waiting for the diner's yes). It is the proof that the checks happen in the server, not in the assistant. Restaurants with a cancellation fee (Ember Grill, Sakura Counter) read the fee back and ask for a slightly longer pause.
 3. **Owner rules.** Sign in as `owner-luna` / `luna-dev-pass` at http://localhost:8080/owner, lower the agent share to 0 and save. The next booking an assistant tries at Luna is refused by rule S2, and the audit list shows the change.
-4. **Call the tools yourself.** Get a token and use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport **Streamable HTTP**, URL `http://localhost:8000/mcp`, custom header `x-ft-user-token: <token>`):
+4. **Call the tools yourself.** Get a token and use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport **Streamable HTTP**, URL `http://localhost:8000/mcp`, custom header `x-ft-user-token: <token>` or `Authorization: Bearer <token>`):
 
    ```bash
    curl -s -X POST http://localhost:9000/token -d grant_type=password -d client_id=alexa-plus-sim \
@@ -119,6 +119,7 @@ The same code also runs on AWS (built and tested on a real account; each service
 | Amazon Bedrock AgentCore **Observability** (CloudWatch) | traces of the Gateway, the policy decisions and the Runtime |
 | Amazon **Cognito** | sign-in for diners and the machine clients |
 | Amazon **DynamoDB** | the single table (on demand) |
+| AWS **Lambda** + Amazon **API Gateway** (HTTP API) | the owner console (`FairTableOwnerWeb`, opt-in with `OWNER_WEB=true`): sign-in through Cognito, cancellation terms, Fair Drops, audit |
 | Amazon **SNS** | one topic for waitlist and Fair Drop notices |
 | AWS **Lambda** + Amazon **EventBridge Scheduler** | the background workers: every minute, release expired holds (which notifies waiting diners) and draw Fair Drops that are due |
 | Amazon **S3** | a private copy of every Fair Drop audit, so anyone can recompute the draw |

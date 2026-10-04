@@ -1,12 +1,24 @@
 """Load the demo data into a table. Used by ``scripts/seed.py`` and by tests."""
 
+import os
 from collections.abc import Mapping
 
 from server.domain.clock import Clock
-from server.domain.fairdrop import Drop, LocalSeedProvider, SeedProvider, commitment
+from server.domain.fairdrop import Drop, KmsSeedProvider, LocalSeedProvider, SeedProvider, commitment
 from server.store import keys
 from server.store.repository import Store, TxOp
 from server.store.seed_data import DropSpec, SeedData, build_seed
+
+
+def seed_provider_from_env(env: Mapping[str, str] | None = None) -> SeedProvider:
+    """Where the secret seed of a Fair Drop comes from: this machine (default) or AWS KMS ``GenerateRandom``
+    (``SEED_PROVIDER=kms``, the AWS profile: no key to create or manage, the bytes come from the KMS hardware)."""
+    env = os.environ if env is None else env
+    if env.get("SEED_PROVIDER", "local").lower() == "kms":
+        import boto3
+
+        return KmsSeedProvider(boto3.client("kms"))
+    return LocalSeedProvider()
 
 
 def clear_drop_entries(store: Store, drop_id: str) -> int:

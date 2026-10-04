@@ -48,13 +48,14 @@ def templates(tmp_path_factory):
         "AWS_REGION": "us-east-1",
         "BUDGET_EMAIL": "alerts@example.com",
         "NOTIFY_EMAIL": "notices@example.com",  # a made-up address
+        "OWNER_WEB": "true",
         "TABLE_NAME": "fairtable",
     }
     subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, check=True, capture_output=True, timeout=180)
     return {
         name: json.loads((out / f"{name}.template.json").read_text())
         for name in ("FairTableData", "FairTableBudget", "FairTableIdentity", "FairTableRuntime", "FairTableGateway",
-                     "FairTableNotify", "FairTableWorkers")
+                     "FairTableNotify", "FairTableWorkers", "FairTableOwnerWeb")
     }
 
 
@@ -571,3 +572,63 @@ def test_the_workers_run_every_minute_on_arm_with_one_instance_and_a_least_privi
                ([st["Action"]] if isinstance(st["Action"], str) else st["Action"])}
     assert "s3:PutObject" in actions and "sns:Publish" in actions and "dynamodb:Scan" not in actions
     assert not any(a.endswith(":*") or a == "*" for a in actions)
+
+
+# ---------------------------------------------------------------- the owner console on Lambda (D-068)
+def test_the_owner_console_is_one_arm_lambda_behind_an_http_api_with_a_throttled_stage(templates):
+    web = templates["FairTableOwnerWeb"]
+    (function,) = [v for v in resources_of(web, "AWS::Lambda::Function").values()
+                   if v["Properties"].get("Handler") == "web.lambda_handler.handler"]
+    props = function["Properties"]
+    assert props["Runtime"] == "python3.12" and props["Architectures"] == ["arm64"] and props["FunctionName"] == "FairTableOwnerWeb"
+    (api,) = resources_of(web, "AWS::ApiGatewayV2::Api").values()
+    assert api["Properties"]["ProtocolType"] == "HTTP"
+    (integration,) = resources_of(web, "AWS::ApiGatewayV2::Integration").values()
+    assert integration["Properties"]["IntegrationType"] == "AWS_PROXY" and integration["Properties"]["PayloadFormatVersion"] == "2.0"
+    (route,) = resources_of(web, "AWS::ApiGatewayV2::Route").values()
+    assert route["Properties"]["RouteKey"] == "$default"
+    (stage,) = resources_of(web, "AWS::ApiGatewayV2::Stage").values()
+    assert stage["Properties"]["DefaultRouteSettings"] == {"ThrottlingBurstLimit": 10, "ThrottlingRateLimit": 5}
+    assert "OwnerUrl" in web["Outputs"]
+
+
+def test_the_owner_console_signs_in_through_cognito_and_keeps_its_secret_out_of_the_repo(templates):
+    web = templates["FairTableOwnerWeb"]
+    (function,) = [v for v in resources_of(web, "AWS::Lambda::Function").values()
+                   if v["Properties"].get("Handler") == "web.lambda_handler.handler"]
+    env = function["Properties"]["Environment"]["Variables"]
+    assert env["AUTH_PROVIDER"] == "cognito" and env["APP_PROFILE"] == "aws" and env["SEED_PROVIDER"] == "kms"
+    assert env["AUTH_TOKEN_USE"] == "access" and env["AUTH_AUDIENCE_CLAIM"] == "client_id"
+    assert "AWS_REGION" not in env  # Lambda reserves it
+    # the session key is a generated secret reached through a dynamic reference, never a literal
+    assert "resolve:secretsmanager" in json.dumps(env["WEB_SESSION_SECRET"])
+    assert not any(isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9]{40,}", v) for v in env.values())
+    (secret,) = resources_of(web, "AWS::SecretsManager::Secret").values()
+    assert secret["Properties"]["GenerateSecretString"]["PasswordLength"] == 48 and secret["DeletionPolicy"] == "Delete"
+
+
+def test_the_owner_console_role_does_what_the_store_does_plus_the_seed_and_nothing_else(templates):
+    web = templates["FairTableOwnerWeb"]
+    statements = [st for p in resources_of(web, "AWS::IAM::Policy").values() for st in p["Properties"]["PolicyDocument"]["Statement"]]
+    actions = {a for st in statements for a in ([st["Action"]] if isinstance(st["Action"], str) else st["Action"])}
+    assert actions == {"dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem",
+                       "dynamodb:DeleteItem", "dynamodb:ConditionCheckItem", "kms:GenerateRandom"}
+    assert not any(a.endswith(":*") or a == "*" for a in actions)
+
+
+def test_the_owner_console_is_tagged_and_only_created_on_request(tmp_path):
+    env = {**os.environ, "CDK_OUTDIR": str(tmp_path), "CDK_DEFAULT_ACCOUNT": "123456789012", "AWS_REGION": "us-east-1",
+           "RUNTIME_ZIP": str(tmp_path / "missing.zip")}
+    env.pop("OWNER_WEB", None)
+    subprocess.run([str(VENV_PYTHON), "app.py"], cwd=CDK_DIR, env=env, check=True, capture_output=True, timeout=180)
+    assert not (tmp_path / "FairTableOwnerWeb.template.json").exists()
+
+
+def test_the_owner_console_stack_carries_the_project_tag(templates):
+    web = templates["FairTableOwnerWeb"]
+    def tagged(resource) -> bool:
+        tags = resource.get("Properties", {}).get("Tags") or []
+        return tags.get("project") == "fairtable" if isinstance(tags, dict) else {"Key": "project", "Value": "fairtable"} in tags
+
+    kinds = {r["Type"] for r in web["Resources"].values() if tagged(r)}
+    assert {"AWS::Lambda::Function", "AWS::SecretsManager::Secret", "AWS::ApiGatewayV2::Api"} <= kinds

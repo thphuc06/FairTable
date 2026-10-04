@@ -22,6 +22,7 @@ from server.config import Settings
 from server.domain.clock import SystemClock
 from server.identity import HttpJwks, TokenVerifier, VerifierConfig
 from server.store import Store, make_client
+from server.store.seeding import seed_provider_from_env
 from simulator.model import build_model
 from web.app import WebDeps, create_app
 from web.auth import CognitoLogin, DevLogin, cognito_client
@@ -68,5 +69,6 @@ if __name__ == "__main__":
         new_id=lambda: uuid.uuid4().hex,
         chat=chat,
         voice=voice,
+        seeds=seed_provider_from_env(),
     )
     uvicorn.run(create_app(deps), host=settings.web_host, port=settings.web_port)
