@@ -48,7 +48,7 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 
 ## Closing checklist (agreed 2026-10-02; the video and the form come last)
 Order of work. Tick items in the Progress table or in an entry; do not start a later group before the earlier one is done.
-1. **Voice listening test** by the developer on the deployed stack (README, "Voice demo"). Fix whatever it shows.
+1. **Voice listening test** by the developer on the deployed stack (`docs/voice-demo.md`). Fix whatever it shows.
 2. **Optional group (only if the developer says go):** KMS seed, S3 audit file, background workers (EventBridge + Lambda). Each needs "wire X", the price from the official page, a teardown, and tests.
 3. **P3-8 freeze:** pin `joserfc`, `pydantic`, `boto3`, `httpx` and the extras, pin Docker image tags, re-run the frozen eval (mock, k = 4, A0/A1/A2 + red team) after D-059, run the gate, commit the report.
 4. **Whole suite + `ruff`**, then the `-m docker` smoke run (ask first: it stops the developer's compose stack).

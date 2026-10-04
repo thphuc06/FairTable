@@ -1,24 +1,20 @@
 # FairTable
 
-> Bots scalp tables; restaurants ban agents. FairTable is the Alexa+ front door that lets agents book fairly, with verified identity, scoped consent, and rules owners control.
+> Bots grab restaurant tables, and restaurants block AI agents. FairTable is the booking server a restaurant publishes for assistants such as Alexa+: every booking has a real diner and a verified agent behind it, the restaurant's own rules decide what is allowed, and hot tables are given out by a lottery anyone can check.
 
-**Status:** feature complete, demo video and submission form still to do: Amazon Developer Hackathon "Build, Ship, Shape"
-**Track:** Alexa+ · **Mini challenge:** AWS Builder
+**Track:** Alexa+ · **Mini challenge:** AWS Builder · Amazon Developer Hackathon "Build, Ship, Shape" · [Apache-2.0](LICENSE)
 
-**What works today:** all 7 MCP tools, both rule layers (Cedar), identity checks, DynamoDB storage, booking confirmed by the diner's spoken yes (read-back, pause, explicit yes), standing waitlists, one table per diner, restaurant and day, the verifiable Fair Drop lottery, an owner console (agent share, cancellation terms, Fair Drops, audit), a chat page with a simulated assistant, a 40-task evaluation set with an A0/A1/A2 comparison, a regression gate and a 12-attack red-team suite, all runnable with `docker compose up`. The same server also runs on AWS (AgentCore Runtime and Gateway, Cognito, DynamoDB, SNS, and the owner console on Lambda behind an API Gateway HTTP API; see [AWS](#aws-services-and-status)), where an optional **voice page** books a table by talking to it (see [Voice demo](#voice-demo-optional-needs-an-aws-deployment)). **Still to do:** the demo video and the submission form (judges do not need any AWS account: the local profile runs everything with `docker compose up`). Progress is tracked in [`docs/devlog/`](docs/devlog/).
+## What it is
+FairTable is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) with seven tools: `restaurant_search`, `availability_check`, `reservation_hold`, `reservation_confirm`, `reservation_manage`, `waitlist_watch`, `waitlist_status`. The tools are plain code; there is no language model inside them.
 
-## What it does
-FairTable is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) that independent restaurants publish so AI agents such as Alexa+ can book tables safely:
-- **Verified identity:** every booking is tied to a real, signed-in diner and a verified agent.
-- **Spoken confirmation, 100 % voice:** after a hold the assistant reads the details back and the diner says yes. The server checks what it can: the read-back token fits this hold, user and terms, a short pause has passed (3 s, 6 s with a fee) and the assistant states that the diner said yes. It cannot hear the diner, so these guards stop mistakes (not asking, asking too fast, confirming other terms), not a model that lies on purpose; the restaurant's own rules (caps, identity, drop seats) bound the damage.
-- **Owner-controlled rules:** enforced with Cedar policies (`cedarpy`), including a cap on how many covers agents can book.
-- **Standing waitlists:** no polling. Agents register once and check `waitlist_status`.
-- **Fair Drop:** an auditable commit–reveal lottery for hot tables; anyone can recompute the draw.
-- **Measured reliability:** pass^k evaluations against an open-storefront baseline (A0 vs A1 vs A2) plus a 12-attack red-team suite.
+- **Verified identity.** A booking needs a signed-in diner and a verified agent. Machine clients can only read.
+- **Rules the restaurant owns.** Written as Cedar policies and checked on every call: group size, active holds per diner, one table per diner and day, and the share of seats that assistants may book (the owner changes it in a console).
+- **Spoken confirmation.** After a hold, the assistant reads the details back and the diner says yes. The server checks what it can: the read-back belongs to this hold and these terms, a short pause has passed, and the assistant states that the diner said yes. It cannot hear the diner, so this stops mistakes (not asking, asking too fast, confirming other terms), not an assistant that lies on purpose; the restaurant's other rules still bound the damage.
+- **Fair Drop.** A hot seat is given out by a lottery with a published commitment: the secret seed is fixed first, revealed after the draw, and anyone can recompute the result.
+- **Standing waitlists.** An agent registers once; a freed table is held for the diner, with no polling.
+- **Measured.** A 40-task evaluation compares an open storefront with FairTable, and a 12-attack red team tries to break it (results below).
 
-The 7 MCP tools are deterministic; there is no LLM inside them: `restaurant_search`, `availability_check`, `reservation_hold`, `reservation_confirm`, `reservation_manage`, `waitlist_watch`, `waitlist_status`.
-
-## Quick start (Docker only)
+## Run it (Docker only)
 The local profile is what judges run. It needs **Docker only**: no AWS account and no model account.
 
 ```bash
@@ -27,155 +23,114 @@ cd FairTable
 docker compose up --build
 ```
 
-The first build takes about a minute. When it finishes everything is running and seeded (three restaurants, two weeks of slots, two Fair Drops). Everything listens on `127.0.0.1` only.
+The first build takes about a minute. Then everything is running and seeded (three restaurants, two weeks of slots, two Fair Drops), listening on `127.0.0.1` only. Stop with `docker compose down`; data is in memory, so every start has the same seed.
 
 | URL | What it is |
 |---|---|
-| http://localhost:8080 | **Start here.** Chat with the simulated assistant and the owner console |
-| http://localhost:8000/mcp | The MCP server (Streamable HTTP; identity in the `x-ft-user-token` header or `Authorization: Bearer`; OAuth metadata at `/.well-known/oauth-protected-resource`) |
-| http://localhost:9000 | Dev token issuer standing in for Cognito (`/token`, `/.well-known/jwks.json`) |
-| http://localhost:8001 | DynamoDB Local (used by the evaluation and by `pytest -m ddb`) |
+| http://localhost:8080 | **Start here.** Chat with a simulated assistant, and the owner console |
+| http://localhost:8000/mcp | The MCP server (identity in the `x-ft-user-token` header or `Authorization: Bearer`; OAuth metadata at `/.well-known/oauth-protected-resource`) |
+| http://localhost:9000 | A development token issuer standing in for Amazon Cognito |
+| http://localhost:8001 | DynamoDB Local (used by the evaluation and the database tests) |
 
-Stop with `docker compose down`. Data is in memory, so every `up` starts from the same seed.
-
-### Try it (about two minutes)
-1. **Book by saying yes.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 on <a date in the next two weeks> at 7pm` (use `YYYY-MM-DD`, or "tomorrow"). The assistant holds a table and reads the details back; nothing is booked yet. Wait a few seconds, then type `Yes, please`: the table is booked. Typing `No, thanks` books nothing and the hold ends by itself.
-2. **See what the server decided.** Under each assistant answer, click **N steps** to see the tool calls behind it: which tools were called with which arguments, and what the server decided (ok, refused with the rule id, or waiting for the diner's yes). It is the proof that the checks happen in the server, not in the assistant. Restaurants with a cancellation fee (Ember Grill, Sakura Counter) read the fee back and ask for a slightly longer pause.
-3. **Owner rules.** Sign in as `owner-luna` / `luna-dev-pass` at http://localhost:8080/owner, lower the agent share to 0 and save. The next booking an assistant tries at Luna is refused by rule S2, and the audit list shows the change.
-4. **Call the tools yourself.** Get a token and use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport **Streamable HTTP**, URL `http://localhost:8000/mcp`, custom header `x-ft-user-token: <token>` or `Authorization: Bearer <token>`):
+### Try it (two minutes)
+1. **Book by saying yes.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 tomorrow at 7pm`. The assistant holds a table and reads the details back; nothing is booked yet. Type `Yes, please` and it is booked. `No, thanks` books nothing.
+2. **See what the server decided.** Under each answer, click **N steps** to see the tool calls and the server's decision (ok, refused with the rule id, or waiting for the yes). This shows that the checks happen in the server, not in the assistant.
+3. **Change the rules.** Sign in as `owner-luna` / `luna-dev-pass` at http://localhost:8080/owner. Lower the agent share to 0 and the next booking at Luna is refused by rule S2. The owner also sets the cancellation terms, releases a seat through a Fair Drop, and reads the audit list.
+4. **Call the tools yourself** with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport Streamable HTTP, URL `http://localhost:8000/mcp`, header `Authorization: Bearer <token>`):
 
    ```bash
    curl -s -X POST http://localhost:9000/token -d grant_type=password -d client_id=alexa-plus-sim \
         -d username=diner-alice -d password=alice-dev-pass
    npx @modelcontextprotocol/inspector
    ```
-5. **Waitlist and Fair Drop.** `waitlist_watch` registers a standing watch (a freed table is held for you and `waitlist_status` finds it). With `drop_id` it enters the lottery for a hot seat (Sakura Counter on Fridays, `drop-sakura-<date>`). The draw's commitment is published up front; after the draw the full record is at `fairtable://drops/<drop_id>/audit`, and `fairtable://restaurants/<id>/policies` lists each restaurant's rules in plain English.
+
+   `waitlist_watch` with `drop_id` enters a lottery (Sakura Counter on Fridays, `drop-sakura-<date>`). After the draw, the full record is at `fairtable://drops/<drop_id>/audit`; `fairtable://restaurants/<id>/policies` is each restaurant's rules in plain English.
 
 ### Test accounts
-Development-only credentials for the local dev issuer (`devauth/`), seeded on purpose and public. They are not secrets and must never be used anywhere else.
+Development-only credentials for the local issuer, public on purpose. Never use them anywhere else.
 
-| Account | Role | Password | Notes |
+| Account | Role | Password |
+|---|---|---|
+| `diner-alice`, `diner-bob`, `diner-carol` | Diner | `alice-dev-pass`, `bob-dev-pass`, `carol-dev-pass` |
+| `owner-luna` | Owner of Luna Trattoria | `luna-dev-pass` |
+
+| OAuth client | Grant | Token carries |
+|---|---|---|
+| `alexa-plus-sim` (secret `alexa-sim-dev-secret`, machine use only) | password, client_credentials | `agent_tier=verified` |
+| `shady-agent` | password | `agent_tier=unverified`: refused by the write rules |
+| `bot-m2m` (secret `bot-m2m-dev-secret`) | client_credentials | no user, no agent tier: used by the red-team attacks |
+
+## Does it work?
+The evaluation runs the same 40 tasks against three configurations: **A0** an open storefront (no rules), **A1** FairTable, and **A2** FairTable without the voice-confirmation checks. A *violation* is damage to the restaurant or the diner, for example a booking the diner never agreed to or a Fair Drop seat taken directly.
+
+| Assistant | Trials | Violations with FairTable (A1) | Violations without the rules (A0) |
 |---|---|---|---|
-| `diner-alice` | Diner | `alice-dev-pass` | An ordinary diner. |
-| `diner-bob` | Diner | `bob-dev-pass` | An ordinary diner. |
-| `diner-carol` | Diner | `carol-dev-pass` | An ordinary diner. |
-| `owner-luna` | Restaurant owner | `luna-dev-pass` | Owner console for Luna Trattoria (`/owner`). |
+| Scripted (mock), 4 runs per task | 160 | **0** | 28 (none of the 48 attack trials is stopped) |
+| DeepSeek flash, 2 runs | 80 | **0** | 6 |
+| Claude Haiku 4.5 on Bedrock, 1 run | 40 | **0** | not run |
+| Amazon Nova Lite on Bedrock, 1 run | 40 | **0** | 13 |
 
-| OAuth client | Grant | Secret | Token carries |
-|---|---|---|---|
-| `alexa-plus-sim` | password (diners), client_credentials | `alexa-sim-dev-secret` (machine use only) | `agent_tier=verified`, `agent_id` |
-| `shady-agent` | password | none | `agent_tier=unverified`: refused by the write rules |
-| `bot-m2m` | client_credentials | `bot-m2m-dev-secret` | no `username`, no `agent_tier`: red-team attacks RT1 and RT3 |
+The 12-attack red team (a forged token, a machine client writing, a confirm without the read-back, a third hold, a Fair Drop seat taken directly, twenty simultaneous holds on one table, prompt injection, and others) is blocked 12 of 12 under A1. The scripted run validates the harness and the rules, not a real model; the real-model runs are small and each model sometimes declines to misbehave, so read them as evidence, not proof. Reports and charts: [`eval/reports/`](eval/reports/), method: [`eval/README.md`](eval/README.md).
 
-### Using a real model (optional)
-The chat assistant and the evaluation use `MODEL_PROVIDER=mock` by default: a scripted assistant, no key, no cost. To use a real model, put this in a `.env` file next to `docker-compose.yml` (never commit it) and run `docker compose up`:
-
-```
-MODEL_PROVIDER=deepseek
-DEEPSEEK_API=<your key>
-```
-
-`deepseek` uses the light `deepseek-flash` model through DeepSeek's OpenAI-compatible API (defaults in `simulator/model.py`; override with `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`). `bedrock` needs `BEDROCK_MODEL_ID` and AWS credentials and is not used in the local profile. See `.env.example`.
-
-## Without Docker for the apps
-Docker is then only needed for DynamoDB Local. Python 3.12.
-
-```bash
-docker compose up -d dynamodb                                  # DynamoDB Local on 127.0.0.1:8001
-python -m venv .venv && . .venv/bin/activate                   # Windows: .venv\Scripts\activate
-pip install -c constraints.txt -e ".[dev,web,sim]"
-
-export DDB_ENDPOINT_URL=http://localhost:8001 TABLE_NAME=fairtable   # PowerShell: $env:NAME="value"
-python scripts/seed.py --reset       # create the table and load the demo data
-python -m devauth                    # token issuer on 127.0.0.1:9000      (terminal 2)
-python -m server                     # MCP server on 127.0.0.1:8000/mcp    (terminal 3)
-python -m web                        # web pages on 127.0.0.1:8080         (terminal 4)
-```
-
-## Tests, evaluation and red team
-```bash
-pip install -c constraints.txt -e ".[dev,web,sim]"
-pytest -q                            # unit tests; the database tests skip when DynamoDB Local is not running
-docker compose up -d dynamodb && DDB_ENDPOINT_URL=http://localhost:8001 pytest -q   # everything except the Docker smoke test (about 10 minutes)
-pytest -q -m docker                  # builds and starts the whole compose stack and drives it over HTTP (ports 8000, 8001, 8080, 9000 must be free)
-```
-
-```bash
-DDB_ENDPOINT_URL=http://localhost:8001 python -m eval --k 2 --config A0,A1,A2   # the 40 tasks, three configurations
-DDB_ENDPOINT_URL=http://localhost:8001 python -m eval.redteam                    # the twelve attacks, blocked or SUCCEEDED per configuration
-```
-
-Results with the mock assistant validate the harness and the rules, not a real model; the report says so. Runs with real models are committed too (DeepSeek flash, Claude Haiku 4.5 and Amazon Nova Lite on Bedrock; `eval/reports/`, D-064): with the rules no violation in any of them, without the rules the same models do harm. A0 is an open store (no policy layer), A1 is FairTable, A2 is FairTable without the voice guards (whatever the assistant sends counts as the diner's yes). Details: [`eval/README.md`](eval/README.md).
-
-## AWS services and status
-**The local profile (`docker compose up`) uses no AWS service** and needs no AWS account. Judges are not asked to run anything on AWS, and nothing here depends on AWS resources still running.
-
-The same code also runs on AWS (built and tested on a real account; each service, its role and what was measured is in [`docs/aws-integration.md`](docs/aws-integration.md)):
+## On AWS
+The same code runs on AWS (built and tested on a real account). Each service, its role and what was measured is in [`docs/aws-integration.md`](docs/aws-integration.md). **Judges do not need AWS**; nothing here depends on AWS resources still running.
 
 | Service | Role |
 |---|---|
-| Amazon Bedrock AgentCore **Runtime** | runs the MCP server (direct code deployment, stateless) |
-| Amazon Bedrock AgentCore **Gateway** and **Policy** | the front door for the agent (bearer token in, tool catalog) and Cedar rules G1 to G4 as defence in depth |
-| Amazon Bedrock AgentCore **Observability** (CloudWatch) | traces of the Gateway, the policy decisions and the Runtime |
-| Amazon **Cognito** | sign-in for diners and the machine clients |
-| Amazon **DynamoDB** | the single table (on demand) |
-| AWS **Lambda** + Amazon **API Gateway** (HTTP API) | the owner console (`FairTableOwnerWeb`, opt-in with `OWNER_WEB=true`): sign-in through Cognito, cancellation terms, Fair Drops, audit |
-| Amazon **SNS** | one topic for waitlist and Fair Drop notices |
-| AWS **Lambda** + Amazon **EventBridge Scheduler** | the background workers: every minute, release expired holds (which notifies waiting diners) and draw Fair Drops that are due |
-| Amazon **S3** | a private copy of every Fair Drop audit, so anyone can recompute the draw |
-| AWS **KMS** (`GenerateRandom`) | the secret seed of each Fair Drop (`SEED_PROVIDER=kms` for the seed script) |
-| Amazon **Bedrock** (Nova 2 Sonic) | the voice page |
-| AWS Budgets, Secrets Manager, Lambda (Cognito trigger and Gateway interceptor), CDK | cost alerts, the token secret, glue, deployment |
-
-Deploy and tear down (needs your own AWS account; the scripts name the account they act on and never use a root user):
+| Amazon Bedrock AgentCore **Runtime** | runs the MCP server |
+| AgentCore **Gateway** and **Policy** | the front door for the agent; Cedar rules G1 to G4 again as defence in depth |
+| AgentCore **Observability** (CloudWatch) | traces of the Gateway, the policy decisions and the Runtime |
+| Amazon **Cognito** | sign-in for diners, owners and machine clients |
+| Amazon **DynamoDB** | the single table |
+| AWS **Lambda** + Amazon **API Gateway** | the owner console (opt-in, `OWNER_WEB=true`) |
+| AWS **Lambda** + Amazon **EventBridge Scheduler** | every minute: release expired holds (and notify waiting diners) and draw Fair Drops that are due |
+| Amazon **SNS**, Amazon **S3**, AWS **KMS** | waitlist and Fair Drop notices; a public copy of every draw record; the random seed of each draw |
+| Amazon **Bedrock** | Nova 2 Sonic for the [voice page](docs/voice-demo.md); Claude Haiku 4.5 and Nova Lite in the evaluation |
+| AWS Budgets, Secrets Manager, CDK | cost alerts, secrets, deployment |
 
 ```bash
-python infra/aws_ctl.py up --runtime      # build the package and deploy the stacks (about 8 minutes)
+python infra/aws_ctl.py up --runtime      # build the package and deploy the stacks
 python infra/aws_ctl.py seed              # load the demo data
 python infra/aws_ctl.py status            # what exists and what can cost money
 python infra/aws_ctl.py down --yes --account <last four digits of the account id>
 pytest -m aws tests/aws                   # the real-AWS tests (opt-in, a few cents)
 ```
 
-Set `NOTIFY_EMAIL` to subscribe an address to the notice topic when deploying (AWS sends a confirmation link; the address is never stored in the repository). Nothing account-specific is hard-coded: account, region and names come from the environment.
+The scripts name the account they act on and never use a root user. Nothing account-specific is in the code; set `NOTIFY_EMAIL` to receive the notice e-mails (the address is never stored). The AgentCore parts cost money while they run, so deploy them to test or demo, then run `down`. A browser microphone demo with Nova 2 Sonic is described in [`docs/voice-demo.md`](docs/voice-demo.md).
 
-## Voice demo (optional, needs an AWS deployment)
-Not part of `docker compose up`: it needs the AWS deployment above and Bedrock access to **Amazon Nova 2 Sonic** (`amazon.nova-2-sonic-v1:0`, us-east-1 or three other regions). The web app serves a page `/voice` with a microphone button; your voice goes to Nova 2 Sonic, which calls the same seven tools through the AgentCore Gateway with the diner's own token, so every rule of the server applies. The assistant holds a table, reads the details back, and books only after you say yes.
+## For developers
+```bash
+python -m venv .venv && . .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -c constraints.txt -e ".[dev,web,sim]"    # Python 3.12
+docker compose up -d dynamodb                         # DynamoDB Local on 127.0.0.1:8001
+export DDB_ENDPOINT_URL=http://localhost:8001 TABLE_NAME=fairtable
+python scripts/seed.py --reset                        # create the table and load the demo data
+python -m devauth                                     # token issuer, 127.0.0.1:9000   (terminal 2)
+python -m server                                      # MCP server,   127.0.0.1:8000   (terminal 3)
+python -m web                                         # web pages,    127.0.0.1:8080   (terminal 4)
 
-1. Sign in to AWS on your machine (the profile that owns the deployment) and install the optional extra: `pip install -c constraints.txt -e ".[web,sim,voice]"` (Python 3.12).
-2. Start the web app with one of the two scripts. They read every setting from the deployed stacks (CloudFormation outputs and the Cognito client) and then run `python -m web`; nothing account-specific is stored in the repository. Use the script for **your** shell and run it from the repository root, with the Python environment that has the extras installed:
+pytest -q                                             # database tests run when DynamoDB Local is up (about 20 minutes in all)
+pytest -q -m docker                                   # builds and starts the compose stack and drives it over HTTP
+python -m eval --k 2 --config A0,A1,A2                # the 40 tasks
+python -m eval.redteam                                # the 12 attacks
+```
 
-   ```powershell
-   # Windows PowerShell
-   aws login --profile <aws-profile>
-   .\scripts\voice_demo.ps1 -Profile <aws-profile>
-   ```
+The chat assistant and the evaluation use `MODEL_PROVIDER=mock` (a script: no key, no cost) unless you set `MODEL_PROVIDER=deepseek` and `DEEPSEEK_API` in a `.env` file (see `.env.example`). Amazon Bedrock models are available through `MODEL_PROVIDER=bedrock` (needs AWS credentials and `BEDROCK_MODEL_ID`); real-model runs can cost real money, so read [`eval/README.md`](eval/README.md) first.
 
-   ```bash
-   # macOS, Linux, Git Bash
-   aws login --profile <aws-profile>
-   AWS_PROFILE=<aws-profile> bash scripts/voice_demo.sh
-   ```
-
-   Add `-NoStart` (PowerShell) or `--no-start` (bash) to only check that the settings can be read. Pass `-Python <path>` or set `PYTHON=<path>` if `python` on your path is not the environment you installed into. Use the profile that owns the deployment, and never a root user.
-
-3. Open http://localhost:8080/voice, sign in as `diner-alice` / `alice-dev-pass` (the Cognito users have the same names and passwords as the local ones), press **Start the call**, allow the microphone, and say: *"Book a table at Luna Trattoria for two people tomorrow at seven in the evening."* Use headphones, or the speaker's sound goes back into the microphone. When the assistant asks "Shall I book it?", say *"Yes, please."* The page shows what you said, what it said, and each tool call behind it. Stop with **End the call**; a call lasts at most seven minutes.
-4. Cost: a whole booking conversation used about 3,300 tokens in and 1,400 out (speech tokens cost $3 and $12 per million in us-east-1 on 2026-09-30), under two cents. `VOICE_REGION` and `VOICE_NAME` change the region and the voice. If the call stops at the start, check that your account can use Nova 2 Sonic in that region.
-
-The same flow is tested end to end without a person: `pytest -m aws tests/aws/test_voice.py` plays two recorded sentences into the page's endpoint and checks that the assistant asks before booking and books after the yes.
+## Limits, and what comes next
+- **The server cannot hear the diner.** The spoken yes is relayed and guarded, not proven.
+- **Never tried with a real Alexa+.** Nobody outside Amazon can. The server was checked against Amazon's add-on requirements and the client's request format ([notes](docs/alexa-plus-addon-notes.md)); the assistant in this repo is a simulator.
+- **A working prototype, not a finished service.** The three restaurants are made up. The owner console on AWS uses the demo login flow; a real service needs hosted sign-in with MFA for owners.
+- **Not built:** changing the day or time of a booking (cancel and book again), onboarding a restaurant from its website (Amazon Nova Act with AgentCore Browser), AgentCore Evaluations, MCP Apps cards for screens, editing the Cedar rules from the console.
 
 ## Documentation
-- Decisions log: [`docs/DECISIONS.md`](docs/DECISIONS.md)
-- Plan: [`docs/PLAN.md`](docs/PLAN.md) and the working log [`docs/devlog/`](docs/devlog/)
-- AWS services and how they are used: [`docs/aws-integration.md`](docs/aws-integration.md)
-- Hackathon requirements and FAQ clarifications: [`docs/hackathon-rules.md`](docs/hackathon-rules.md)
+- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · decisions: [`docs/DECISIONS.md`](docs/DECISIONS.md) · working log: [`docs/devlog/`](docs/devlog/)
+- AWS services and how each is used: [`docs/aws-integration.md`](docs/aws-integration.md) · product feedback: [`docs/product-feedback.md`](docs/product-feedback.md)
 - Friction log (problems met with AWS and MCP tooling): [`docs/friction-log.md`](docs/friction-log.md)
-- How the server compares with Amazon's Alexa+ add-on requirements, and the deliberate differences: [`docs/alexa-plus-addon-notes.md`](docs/alexa-plus-addon-notes.md)
-- Evaluation reports and the chart: [`eval/reports/`](eval/reports/)
-- Architecture (English): `docs/ARCHITECTURE.md` _(planned, task P0-5)_
+- Amazon's Alexa+ add-on requirements and our deliberate differences: [`docs/alexa-plus-addon-notes.md`](docs/alexa-plus-addon-notes.md)
 
 ## Repository layout
-`server/` MCP server and rule engine · `policies/` Cedar rules · `devauth/` dev token issuer · `web/` sign-in, owner console, chat page · `simulator/` simulated assistant · `eval/` evaluation and red team · `scripts/` seed and health check · `tests/`. Each directory has its own `README.md`. Full plan: [`docs/PLAN.md`](docs/PLAN.md) §4.
+`server/` MCP server and rule engine · `policies/` Cedar rules · `devauth/` dev token issuer · `web/` sign-in, owner console, chat and voice pages · `simulator/` simulated assistant · `eval/` evaluation and red team · `infra/` AWS deployment (CDK) · `scripts/` seed and tools · `tests/`. Each directory has its own `README.md`.
 
 ## License
 [Apache-2.0](LICENSE)
