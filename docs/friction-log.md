@@ -4,72 +4,443 @@ Problems hit with AWS / MCP tooling while building FairTable. Counts toward judg
 
 Format per entry: **task attempted · steps · expected vs. actual · severity (low/med/high) · workaround · actionable suggestion**.
 
-| Date | Tool | Entry |
-|---|---|---|
-| 2026-09-29 | Bedrock | Model access blocked on the account; AWS Support case pending. Workaround: `MODEL_PROVIDER=mock` first (see `docs/DECISIONS.md` D-003). Severity: high. |
-| 2026-09-29 | FastMCP 3.4.7 / mcp 1.30.0 | **Task:** raise JSON-RPC -32042 (URLElicitationRequiredError) from a tool. **Steps:** `raise UrlElicitationRequiredError([...])` inside a `@mcp.tool`. **Expected:** client gets error code -32042 (the mcp lowlevel server re-raises it, `mcp/server/lowlevel/server.py` ~L585). **Actual:** FastMCP's `FastMCP.call_tool` (`fastmcp/server/server.py`, the final `except Exception`) wraps it in `ToolError`, so the client receives `isError=true` with text "URL elicitation required" and no URL. FastMCP has no reference to `UrlElicitation` anywhere. **Severity:** high (step-up is a Must). **Workaround:** a 6-line `Middleware.on_call_tool` that catches `ToolError` whose `__cause__` is `UrlElicitationRequiredError` and re-raises the cause; verified in-process and over Streamable HTTP (`tests/integration/test_fastmcp_spike.py`). **Suggestion:** FastMCP should re-raise `McpError` subclasses (or at least `UrlElicitationRequiredError`) unchanged, as the mcp SDK's own FastMCP does. Source: installed `fastmcp/server/server.py`, `mcp/server/fastmcp/tools/base.py`, `mcp/shared/exceptions.py`. |
-| 2026-09-29 | MCP Inspector (npx, CLI mode) | **Task:** call a tool that raises -32042 via `npx @modelcontextprotocol/inspector --cli <url> --transport http --method tools/call --tool-name needs_consent`. **Actual:** the command printed nothing and never returned (killed at 40 s / 120 s), whereas `isError:true` results, unknown-tool errors and custom `--header` values work and return immediately. The Python client over the same server receives a proper `McpError(-32042)`. Also, on Node 24 / Windows every CLI run ends with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76` (cosmetic). **Severity:** low-med (manual testing of step-up). **Workaround:** test -32042 with the FastMCP Python client; try the Inspector UI (not verified headless). **Suggestion:** the Inspector CLI should surface JSON-RPC errors with code -32042 instead of waiting. |
-| 2026-09-29 | FastMCP 3.4.7 transport security | **Task:** follow the Streamable HTTP spec security warning ("servers MUST validate the Origin header … 403"). **Actual:** `FastMCP.http_app()` / `run(transport="http")` default to `host_origin_protection=False`, so a hostile `Origin` gets 200 (tested). Not mentioned in the quick-start; found in `fastmcp/server/http.py`. **Severity:** med (security default differs from the spec MUST). **Workaround:** pass `host_origin_protection=True` (+ `allowed_hosts` / `allowed_origins` for hosted profiles); verified 403 on hostile Origin, 200 with no Origin. **Suggestion:** default to `"auto"` (protects loopback-bound servers) or warn at startup. Source: spec 2025-11-25 basic/transports; installed `fastmcp/server/http.py`. |
-| 2026-09-29 | fastmcp `tasks` extra | `task=True` needs the optional `pydocket` package (`fastmcp-slim` extra `tasks`; not installed by `pip install fastmcp`). With `pydocket==0.25.2` the default `memory://` backend works in-process and over Streamable HTTP with no Redis (`FASTMCP_DOCKET_URL` default is `memory://`). Installing it did not change the pins (`pip check` clean). Declared as the optional `tasks` extra in `pyproject.toml`. Severity: low. |
-| 2026-09-29 | fastmcp error masking | `FastMCP(mask_error_details=True)` masks unexpected exceptions but leaves structured `ToolResult(is_error=True)` and -32042 untouched (tested). Without masking, `str(exception)` of an unexpected error reaches the client, so the server must set `mask_error_details=True` in production profiles. Severity: low. |
-| 2026-09-29 | Environment | The "already prepared" env from the task prompt did not exist on this PC (prompt came from another machine): no `fairtable` conda env and Docker Desktop was not running. Created `conda create -n fairtable python=3.12` and started Docker Desktop. All pinned wheels (incl. `cedarpy==4.12.1`, cp312 win_amd64) installed cleanly. Severity: low. |
-| 2026-09-29 | DynamoDB Local | Image `amazon/dynamodb-local:latest` resolved to DynamoDB Local **3.3.1**. `TransactWriteItems` cancellation: `CancellationReasons` is positional (one entry per item, `None` for the healthy ones) and `ReturnValuesOnConditionCheckFailure=ALL_OLD` returns the blocking item. In a 20-thread race all 19 losers got `ConditionalCheckFailed` (Local serialises transactions, so it never returned `TransactionConflict`; real DynamoDB can, so the code must treat `TransactionConflict` as retryable, not as SLOT_TAKEN). Severity: info. |
-| 2026-09-29 | cedarpy 4.12.1 | Reasons come back as `policy0…policyN` (index in the parsed text), so the `policyN -> (@id, @on_deny)` table must be built from the same text that is evaluated. `policies_to_json_str` keeps annotations; `diagnostics.id_annotations_by_reason` gives `@id` directly but not `@on_deny`. A forbid whose condition hits a missing attribute is skipped and reported in `diagnostics.errors` (the reason G4 needs the `has`-guard, and why every Cedar context must be complete). Severity: info. |
-| 2026-09-29 | FastMCP 3.4.7 logging | **Task:** return expected business refusals (bad token, unknown restaurant) as structured `isError` results. **Actual:** raising any ordinary exception from a tool makes FastMCP log a full multi-screen rich traceback at ERROR for every refusal, which drowns real bugs. **Workaround:** raise a `ToolError(..., log_level=logging.INFO)` subclass (a `FastMCPError`), which FastMCP logs at INFO without traceback and does not wrap; a middleware converts it to the structured result. **Severity:** low-med. **Suggestion:** document `log_level` on `FastMCPError`, or give tools a first-class "expected error" path. Source: `fastmcp/server/server.py` (`call_tool`), `fastmcp/exceptions.py`. |
-| 2026-09-29 | Starlette TestClient | `fastapi.testclient.TestClient` (starlette 1.7) emits `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead.` although `httpx2` is not a normal dependency of FastAPI. Filtered in `pyproject.toml`. Severity: info. |
-| 2026-09-29 | boto3 / DynamoDB | `TypeSerializer` raises on Python `float` ("Float types are not supported. Use Decimal"), which bites token-bucket state; convert with `Decimal(str(x))`. Severity: info. |
-| 2026-09-29 | mcp SDK 1.30 `ServerSession.check_client_capability` | **Task:** decide whether the connected client can open a URL (URL-mode elicitation) before returning -32042. **Actual:** the helper only checks that `capabilities.elicitation is not None`, so a client that declared form mode only (or an empty `elicitation: {}`, which the spec defines as form-only) counts as supporting it. **Workaround:** read `client_params.capabilities.elicitation.url` directly (tested with none / empty / form / url / both). **Severity:** med (would send -32042 to clients that cannot handle it). **Suggestion:** make the helper honour `form` vs `url`. Source: `mcp/server/session.py` L132-169, spec 2025-11-25 "Capabilities". |
-| 2026-09-29 | DynamoDB | `sub` (and `status`) are reserved words; a condition using them fails at runtime with `ValidationException: Attribute name is a reserved keyword` and DynamoDB Local reports it only when the transaction is sent. Also no arithmetic in condition expressions. Cost: one failed test run. Severity: info. |
-| 2026-09-29 | conda | `conda run -n <env> python -c "<multi-line code>"` prints the conda usage text instead of running the code (multi-line arguments are dropped), and long `bash` heredocs sometimes fail to parse in this shell. Workaround: write scripts to a file and run the file. Severity: info. |
-| 2026-09-29 | DynamoDB | `extended` is also a reserved word (after `sub` and `status`); the error only appears when the update runs. The reserved list is long and surprising, so attribute names now get a prefix (`hold_extended`) or an alias (`#st`, `#sub`). Severity: info. |
-| 2026-09-29 | FastMCP 3.4.7 | **Finding, not a defect:** a resource that raises `ResourceError` reaches the client as `McpError` (message preserved), while a tool that raises the equivalent gets masked with `mask_error_details=True`. Worth knowing when choosing what to expose as a resource. Severity: info. |
-| 2026-09-29 | Amazon Bedrock (new account) | **Task:** call a model from a fresh IAM-admin account (us-east-1, `aws login` credentials). **Actual:** `bedrock-runtime converse` fails for every model tried (Amazon Nova Micro, Claude Haiku 4.5, also through `us.` inference profiles) with `ValidationException: Operation not allowed`, a message that names no cause. `get-foundation-model-availability` says `authorizationStatus=NOT_AUTHORIZED` (Nova: agreement available; Claude: agreement not available). `get-use-case-for-model-access` says the Anthropic first-time-use form was never submitted. Service Quotas show cross-region inference limits of **0** for Claude Haiku 4.5 (requests per minute) and Nova Micro (tokens per minute), while the docs say model access is enabled by default. **Severity:** high (blocks any real-model run on Bedrock). **Workaround:** interim provider DeepSeek (D-018). **Suggestion:** make the error say which prerequisite is missing (use-case form, payment method, account verification or a zero quota), and surface zero default quotas on the Bedrock console. Sources: docs.aws.amazon.com/bedrock/latest/userguide/model-access.html, `aws service-quotas list-service-quotas --service-code bedrock`. |
-| 2026-09-29 | AWS CLI `aws login` | Worked as documented for an IAM user with console access (short-term credentials, type `login`, no access keys created). Positive onboarding note for the product feedback. Severity: info. |
+### 2026-09-29 · Bedrock
 
-| 2026-09-30 | Strands 1.57.1 `MCPClient` + sse-starlette + uvicorn (tests) | **Task:** connect the Strands agent to our server over Streamable HTTP inside the pytest suite. **Actual:** the whole suite hung (no error, `MCPClient` start timed out after 30 s, then `stop()` joined a stuck thread for good) although the same tests passed alone. Cause found with `faulthandler_timeout` and debug logs: the server closed every SSE response at once ("Closing SSE writer", client: `incomplete chunked read`). sse-starlette decides "the server is shutting down" by inspecting the process's SIGTERM handler for a uvicorn `Server` with `should_exit` set (`sse_starlette/sse.py`, `_shutdown_watcher`, issue #132/#211 notes). An earlier test that ran two uvicorn servers in one loop (main thread) restored their signal handlers out of order and left a handler pointing at a dead server, so every later server in the process looked like it was shutting down. **Severity:** med (hours of hang-hunting, silent). **Workaround:** an autouse fixture in `tests/conftest.py` puts the original SIGINT/SIGTERM handlers back after every test. **Suggestions:** sse-starlette should not treat a stale handler as a live shutdown; Strands' `MCPClient.start()` should give up instead of joining a thread that cannot finish when init times out. Also: Strands uses the deprecated `streamablehttp_client` from `mcp` (a `DeprecationWarning: Use streamable_http_client instead` in every run). |
-| 2026-09-30 | Strands 1.57.1 `OpenAIModel` with a thinking model (DeepSeek flash) | **Task:** run the simulated assistant on DeepSeek through Strands' OpenAI model class. **Actual:** it works (tool calls over MCP, a full booking), but every model turn after the first logs `reasoningContent is not supported in multi-turn conversations with the Chat Completions API.` (12 times in one 6-call conversation). The model's reasoning text is dropped from the history instead of being passed back or silently ignored. Also the class needs the separate `openai` package, which is not a dependency of `strands-agents` by default (extra `openai`). **Severity:** low. **Workaround:** none needed; declared `openai>=1.68,<3` in our `sim` extra. **Suggestion:** log the reasoning notice once per conversation, and name the missing extra in the `ImportError`. |
-| 2026-09-30 | boto3 / `.env` | A `.env` that defines `AWS_PROFILE=` (empty) makes botocore fail with `ProfileNotFound: The config profile () could not be found` as soon as any client is created, when the file is exported as it is (`set -a; . .env`, or docker compose `env_file`). An empty variable is not the same as an unset one. Cost: one failed run. **Workaround:** load only the variables needed (`DEEPSEEK_*`). **Follow-up for the Docker profile (P1-23):** do not pass empty `AWS_PROFILE` / `AWS_REGION` to containers. Severity: low. |
-| 2026-09-30 | awslabs/agentcore-samples (documentation and samples) | **Task:** learn AgentCore Runtime, Gateway and Policy from the official samples repository on Windows. **Actual:** (1) `git clone` fails to check out part of the tree (`Filename too long`; the tree has paths above 260 characters); workaround `git config core.longpaths true` and reading files with `git show HEAD:<path>`. (2) The Policy sample README writes the Cedar resource type as `AgentCore::gateway` in one place and `AgentCore::Gateway` in another; the documentation and the healthcare sample use `AgentCore::Gateway`. (3) The Gateway header page says the target allowlist cannot hold `Authorization` but an interceptor's `Authorization` is forwarded, while a sample states as fact (empirically) that the interceptor runs before the policy engine, which the documentation pages I read do not say. (4) The gateway-outbound page says the service role needs `bedrock-agentcore:InvokeGateway` even for a Runtime target, which looks like a slip for `InvokeAgentRuntime`. **Severity:** low-med (each cost minutes; (2) and (4) could cost a failed deploy). **Suggestion:** state the Cedar entity types once and link to them from the samples; give the exact IAM action per target type. |
-| 2026-09-30 | pip on Windows | `pip download --platform manylinux2014_aarch64 ... fastmcp mcp` for another platform fails with `No matching distribution found for pywin32>=310; sys_platform == "win32"`: the dependency markers are evaluated for the **host**, not for the target platform. Workaround: resolve the dependency set on Linux (`pip install --dry-run --report` in `python:3.12.14-slim`), then `pip download --no-deps` the pinned list for aarch64. Severity: low. **Suggestion:** `--platform` should evaluate markers for the target, or the error should say so. |
-| 2026-09-30 | boto3 + `aws login` on Windows | **Task:** run the tests against real DynamoDB with the `aws login` session. **Actual:** boto3 raises `MissingDependencyException: Using the login credential provider requires ... pip install "botocore[crt]"`; after installing it, `import awscrt` fails with `DLL load failed ... An Application Control policy has blocked this file` (Windows 11 App Control). **Severity:** med (blocks SDK use of the recommended sign-in on locked-down PCs). **Workaround:** `aws configure export-credentials --format env` gives short-term keys for the process (no `awscrt`); uninstalled `awscrt`. **Suggestion:** a pure-Python path for the login provider (the ECDSA work needs only `cryptography`), or a clearer message that names the DLL block. |
-| 2026-09-30 | AWS CDK (Python) on Windows | (1) `"app": ".venv/Scripts/python app.py"` in `cdk.json` fails (`'.venv' is not recognized as an internal or external command`) because the CLI runs the command through `cmd.exe`; use `"python app.py"` with the venv activated. (2) Every `cdk` command prints a Node stack trace `ENOTEMPTY ... jsii-kernel-...` at exit when a Python app ran (temp-directory cleanup race on Windows); the command still succeeds. (3) `aws_dynamodb.Table(point_in_time_recovery=...)` is deprecated in aws-cdk-lib 2.271.0 in favour of `point_in_time_recovery_specification` (warning at synth). (4) `cdk bootstrap` in an empty account worked first time in about a minute. **Severity:** low. |
-| 2026-09-30 | AWS Budgets (CloudFormation) | `AWS::Budgets::Budget` `CostTypes.IncludeCredit` **defaults to true**. With a promotional credit the measured spend stays near zero, so absolute-dollar alerts never fire until the credit is used up. Found in the CloudFormation reference; set `IncludeCredit: false` for alerts on gross usage. **Severity:** med (silent failure of the safety net). **Suggestion:** say this next to the credit documentation and in the console's budget wizard. |
-| 2026-09-30 | DynamoDB (real) vs DynamoDB Local | Local serialises transactions and never returns `TransactionConflict`; the real service does. 20 simultaneous `TransactWriteItems` on one item: 16 of 600 requests still conflicted after 4 retries with a 20-80 ms ladder. The guarantee held (one winner in 30 of 30 rounds); the retry policy did not. Fixed with 8 attempts and full-jitter backoff (0 of 600 afterwards). Also: creating and deleting a table with two GSIs takes about 50 s per test, so running the integration suite against the real service is about 100 times slower than Local. **Severity:** med. **Suggestion:** document `TransactionConflict` rates for hot items next to the `TransactWriteItems` reference, and offer a Local mode that injects conflicts. |
-| 2026-09-30 | DynamoDB (real) from a far region | Measured from Vietnam to `us-east-1`: TCP 0.26 s, TLS 0.5 s, and boto3 `get_item` about 1.06 s each (15 of 15 calls, apparently a new connection per call). An integration suite that takes 12 minutes against DynamoDB Local takes about 30 s per test against the service; creating a table with two GSIs takes 25 to 45 s and deleting it about 24 s. Seeding 600 items took 35 s sequentially and 9.5 s with 8 threads. **Severity:** med (slows every AWS-side test loop). **Workaround:** one shared table per run (`FT_TEST_SHARED_TABLE=1`), parallel batch writes, run only the store-related tests on AWS. **Suggestion:** document expected table-creation times (they are not in the `CreateTable` reference) and offer a way to reuse a table in test frameworks. |
-| 2026-09-30 | Cognito (CDK / CloudFormation) | (1) Wiring the pre token function to the app client id makes a dependency cycle (pool -> function -> client id -> pool), so the function looks the client up by name at run time. (2) A password sign-in (`InitiateAuth`) token has only the scope `aws.cognito.signin.user.admin`, and `ClientMetadata` from `InitiateAuth` is not passed to the trigger, so a per-app trigger has only `callerContext.clientId` to go on. (3) `aws_cognito.UserPoolClient` leaves `ExplicitAuthFlows` out when no flow is enabled and Cognito then enables user SRP and custom auth for a machine-only client; needs a property override. (4) The Cognito price list has many per-RPS items that read like automatic charges; they are paid rate-limit increases. **Severity:** low-med. **Suggestion:** document the client-by-name workaround for the cycle, and let CDK emit an explicit empty flow list. |
-| 2026-09-30 | AgentCore Runtime (CloudFormation / CDK) | (1) The L1 class `aws_bedrockagentcore.CfnRuntime` in aws-cdk-lib 2.271.0 has no `platform_version`, although the CloudFormation reference lists `PlatformVersion` (description: "not available"); needs `add_property_override`. The valid values are not documented on that page. (2) `ProtocolConfiguration` is a plain string in CloudFormation but an object (`serverProtocol`) in the API. (3) The runtime name pattern forbids hyphens while every other AgentCore name (Gateway) allows hyphens and forbids underscores. (4) The first cross-stack reference makes CDK 2.271.0 print a warning about a `defaultCrossStackReferences` flag, which `--strict` turns into a failure until the flag is set. (5) The service creates the runtime's log group itself, so a stack delete leaves it behind. **Severity:** low. **Suggestion:** keep the L1 classes in step with the resource reference and document the `PlatformVersion` values. |
-| 2026-09-30 | AgentCore Runtime (new account) | **Task:** create the first runtime with CloudFormation. **Actual:** `CREATE_FAILED ... maxAgents limit exceeded for account <id>. Please contact AWS Support (Service: BedrockAgentCoreControl, Status Code: 402, ServiceLimitExceeded)`. Service Quotas shows the **applied** value of *Total Agents per Account*, *Endpoints per Agent*, *Versions per Agent* and *Active Session Workloads per Account* as **0** while the AWS default is 1000, 10, 1000 and 5000 (all adjustable, no request pending). The message names neither the quota nor Service Quotas, and "402" reads like a payment problem. Same pattern as the zero Bedrock quotas of this account. **Severity:** high (blocks the AWS-hosted MCP server). **Workaround:** request an increase in Service Quotas (or through the open support case); none found. **Suggestion:** say *which* quota is 0 and link to its Service Quotas page in the error, and show AgentCore quotas at 0 in the console before the first create. |
-| 2026-09-30 | Service Quotas (AgentCore) | **Task:** ask for the AgentCore Runtime quotas that are applied at 0 on a new account. **Actual:** `RequestServiceQuotaIncrease` refuses any desired value that is not *greater than the default* (1000 agents), although the applied value is 0. So the documented self-service route cannot express "restore the default". The error of the failed create says "contact AWS Support". **Severity:** high (no self-service way out). **Workaround:** a support case. **Suggestion:** accept a request up to the default when the applied value is below it, or show a "request account review" action next to a zero quota. |
-| 2026-09-30 | AWS teardown (listing after the run) | `python infra/aws_ctl.py down --yes` on the real account (data and identity stacks): 2 min 8 s, then the inventory of everything owned by the project printed "nothing that costs money is left" (no table, pool, function, secret, runtime or project log group; the budget `fairtable-150usd` and the bootstrap stack kept on purpose). `up` rebuilt it in 3 min 14 s. Two remarks: `cdk destroy <stack>` prints "Including depending stacks: FairTableRuntime" for a stack that does not exist (harmless), and the service-created Runtime log group is the one thing CloudFormation never removes, hence the tool's own cleanup. **Severity:** info. |
-| 2026-09-30 | Community research: zero quotas on new accounts | Many AWS re:Post threads describe the same pattern as ours. Bedrock model quotas applied at 0 ("New AWS account has 0 Amazon Bedrock quotas in all regions", "All Bedrock model quotas stuck at 0 tokens/day", "Free Plan - Bedrock has zero quotas"); `ValidationException: Operation not allowed` on InvokeModel and on the Anthropic first-time-use form ("Bedrock error: ValidationException Operation Not Allowed", "Anthropic FTU form blocked despite verified IAM, Marketplace, billing"); AgentCore `maxAgents limit exceeded for account` ("Unable to create AgentCore Runtimes due to ServiceQuotaExceededException even though none exist", "Unable to host an agent using Amazon Bedrock AgentCore Runtime"). What the threads report (read through search-result summaries, because re:Post returns 403 to a fetch tool): it is an account-level eligibility restriction, not a model-access setting; enabling model access in the console does not lift it; support says the account lacks "established billing and usage history" and names no minimum spend or age; a payment method alone does not raise quotas; the suggested route is a support case ("Account and billing", free on the Basic plan, asking for account verification, or a quota-increase case naming the service and region); reported waits range from a couple of days to 15 days with seven cases. A separate, different cause of a similar-looking AgentCore error exists (first use of the service-linked role hits an IAM rate limit: "Failed creating service linked role. Rate limit exceeded from IAM", fixed by `aws iam create-service-linked-role --aws-service-name bedrock-agentcore.amazonaws.com`); our error text is `maxAgents`, so it does not apply. **Severity:** info. **Sources:** see the devlog entry of 2026-09-30 "research". |
-| 2026-10-01 | AWS CLI profiles with `aws login` | With two sign-ins on one PC (`default` and `fairtable2`): `AWS_PROFILE=default aws sts get-caller-identity` answers "The config profile (default) could not be found", while the same call without the variable works; the sessions expire separately ("Your session has expired. Please reauthenticate using 'aws login'"), and boto3 cannot use either without `awscrt` (blocked on this PC), so a `credential_process` helper is needed per profile. **Severity:** low. **Suggestion:** treat the name `default` as a normal profile name for login sessions. |
-| 2026-10-01 | AgentCore Runtime (MCP server) | **Task:** call the deployed MCP server through `InvokeAgentRuntime`. **Actual:** every call returned `Received error (421) from runtime. Please check your CloudWatch logs for more information.` The log showed only `POST /mcp ... 421 Misdirected Request`, not the Host header that the server's (FastMCP) Host protection refused; the platform's own health checks from 127.0.0.1 passed, so the runtime looked healthy. After adding a log line for the refused Host the value was `<uuid>.lambda-microvm.us-east-1.on.aws`, a per-microVM name that is documented nowhere I could find (the MCP contract page says only that the server listens on 0.0.0.0:8000/mcp). **Severity:** med (an MCP server with Host validation fails 100% of calls and the log hides why; frameworks with DNS-rebinding protection on by default hit it). **Workaround:** `MCP_ALLOWED_HOSTS=*.lambda-microvm.*.on.aws`. **Suggestion:** document the Host the proxy forwards (or forward `127.0.0.1`/`localhost`), and show the refused value in the error. Cost of finding it: three environment updates at about 4.4 minutes each. |
-| 2026-10-01 | AgentCore Runtime updates | Every environment-variable change creates a new runtime version and takes about 4.4 minutes to reach `READY` through CloudFormation, which turns a configuration search (like the Host above) into a slow loop. No faster way to change an environment variable without a new version was found. **Severity:** low-med. **Suggestion:** a faster path for environment-only changes, or a way to test an invocation header against the container locally. |
-| 2026-10-01 | AgentCore Gateway documentation | (1) The outbound-authorization page says the gateway service role needs `bedrock-agentcore:InvokeGateway` for an IAM-authorised Runtime target; the IAM service reference says that action applies to the `gateway` resource, and the action that calls a Runtime is `InvokeAgentRuntime` (resources `runtime` and `runtime-endpoint`). The Gateway pages never name `InvokeAgentRuntime`. (2) The interceptor page's output example shows only `body` under `transformedGatewayRequest`; the header page shows `headers` there. (3) The header page says `Authorization` returned by an interceptor is forwarded to the target, which collides with SigV4 outbound authorization; nothing says what happens then. (4) Tool names get the prefix `<target>___` with no switch to drop it. **Severity:** low-med (each cost a documentation search; (1) could cost a failed deploy). **Suggestion:** name the Runtime invoke action on the outbound-auth page and state the interaction of an interceptor's `Authorization` with SigV4. |
-| 2026-10-01 | AWS CDK cross-stack references | After adding a stack that uses a value of an already deployed stack, `cdk deploy FairTableGateway --exclusively` rolled back with `No export named FairTableRuntime:ExportsOutputFnGetAttRuntimeAgentRuntimeId... found`: the producer stack had been deployed before it exported that value, and `--exclusively` skips it. The CDK message ("failed creation, it may need to be manually deleted") does not mention the cause; it is in the CloudFormation events. Without `--exclusively` CDK updated the producer first and also removed the failed stack by itself. **Severity:** low. **Suggestion:** have `--exclusively` warn when the consumer imports a value the deployed producer does not export. |
-| 2026-10-01 | AgentCore Gateway URL elicitation | **Task:** let a URL-capable client receive the consent URL (`-32042`) through the Gateway, as the page "Use elicitation with your AgentCore gateway" describes ("URL mode (exception-based)": the Gateway forwards the `URLElicitationRequiredError`). **Steps:** Runtime stateful, Gateway `sessionConfiguration` on (then also `streamingConfiguration`), client declares `elicitation` (form and url), call a tool that raises `UrlElicitationRequiredError`. **Actual:** called directly the Runtime returns JSON-RPC `-32042` with the URL; through the Gateway the client gets a tool result `isError: true`, text `McpException - MCP invocation failed: URL elicitation required`, no URL. Same with streaming on. **Expected:** the error and its `elicitations` data forwarded. **Severity:** med (breaks URL elicitation through the Gateway; our fallback is a plain result with the link). **Workaround:** stateless server, step-up as an ordinary result with `consent_url`. **Suggestion:** forward the error data, or document that exception-based URL elicitation needs a different setup. |
-| 2026-10-02 | AgentCore Policy (CloudFormation) | **Task:** create an engine and six Cedar policies in one stack deploy with `FAIL_ON_ANY_FINDINGS`. **Actual:** five policies became `ACTIVE`; `ft_g3_party_size_waitlist_watch` ended `CREATE_FAILED` with `Overly Restrictive: Policy Engine will deny every request for the specified principal, action and resource combination if the policy is added`. The same statement created by hand a minute later was `ACTIVE`. `CreatePolicy` returns at once and the validation runs afterwards against the policies that are active at that moment; CloudFormation counts a policy as created after its "eventual consistency check", not when it is `ACTIVE`, so the `forbid` was validated while the `permit` for its tool was still being validated. **Worse:** the failed policy stayed in `CREATE_IN_PROGRESS` in CloudFormation for 19 minutes (until I cancelled the update; the rollback was clean). **Workaround:** two deploys, the `permit` policies first (`GATEWAY_POLICY_STAGE=permits`), then the `forbid` policies (D-049). **Wish:** CloudFormation should wait for `ACTIVE` (or fail on `CREATE_FAILED`), and "overly restrictive" should not be judged against policies that are still being created. |
-| 2026-10-02 | AgentCore Policy documentation | The Cedar schema generated from a gateway's tools cannot be read (no API), so a policy can only be checked by creating it. Our local check uses an approximate schema; all six statements, written from the documented rules (string tags, `hasTag`, `has` for optional inputs, `resource == AgentCore::Gateway::"<arn>"`), were accepted by the service on the first try, which is the evidence that the approximation was close enough. |
-| 2026-10-02 | AgentCore Runtime | Under a sustained run of the real-AWS tests (about 35 tests in 5 minutes) one direct `InvokeAgentRuntime` call returned `502 Bad Gateway` with nothing in the container's log, and in the same period one call through the Gateway came back as a tool error with no text. Both passed when repeated (3 full runs: 2 transient failures, then 35 of 35). No documented retry guidance for a 502 from the Runtime; our test clients do not retry. |
-| 2026-10-02 | AgentCore Observability (Gateway, Runtime) | **Task:** get traces of Gateway and Runtime calls with CloudFormation only. **Actual:** (1) `CfnRuntime` and `CfnGateway` have no tracing property; the documented way is a console toggle or, for memory and gateway, a CloudWatch Logs delivery (source `TRACES`, destination `XRAY`). The same delivery pattern was accepted for a Runtime ARN and produced `AgentCore.Runtime.Invoke` spans, although no page says so. (2) Enabling Transaction Search through CloudFormation took 403 s; `aws logs filter-log-events` on `aws/spans` stayed empty while the same spans were found with Logs Insights and as X-Ray trace summaries (1 % indexed), so the first check looked like a failure for 20 minutes. (3) The Gateway emits spans for the policy engine (`AgentCore.Policy.AuthorizeAction`, with the determining policy and the decision): useful, and not mentioned in the Gateway observability page. (4) The spans carry the account id and the gateway ARN, which matters for screen recordings. **Severity:** low-med. **Suggestion:** list the tracing switch for each resource type in the CloudFormation reference, and document the Policy spans. |
-| 2026-10-02 | FastMCP 3.4.7 (argument errors) | **Task:** answer a tool call with a wrong-typed or missing argument with a plain error. **Actual:** FastMCP wraps pydantic's error in its own `fastmcp.exceptions.ValidationError` (a `FastMCPError`, **not** a `ToolError`), so a middleware that catches `ToolError` never sees it; the client then gets pydantic's text ("1 validation error for call[...] ... For further information visit https://errors.pydantic.dev/..."). Found by a test that scanned every error text for library wording. **Workaround:** `ErrorMappingMiddleware` also catches `ArgumentError` and builds a `FairTableError` (`INVALID_INPUT`) from the field names (`server/middleware.py`). Source: installed `fastmcp/server/server.py` around the "Invalid arguments for tool" log line. |
-| 2026-10-02 | Alexa+ documentation | Amazon's pages disagree on the MCP version (the overview says 2025-11-25; the client-lifecycle sample says `initialize` with 2025-03-26). Account-linking and authentication pages say a tool called without a valid token must get HTTP 401 or 403, and that Alexa+ sends the token as `Authorization: Bearer`; they also say `WWW-Authenticate` is not supported. Nothing says how a server behind an AWS gateway should do this. Read raw (curl) because the fetch-tool summaries had already been wrong once. |
-| 2026-10-02 | Nova 2 Sonic documentation vs Strands | The Nova 2 user guide's Strands example imports `from strands.experimental.bidi.models.novasonic import BidiNovaSonicModel` and `BidiAudioIO` / `BidiTextIO` from `strands.experimental.bidi.io.audio` / `.text`. In the installed `strands-agents==1.57.1` the module is `strands.experimental.bidi.models.bedrock` and the class `BedrockNovaSonicModel`. The `bidi` extra and `pyaudio` are not installed by default. Nothing was run; the installed source was read instead. |
-| 2026-10-02 | Bedrock pricing page | The pricing page is rendered in the browser from placeholders (`{priceOf!bedrock/bedrock!<key>!*!1000}`), so a raw `curl` of the page shows no number. The numbers come from the price file `b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/bedrock/USD/current/bedrock.json` (gzip), looked up by the same keys. No page read says how many tokens a minute of speech is. |
-| 2026-10-02 | AgentCore Runtime / CDK | Redeploying the Runtime and Gateway took 356 s (the Runtime version alone about 4.4 minutes). `cdk diff FairTableRuntime FairTableGateway --exclusively` without the optional Observability stack in the app shows `Output ExportsOutputFnGetAttGatewayGatewayArn... removed`: deploying that would fail because FairTableObservability imports it, and with only one of the two observability switches the diff shows the runtime trace delivery being destroyed. Workaround: synthesise with every switch that the deployed stacks were made with (`OBSERVABILITY=true`, `OBSERVABILITY_RUNTIME=true`, `GATEWAY_POLICY=ENFORCE`, `MCP_ALLOWED_HOSTS`). The Runtime's environment is the place to read what a redeploy must keep (`get_agent_runtime`). |
-| 2026-10-02 | AgentCore Gateway | After the Runtime got a new package the Gateway target kept its old tool catalog (eight tools) until `SynchronizeGatewayTargets` was called; the call returned `SYNCHRONIZING` and the target was `READY` again within seconds. The CloudFormation update of the Runtime does not trigger it. |
-| 2026-10-02 | Amazon Nova 2 Sonic (tool use) | **Task:** let the speech model call our tools. **Actual:** it hears and answers correctly and calls tools in the right order, but when it must pass a 295-character signed `slot_token` from one tool result to the next call, it changes a character (found at index 162 of 295); the server answered `bad_signature` nine times and the model kept retrying. No documentation page read mentions a limit on argument length or fidelity. **Evidence:** Runtime log lines `tool=reservation_hold code=INVALID_SLOT_TOKEN reason=bad_signature`, and a test that compared the argument with the result. **Workaround:** none yet (short identifiers are being considered). |
-| 2026-10-02 | Amazon Nova 2 Sonic (stream) | The stream ends with `ValidationException: Timed out waiting for audio bytes or interactive content. Please ensure gaps between audio bytes and interactive content are less than the timeout` when the client stops sending audio for a few seconds (for example while the assistant waits for a tool). A client has to send silence continuously. The timeout value is not stated in the error. |
-| 2026-10-02 | Amazon Nova 2 Sonic (system prompt) | Adding one sentence to the system prompt ("When you confirm, copy the read_back_token from the hold result exactly, character for character.") made the whole stream fail at once with `ValidationException ... Error 1 : This request has been blocked by our content filters.` The error names no part of the request, and the same session without the sentence worked. Found by removing the sentence. |
-| 2026-10-02 | Amazon Nova 2 Sonic (short ids) | With an 8-character offer id, an 11-character read-back code and a 32-character hold id the model copied every value correctly in 7 of 7 booked conversations (3 against a stub, 4 through the Gateway); it also picks simple idempotency keys (`hold-luna-1`) and repeats them in later conversations, and it asked for a whole evening when the user named one time. Fixed on our side (D-059). |
-| 2026-10-02 | Amazon Nova 2 Sonic (audio stream) | **Task:** play the model's voice in the browser. **Steps:** a recorded request played into the page's endpoint on the real stack, arrival time of every audio piece logged. **Expected vs. actual:** a steady stream; actual 80 ms pieces at about the speed of speech with gaps of up to 0.4 s between pieces (measured from a PC in Vietnam to us-east-1), so a player that starts each piece at once is choppy. **Severity:** low. **Workaround:** the page plays with a 0.3 s head start and restarts it after a dry spell; replaying the measured arrivals through that model leaves no audible gap (a person still has to listen). **Suggestion:** document the pace and burstiness of the audio stream and a recommended playback buffer. |
-| 2026-10-02 | Amazon Nova 2 Sonic (tool calls) | **Task:** make the assistant say something while it waits for a tool. **Steps:** one sentence added to the system prompt ("Before you look something up, say one short sentence such as: One moment, let me check."), real call on the Gateway, arrival time of every audio piece and tool call. **Expected vs. actual:** a spoken filler before the first tool call; actual silence through 3 to 4 tool calls (14 to 19 s after the end of the request), the same as without the sentence. **Severity:** low. **Workaround:** the page shows what the assistant is doing ("Holding the table...") while it waits. **Suggestion:** document whether a model can speak between tool calls, and how to ask for it. |
-| 2026-10-02 | AWS Lambda (new account) | **Task:** run the background worker with one instance at a time. **Steps:** `reservedConcurrentExecutions: 1` in the CDK function. **Expected vs. actual:** one reserved instance; actual a likely failure, because the account's concurrent-execution limit is 10 and a reservation must leave 10 unreserved (`get-account-settings` showed 10 and 10). **Severity:** low. **Workaround:** no reservation; the routines are idempotent with conditional writes, so overlapping runs are safe. **Suggestion:** say in the CDK construct documentation that a new account's limit of 10 makes any reservation fail, and how to raise it. |
-| 2026-10-02 | AWS CDK (Python) | **Task:** expose the Runtime stack's environment variables to the workers stack. **Steps:** `self.environment = {...}` in a stack class. **Expected vs. actual:** a plain attribute; actual `AttributeError: property 'environment' of 'RuntimeStack' object has no setter`, because `Stack.environment` is a read-only property of the base class. **Severity:** low. **Workaround:** another attribute name. **Suggestion:** none; worth knowing that stack attributes share names with CDK properties. |
-| 2026-10-02 | AWS CDK (aws_lambda) | `logRetention` is deprecated in favour of an explicit `logGroup`; the first synthesis printed the warning. | An explicit `LogGroup` with the function name, one week, destroyed with the stack. | Low | The deprecation message names the replacement, which made this a two-minute change. |
-| 2026-10-03 | Amazon Bedrock (Nova Lite, ConverseStream) | **Task:** run the evaluation with `us.amazon.nova-lite-v1:0` through the Strands `BedrockModel`. **Actual:** in a few trials the call failed with `modelStreamErrorException: Model produced invalid sequence as part of ToolUse`, which ends the conversation. **Severity:** low. **Workaround:** the harness counts a model-service error as a failed trial of the model, not a crash. **Suggestion:** say in the tool-use guide how often a small model produces an invalid tool call and whether a retry is advised. |
-| 2026-10-03 | Amazon Bedrock (Nova Lite) through Strands | **Task:** the same evaluation, 120 trials. **Actual:** in 3 trials the agent loop ended with `EventLoopException: maximum recursion depth exceeded` (the model kept calling tools) and in 1 with `ValidationException: A conversation must start with a user message` (the conversation was trimmed so that it began with another role). **Severity:** low. **Workaround:** both are counted as a failed trial of the model. **Suggestion:** document the recursion limit of the event loop and say whether the conversation manager guarantees a user message first. |
-| 2026-10-03 | Amazon Bedrock (quotas, new account) | **Task:** four evaluation jobs at once against Bedrock. **Actual:** Nova Lite trials took about two minutes each and one job stood still for 40 minutes, with no throttling error in the log; the same job alone took 14 s a trial. The cause is not confirmed. **Severity:** low. **Workaround:** one job at a time. **Suggestion:** show the tokens-per-minute quota of a new account in the first-use guide. |
-| 2026-10-03 | AWS CLI `aws login` | A login session expired after a few hours in the middle of a 40-minute run, and every later call failed with `LoginRefreshRequired` (boto3, with `awscrt`) or `ExpiredTokenException` (an in-flight call). Nothing warns before it happens. **Workaround:** log in again before long jobs. **Suggestion:** print the expiry time of a session in `aws login` and in `aws sts get-caller-identity`. |
-| 2026-10-03 | FastMCP 3.4.7 (`get_http_headers`) and the MCP authorization specification | **Task:** accept `Authorization: Bearer` as the MCP specification asks. **Actual:** `get_http_headers()` hides `authorization` by default (so a server that reads the bearer token with the obvious call finds nothing); the argument `include={"authorization"}` is only described in the function's docstring. **Severity:** low. **Workaround:** a `request_headers()` wrapper. **Suggestion:** say it in the FastMCP authentication guide next to the token verifiers. |
-| 2026-10-04 | AWS CDK (`aws_cognito.UserPoolClient.user_pool_client_secret`) | **Task:** hand the client secret of a Cognito app client to a Lambda. **Actual:** the L2 property is not a plain `GetAtt`: it adds an `AwsCustomResource` (a singleton Lambda and an IAM statement for `cognito-idp:DescribeUserPoolClient`) to the stack that owns the client, which changed our identity stack and broke a test that pins its policies. **Severity:** low. **Workaround:** the L1 attribute `client.node.default_child.attr_client_secret`, a plain `Fn::GetAtt`. **Suggestion:** say in the construct's documentation that reading the secret creates a custom resource, and point to the L1 attribute. |
+Model access blocked on the account; AWS Support case pending. Workaround: `MODEL_PROVIDER=mock` first (see `docs/DECISIONS.md` D-003). Severity: high.
+
+### 2026-09-29 · FastMCP 3.4.7 / mcp 1.30.0
+
+**Task:** raise JSON-RPC -32042 (URLElicitationRequiredError) from a tool.
+
+- **Steps:** `raise UrlElicitationRequiredError([...])` inside a `@mcp.tool`.
+- **Expected:** client gets error code -32042 (the mcp lowlevel server re-raises it, `mcp/server/lowlevel/server.py` ~L585).
+- **Actual:** FastMCP's `FastMCP.call_tool` (`fastmcp/server/server.py`, the final `except Exception`) wraps it in `ToolError`, so the client receives `isError=true` with text "URL elicitation required" and no URL. FastMCP has no reference to `UrlElicitation` anywhere.
+- **Severity:** high (step-up is a Must).
+- **Workaround:** a 6-line `Middleware.on_call_tool` that catches `ToolError` whose `__cause__` is `UrlElicitationRequiredError` and re-raises the cause; verified in-process and over Streamable HTTP (`tests/integration/test_fastmcp_spike.py`).
+- **Suggestion:** FastMCP should re-raise `McpError` subclasses (or at least `UrlElicitationRequiredError`) unchanged, as the mcp SDK's own FastMCP does. Source: installed `fastmcp/server/server.py`, `mcp/server/fastmcp/tools/base.py`, `mcp/shared/exceptions.py`.
+
+### 2026-09-29 · MCP Inspector (npx, CLI mode)
+
+**Task:** call a tool that raises -32042 via `npx @modelcontextprotocol/inspector --cli <url> --transport http --method tools/call --tool-name needs_consent`.
+
+- **Actual:** the command printed nothing and never returned (killed at 40 s / 120 s), whereas `isError:true` results, unknown-tool errors and custom `--header` values work and return immediately. The Python client over the same server receives a proper `McpError(-32042)`. Also, on Node 24 / Windows every CLI run ends with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76` (cosmetic).
+- **Severity:** low-med (manual testing of step-up).
+- **Workaround:** test -32042 with the FastMCP Python client; try the Inspector UI (not verified headless).
+- **Suggestion:** the Inspector CLI should surface JSON-RPC errors with code -32042 instead of waiting.
+
+### 2026-09-29 · FastMCP 3.4.7 transport security
+
+**Task:** follow the Streamable HTTP spec security warning ("servers MUST validate the Origin header … 403").
+
+- **Actual:** `FastMCP.http_app()` / `run(transport="http")` default to `host_origin_protection=False`, so a hostile `Origin` gets 200 (tested). Not mentioned in the quick-start; found in `fastmcp/server/http.py`.
+- **Severity:** med (security default differs from the spec MUST).
+- **Workaround:** pass `host_origin_protection=True` (+ `allowed_hosts` / `allowed_origins` for hosted profiles); verified 403 on hostile Origin, 200 with no Origin.
+- **Suggestion:** default to `"auto"` (protects loopback-bound servers) or warn at startup. Source: spec 2025-11-25 basic/transports; installed `fastmcp/server/http.py`.
+
+### 2026-09-29 · fastmcp `tasks` extra
+
+`task=True` needs the optional `pydocket` package (`fastmcp-slim` extra `tasks`; not installed by `pip install fastmcp`). With `pydocket==0.25.2` the default `memory://` backend works in-process and over Streamable HTTP with no Redis (`FASTMCP_DOCKET_URL` default is `memory://`). Installing it did not change the pins (`pip check` clean). Declared as the optional `tasks` extra in `pyproject.toml`. Severity: low.
+
+### 2026-09-29 · fastmcp error masking
+
+`FastMCP(mask_error_details=True)` masks unexpected exceptions but leaves structured `ToolResult(is_error=True)` and -32042 untouched (tested). Without masking, `str(exception)` of an unexpected error reaches the client, so the server must set `mask_error_details=True` in production profiles. Severity: low.
+
+### 2026-09-29 · Environment
+
+The "already prepared" env from the task prompt did not exist on this PC (prompt came from another machine): no `fairtable` conda env and Docker Desktop was not running. Created `conda create -n fairtable python=3.12` and started Docker Desktop. All pinned wheels (incl. `cedarpy==4.12.1`, cp312 win_amd64) installed cleanly. Severity: low.
+
+### 2026-09-29 · DynamoDB Local
+
+Image `amazon/dynamodb-local:latest` resolved to DynamoDB Local **3.3.1**. `TransactWriteItems` cancellation: `CancellationReasons` is positional (one entry per item, `None` for the healthy ones) and `ReturnValuesOnConditionCheckFailure=ALL_OLD` returns the blocking item. In a 20-thread race all 19 losers got `ConditionalCheckFailed` (Local serialises transactions, so it never returned `TransactionConflict`; real DynamoDB can, so the code must treat `TransactionConflict` as retryable, not as SLOT_TAKEN). Severity: info.
+
+### 2026-09-29 · cedarpy 4.12.1
+
+Reasons come back as `policy0…policyN` (index in the parsed text), so the `policyN -> (@id, @on_deny)` table must be built from the same text that is evaluated. `policies_to_json_str` keeps annotations; `diagnostics.id_annotations_by_reason` gives `@id` directly but not `@on_deny`. A forbid whose condition hits a missing attribute is skipped and reported in `diagnostics.errors` (the reason G4 needs the `has`-guard, and why every Cedar context must be complete). Severity: info.
+
+### 2026-09-29 · FastMCP 3.4.7 logging
+
+**Task:** return expected business refusals (bad token, unknown restaurant) as structured `isError` results.
+
+- **Actual:** raising any ordinary exception from a tool makes FastMCP log a full multi-screen rich traceback at ERROR for every refusal, which drowns real bugs.
+- **Workaround:** raise a `ToolError(..., log_level=logging.INFO)` subclass (a `FastMCPError`), which FastMCP logs at INFO without traceback and does not wrap; a middleware converts it to the structured result.
+- **Severity:** low-med.
+- **Suggestion:** document `log_level` on `FastMCPError`, or give tools a first-class "expected error" path. Source: `fastmcp/server/server.py` (`call_tool`), `fastmcp/exceptions.py`.
+
+### 2026-09-29 · Starlette TestClient
+
+`fastapi.testclient.TestClient` (starlette 1.7) emits `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead.` although `httpx2` is not a normal dependency of FastAPI. Filtered in `pyproject.toml`. Severity: info.
+
+### 2026-09-29 · boto3 / DynamoDB
+
+`TypeSerializer` raises on Python `float` ("Float types are not supported. Use Decimal"), which bites token-bucket state; convert with `Decimal(str(x))`. Severity: info.
+
+### 2026-09-29 · mcp SDK 1.30 `ServerSession.check_client_capability`
+
+**Task:** decide whether the connected client can open a URL (URL-mode elicitation) before returning -32042.
+
+- **Actual:** the helper only checks that `capabilities.elicitation is not None`, so a client that declared form mode only (or an empty `elicitation: {}`, which the spec defines as form-only) counts as supporting it.
+- **Workaround:** read `client_params.capabilities.elicitation.url` directly (tested with none / empty / form / url / both).
+- **Severity:** med (would send -32042 to clients that cannot handle it).
+- **Suggestion:** make the helper honour `form` vs `url`. Source: `mcp/server/session.py` L132-169, spec 2025-11-25 "Capabilities".
+
+### 2026-09-29 · DynamoDB
+
+`sub` (and `status`) are reserved words; a condition using them fails at runtime with `ValidationException: Attribute name is a reserved keyword` and DynamoDB Local reports it only when the transaction is sent. Also no arithmetic in condition expressions. Cost: one failed test run. Severity: info.
+
+### 2026-09-29 · conda
+
+`conda run -n <env> python -c "<multi-line code>"` prints the conda usage text instead of running the code (multi-line arguments are dropped), and long `bash` heredocs sometimes fail to parse in this shell. Workaround: write scripts to a file and run the file. Severity: info.
+
+### 2026-09-29 · DynamoDB
+
+`extended` is also a reserved word (after `sub` and `status`); the error only appears when the update runs. The reserved list is long and surprising, so attribute names now get a prefix (`hold_extended`) or an alias (`#st`, `#sub`). Severity: info.
+
+### 2026-09-29 · FastMCP 3.4.7
+
+**Finding, not a defect:** a resource that raises `ResourceError` reaches the client as `McpError` (message preserved), while a tool that raises the equivalent gets masked with `mask_error_details=True`. Worth knowing when choosing what to expose as a resource. Severity: info.
+
+### 2026-09-29 · Amazon Bedrock (new account)
+
+**Task:** call a model from a fresh IAM-admin account (us-east-1, `aws login` credentials).
+
+- **Actual:** `bedrock-runtime converse` fails for every model tried (Amazon Nova Micro, Claude Haiku 4.5, also through `us.` inference profiles) with `ValidationException: Operation not allowed`, a message that names no cause. `get-foundation-model-availability` says `authorizationStatus=NOT_AUTHORIZED` (Nova: agreement available; Claude: agreement not available). `get-use-case-for-model-access` says the Anthropic first-time-use form was never submitted. Service Quotas show cross-region inference limits of **0** for Claude Haiku 4.5 (requests per minute) and Nova Micro (tokens per minute), while the docs say model access is enabled by default.
+- **Severity:** high (blocks any real-model run on Bedrock).
+- **Workaround:** interim provider DeepSeek (D-018).
+- **Suggestion:** make the error say which prerequisite is missing (use-case form, payment method, account verification or a zero quota), and surface zero default quotas on the Bedrock console. Sources: docs.aws.amazon.com/bedrock/latest/userguide/model-access.html, `aws service-quotas list-service-quotas --service-code bedrock`.
+
+### 2026-09-29 · AWS CLI `aws login`
+
+Worked as documented for an IAM user with console access (short-term credentials, type `login`, no access keys created). Positive onboarding note for the product feedback. Severity: info.
+
+### 2026-09-30 · Strands 1.57.1 `MCPClient` + sse-starlette + uvicorn (tests)
+
+**Task:** connect the Strands agent to our server over Streamable HTTP inside the pytest suite.
+
+- **Actual:** the whole suite hung (no error, `MCPClient` start timed out after 30 s, then `stop()` joined a stuck thread for good) although the same tests passed alone. Cause found with `faulthandler_timeout` and debug logs: the server closed every SSE response at once ("Closing SSE writer", client: `incomplete chunked read`). sse-starlette decides "the server is shutting down" by inspecting the process's SIGTERM handler for a uvicorn `Server` with `should_exit` set (`sse_starlette/sse.py`, `_shutdown_watcher`, issue #132/#211 notes). An earlier test that ran two uvicorn servers in one loop (main thread) restored their signal handlers out of order and left a handler pointing at a dead server, so every later server in the process looked like it was shutting down.
+- **Severity:** med (hours of hang-hunting, silent).
+- **Workaround:** an autouse fixture in `tests/conftest.py` puts the original SIGINT/SIGTERM handlers back after every test.
+- **Suggestions:** sse-starlette should not treat a stale handler as a live shutdown; Strands' `MCPClient.start()` should give up instead of joining a thread that cannot finish when init times out. Also: Strands uses the deprecated `streamablehttp_client` from `mcp` (a `DeprecationWarning: Use streamable_http_client instead` in every run).
+
+### 2026-09-30 · Strands 1.57.1 `OpenAIModel` with a thinking model (DeepSeek flash)
+
+**Task:** run the simulated assistant on DeepSeek through Strands' OpenAI model class.
+
+- **Actual:** it works (tool calls over MCP, a full booking), but every model turn after the first logs `reasoningContent is not supported in multi-turn conversations with the Chat Completions API.` (12 times in one 6-call conversation). The model's reasoning text is dropped from the history instead of being passed back or silently ignored. Also the class needs the separate `openai` package, which is not a dependency of `strands-agents` by default (extra `openai`).
+- **Severity:** low.
+- **Workaround:** none needed; declared `openai>=1.68,<3` in our `sim` extra.
+- **Suggestion:** log the reasoning notice once per conversation, and name the missing extra in the `ImportError`.
+
+### 2026-09-30 · boto3 / `.env`
+
+A `.env` that defines `AWS_PROFILE=` (empty) makes botocore fail with `ProfileNotFound: The config profile () could not be found` as soon as any client is created, when the file is exported as it is (`set -a; . .env`, or docker compose `env_file`). An empty variable is not the same as an unset one. Cost: one failed run.
+
+- **Workaround:** load only the variables needed (`DEEPSEEK_*`). **Follow-up for the Docker profile (P1-23):** do not pass empty `AWS_PROFILE` / `AWS_REGION` to containers. Severity: low.
+
+### 2026-09-30 · awslabs/agentcore-samples (documentation and samples)
+
+**Task:** learn AgentCore Runtime, Gateway and Policy from the official samples repository on Windows.
+
+- **Actual:** (1) `git clone` fails to check out part of the tree (`Filename too long`; the tree has paths above 260 characters); workaround `git config core.longpaths true` and reading files with `git show HEAD:<path>`. (2) The Policy sample README writes the Cedar resource type as `AgentCore::gateway` in one place and `AgentCore::Gateway` in another; the documentation and the healthcare sample use `AgentCore::Gateway`. (3) The Gateway header page says the target allowlist cannot hold `Authorization` but an interceptor's `Authorization` is forwarded, while a sample states as fact (empirically) that the interceptor runs before the policy engine, which the documentation pages I read do not say. (4) The gateway-outbound page says the service role needs `bedrock-agentcore:InvokeGateway` even for a Runtime target, which looks like a slip for `InvokeAgentRuntime`.
+- **Severity:** low-med (each cost minutes; (2) and (4) could cost a failed deploy).
+- **Suggestion:** state the Cedar entity types once and link to them from the samples; give the exact IAM action per target type.
+
+### 2026-09-30 · pip on Windows
+
+`pip download --platform manylinux2014_aarch64 ... fastmcp mcp` for another platform fails with `No matching distribution found for pywin32>=310; sys_platform == "win32"`: the dependency markers are evaluated for the **host**, not for the target platform. Workaround: resolve the dependency set on Linux (`pip install --dry-run --report` in `python:3.12.14-slim`), then `pip download --no-deps` the pinned list for aarch64. Severity: low.
+
+- **Suggestion:** `--platform` should evaluate markers for the target, or the error should say so.
+
+### 2026-09-30 · boto3 + `aws login` on Windows
+
+**Task:** run the tests against real DynamoDB with the `aws login` session.
+
+- **Actual:** boto3 raises `MissingDependencyException: Using the login credential provider requires ... pip install "botocore[crt]"`; after installing it, `import awscrt` fails with `DLL load failed ... An Application Control policy has blocked this file` (Windows 11 App Control).
+- **Severity:** med (blocks SDK use of the recommended sign-in on locked-down PCs).
+- **Workaround:** `aws configure export-credentials --format env` gives short-term keys for the process (no `awscrt`); uninstalled `awscrt`.
+- **Suggestion:** a pure-Python path for the login provider (the ECDSA work needs only `cryptography`), or a clearer message that names the DLL block.
+
+### 2026-09-30 · AWS CDK (Python) on Windows
+
+(1) `"app": ".venv/Scripts/python app.py"` in `cdk.json` fails (`'.venv' is not recognized as an internal or external command`) because the CLI runs the command through `cmd.exe`; use `"python app.py"` with the venv activated. (2) Every `cdk` command prints a Node stack trace `ENOTEMPTY ... jsii-kernel-...` at exit when a Python app ran (temp-directory cleanup race on Windows); the command still succeeds. (3) `aws_dynamodb.Table(point_in_time_recovery=...)` is deprecated in aws-cdk-lib 2.271.0 in favour of `point_in_time_recovery_specification` (warning at synth). (4) `cdk bootstrap` in an empty account worked first time in about a minute.
+
+- **Severity:** low.
+
+### 2026-09-30 · AWS Budgets (CloudFormation)
+
+`AWS::Budgets::Budget` `CostTypes.IncludeCredit` **defaults to true**. With a promotional credit the measured spend stays near zero, so absolute-dollar alerts never fire until the credit is used up. Found in the CloudFormation reference; set `IncludeCredit: false` for alerts on gross usage.
+
+- **Severity:** med (silent failure of the safety net).
+- **Suggestion:** say this next to the credit documentation and in the console's budget wizard.
+
+### 2026-09-30 · DynamoDB (real) vs DynamoDB Local
+
+Local serialises transactions and never returns `TransactionConflict`; the real service does. 20 simultaneous `TransactWriteItems` on one item: 16 of 600 requests still conflicted after 4 retries with a 20-80 ms ladder. The guarantee held (one winner in 30 of 30 rounds); the retry policy did not. Fixed with 8 attempts and full-jitter backoff (0 of 600 afterwards). Also: creating and deleting a table with two GSIs takes about 50 s per test, so running the integration suite against the real service is about 100 times slower than Local.
+
+- **Severity:** med.
+- **Suggestion:** document `TransactionConflict` rates for hot items next to the `TransactWriteItems` reference, and offer a Local mode that injects conflicts.
+
+### 2026-09-30 · DynamoDB (real) from a far region
+
+Measured from Vietnam to `us-east-1`: TCP 0.26 s, TLS 0.5 s, and boto3 `get_item` about 1.06 s each (15 of 15 calls, apparently a new connection per call). An integration suite that takes 12 minutes against DynamoDB Local takes about 30 s per test against the service; creating a table with two GSIs takes 25 to 45 s and deleting it about 24 s. Seeding 600 items took 35 s sequentially and 9.5 s with 8 threads.
+
+- **Severity:** med (slows every AWS-side test loop).
+- **Workaround:** one shared table per run (`FT_TEST_SHARED_TABLE=1`), parallel batch writes, run only the store-related tests on AWS.
+- **Suggestion:** document expected table-creation times (they are not in the `CreateTable` reference) and offer a way to reuse a table in test frameworks.
+
+### 2026-09-30 · Cognito (CDK / CloudFormation)
+
+(1) Wiring the pre token function to the app client id makes a dependency cycle (pool -> function -> client id -> pool), so the function looks the client up by name at run time. (2) A password sign-in (`InitiateAuth`) token has only the scope `aws.cognito.signin.user.admin`, and `ClientMetadata` from `InitiateAuth` is not passed to the trigger, so a per-app trigger has only `callerContext.clientId` to go on. (3) `aws_cognito.UserPoolClient` leaves `ExplicitAuthFlows` out when no flow is enabled and Cognito then enables user SRP and custom auth for a machine-only client; needs a property override. (4) The Cognito price list has many per-RPS items that read like automatic charges; they are paid rate-limit increases.
+
+- **Severity:** low-med.
+- **Suggestion:** document the client-by-name workaround for the cycle, and let CDK emit an explicit empty flow list.
+
+### 2026-09-30 · AgentCore Runtime (CloudFormation / CDK)
+
+(1) The L1 class `aws_bedrockagentcore.CfnRuntime` in aws-cdk-lib 2.271.0 has no `platform_version`, although the CloudFormation reference lists `PlatformVersion` (description: "not available"); needs `add_property_override`. The valid values are not documented on that page. (2) `ProtocolConfiguration` is a plain string in CloudFormation but an object (`serverProtocol`) in the API. (3) The runtime name pattern forbids hyphens while every other AgentCore name (Gateway) allows hyphens and forbids underscores. (4) The first cross-stack reference makes CDK 2.271.0 print a warning about a `defaultCrossStackReferences` flag, which `--strict` turns into a failure until the flag is set. (5) The service creates the runtime's log group itself, so a stack delete leaves it behind.
+
+- **Severity:** low.
+- **Suggestion:** keep the L1 classes in step with the resource reference and document the `PlatformVersion` values.
+
+### 2026-09-30 · AgentCore Runtime (new account)
+
+**Task:** create the first runtime with CloudFormation.
+
+- **Actual:** `CREATE_FAILED ... maxAgents limit exceeded for account <id>. Please contact AWS Support (Service: BedrockAgentCoreControl, Status Code: 402, ServiceLimitExceeded)`. Service Quotas shows the **applied** value of *Total Agents per Account*, *Endpoints per Agent*, *Versions per Agent* and *Active Session Workloads per Account* as **0** while the AWS default is 1000, 10, 1000 and 5000 (all adjustable, no request pending). The message names neither the quota nor Service Quotas, and "402" reads like a payment problem. Same pattern as the zero Bedrock quotas of this account.
+- **Severity:** high (blocks the AWS-hosted MCP server).
+- **Workaround:** request an increase in Service Quotas (or through the open support case); none found.
+- **Suggestion:** say *which* quota is 0 and link to its Service Quotas page in the error, and show AgentCore quotas at 0 in the console before the first create.
+
+### 2026-09-30 · Service Quotas (AgentCore)
+
+**Task:** ask for the AgentCore Runtime quotas that are applied at 0 on a new account.
+
+- **Actual:** `RequestServiceQuotaIncrease` refuses any desired value that is not *greater than the default* (1000 agents), although the applied value is 0. So the documented self-service route cannot express "restore the default". The error of the failed create says "contact AWS Support".
+- **Severity:** high (no self-service way out).
+- **Workaround:** a support case.
+- **Suggestion:** accept a request up to the default when the applied value is below it, or show a "request account review" action next to a zero quota.
+
+### 2026-09-30 · AWS teardown (listing after the run)
+
+`python infra/aws_ctl.py down --yes` on the real account (data and identity stacks): 2 min 8 s, then the inventory of everything owned by the project printed "nothing that costs money is left" (no table, pool, function, secret, runtime or project log group; the budget `fairtable-150usd` and the bootstrap stack kept on purpose). `up` rebuilt it in 3 min 14 s. Two remarks: `cdk destroy <stack>` prints "Including depending stacks: FairTableRuntime" for a stack that does not exist (harmless), and the service-created Runtime log group is the one thing CloudFormation never removes, hence the tool's own cleanup.
+
+- **Severity:** info.
+
+### 2026-09-30 · Community research: zero quotas on new accounts
+
+Many AWS re:Post threads describe the same pattern as ours. Bedrock model quotas applied at 0 ("New AWS account has 0 Amazon Bedrock quotas in all regions", "All Bedrock model quotas stuck at 0 tokens/day", "Free Plan - Bedrock has zero quotas"); `ValidationException: Operation not allowed` on InvokeModel and on the Anthropic first-time-use form ("Bedrock error: ValidationException Operation Not Allowed", "Anthropic FTU form blocked despite verified IAM, Marketplace, billing"); AgentCore `maxAgents limit exceeded for account` ("Unable to create AgentCore Runtimes due to ServiceQuotaExceededException even though none exist", "Unable to host an agent using Amazon Bedrock AgentCore Runtime"). What the threads report (read through search-result summaries, because re:Post returns 403 to a fetch tool): it is an account-level eligibility restriction, not a model-access setting; enabling model access in the console does not lift it; support says the account lacks "established billing and usage history" and names no minimum spend or age; a payment method alone does not raise quotas; the suggested route is a support case ("Account and billing", free on the Basic plan, asking for account verification, or a quota-increase case naming the service and region); reported waits range from a couple of days to 15 days with seven cases. A separate, different cause of a similar-looking AgentCore error exists (first use of the service-linked role hits an IAM rate limit: "Failed creating service linked role. Rate limit exceeded from IAM", fixed by `aws iam create-service-linked-role --aws-service-name bedrock-agentcore.amazonaws.com`); our error text is `maxAgents`, so it does not apply.
+
+- **Severity:** info.
+- **Sources:** see the devlog entry of 2026-09-30 "research".
+
+### 2026-10-01 · AWS CLI profiles with `aws login`
+
+With two sign-ins on one PC (`default` and `fairtable2`): `AWS_PROFILE=default aws sts get-caller-identity` answers "The config profile (default) could not be found", while the same call without the variable works; the sessions expire separately ("Your session has expired. Please reauthenticate using 'aws login'"), and boto3 cannot use either without `awscrt` (blocked on this PC), so a `credential_process` helper is needed per profile.
+
+- **Severity:** low.
+- **Suggestion:** treat the name `default` as a normal profile name for login sessions.
+
+### 2026-10-01 · AgentCore Runtime (MCP server)
+
+**Task:** call the deployed MCP server through `InvokeAgentRuntime`.
+
+- **Actual:** every call returned `Received error (421) from runtime. Please check your CloudWatch logs for more information.` The log showed only `POST /mcp ... 421 Misdirected Request`, not the Host header that the server's (FastMCP) Host protection refused; the platform's own health checks from 127.0.0.1 passed, so the runtime looked healthy. After adding a log line for the refused Host the value was `<uuid>.lambda-microvm.us-east-1.on.aws`, a per-microVM name that is documented nowhere I could find (the MCP contract page says only that the server listens on 0.0.0.0:8000/mcp).
+- **Severity:** med (an MCP server with Host validation fails 100% of calls and the log hides why; frameworks with DNS-rebinding protection on by default hit it).
+- **Workaround:** `MCP_ALLOWED_HOSTS=*.lambda-microvm.*.on.aws`.
+- **Suggestion:** document the Host the proxy forwards (or forward `127.0.0.1`/`localhost`), and show the refused value in the error. Cost of finding it: three environment updates at about 4.4 minutes each.
+
+### 2026-10-01 · AgentCore Runtime updates
+
+Every environment-variable change creates a new runtime version and takes about 4.4 minutes to reach `READY` through CloudFormation, which turns a configuration search (like the Host above) into a slow loop. No faster way to change an environment variable without a new version was found.
+
+- **Severity:** low-med.
+- **Suggestion:** a faster path for environment-only changes, or a way to test an invocation header against the container locally.
+
+### 2026-10-01 · AgentCore Gateway documentation
+
+(1) The outbound-authorization page says the gateway service role needs `bedrock-agentcore:InvokeGateway` for an IAM-authorised Runtime target; the IAM service reference says that action applies to the `gateway` resource, and the action that calls a Runtime is `InvokeAgentRuntime` (resources `runtime` and `runtime-endpoint`). The Gateway pages never name `InvokeAgentRuntime`. (2) The interceptor page's output example shows only `body` under `transformedGatewayRequest`; the header page shows `headers` there. (3) The header page says `Authorization` returned by an interceptor is forwarded to the target, which collides with SigV4 outbound authorization; nothing says what happens then. (4) Tool names get the prefix `<target>___` with no switch to drop it.
+
+- **Severity:** low-med (each cost a documentation search; (1) could cost a failed deploy).
+- **Suggestion:** name the Runtime invoke action on the outbound-auth page and state the interaction of an interceptor's `Authorization` with SigV4.
+
+### 2026-10-01 · AWS CDK cross-stack references
+
+After adding a stack that uses a value of an already deployed stack, `cdk deploy FairTableGateway --exclusively` rolled back with `No export named FairTableRuntime:ExportsOutputFnGetAttRuntimeAgentRuntimeId... found`: the producer stack had been deployed before it exported that value, and `--exclusively` skips it. The CDK message ("failed creation, it may need to be manually deleted") does not mention the cause; it is in the CloudFormation events. Without `--exclusively` CDK updated the producer first and also removed the failed stack by itself.
+
+- **Severity:** low.
+- **Suggestion:** have `--exclusively` warn when the consumer imports a value the deployed producer does not export.
+
+### 2026-10-01 · AgentCore Gateway URL elicitation
+
+**Task:** let a URL-capable client receive the consent URL (`-32042`) through the Gateway, as the page "Use elicitation with your AgentCore gateway" describes ("URL mode (exception-based)": the Gateway forwards the `URLElicitationRequiredError`).
+
+- **Steps:** Runtime stateful, Gateway `sessionConfiguration` on (then also `streamingConfiguration`), client declares `elicitation` (form and url), call a tool that raises `UrlElicitationRequiredError`.
+- **Actual:** called directly the Runtime returns JSON-RPC `-32042` with the URL; through the Gateway the client gets a tool result `isError: true`, text `McpException - MCP invocation failed: URL elicitation required`, no URL. Same with streaming on.
+- **Expected:** the error and its `elicitations` data forwarded.
+- **Severity:** med (breaks URL elicitation through the Gateway; our fallback is a plain result with the link).
+- **Workaround:** stateless server, step-up as an ordinary result with `consent_url`.
+- **Suggestion:** forward the error data, or document that exception-based URL elicitation needs a different setup.
+
+### 2026-10-02 · AgentCore Policy (CloudFormation)
+
+**Task:** create an engine and six Cedar policies in one stack deploy with `FAIL_ON_ANY_FINDINGS`.
+
+- **Actual:** five policies became `ACTIVE`; `ft_g3_party_size_waitlist_watch` ended `CREATE_FAILED` with `Overly Restrictive: Policy Engine will deny every request for the specified principal, action and resource combination if the policy is added`. The same statement created by hand a minute later was `ACTIVE`. `CreatePolicy` returns at once and the validation runs afterwards against the policies that are active at that moment; CloudFormation counts a policy as created after its "eventual consistency check", not when it is `ACTIVE`, so the `forbid` was validated while the `permit` for its tool was still being validated. **Worse:** the failed policy stayed in `CREATE_IN_PROGRESS` in CloudFormation for 19 minutes (until I cancelled the update; the rollback was clean).
+- **Workaround:** two deploys, the `permit` policies first (`GATEWAY_POLICY_STAGE=permits`), then the `forbid` policies (D-049). **Wish:** CloudFormation should wait for `ACTIVE` (or fail on `CREATE_FAILED`), and "overly restrictive" should not be judged against policies that are still being created.
+
+### 2026-10-02 · AgentCore Policy documentation
+
+The Cedar schema generated from a gateway's tools cannot be read (no API), so a policy can only be checked by creating it. Our local check uses an approximate schema; all six statements, written from the documented rules (string tags, `hasTag`, `has` for optional inputs, `resource == AgentCore::Gateway::"<arn>"`), were accepted by the service on the first try, which is the evidence that the approximation was close enough.
+
+### 2026-10-02 · AgentCore Runtime
+
+Under a sustained run of the real-AWS tests (about 35 tests in 5 minutes) one direct `InvokeAgentRuntime` call returned `502 Bad Gateway` with nothing in the container's log, and in the same period one call through the Gateway came back as a tool error with no text. Both passed when repeated (3 full runs: 2 transient failures, then 35 of 35). No documented retry guidance for a 502 from the Runtime; our test clients do not retry.
+
+### 2026-10-02 · AgentCore Observability (Gateway, Runtime)
+
+**Task:** get traces of Gateway and Runtime calls with CloudFormation only.
+
+- **Actual:** (1) `CfnRuntime` and `CfnGateway` have no tracing property; the documented way is a console toggle or, for memory and gateway, a CloudWatch Logs delivery (source `TRACES`, destination `XRAY`). The same delivery pattern was accepted for a Runtime ARN and produced `AgentCore.Runtime.Invoke` spans, although no page says so. (2) Enabling Transaction Search through CloudFormation took 403 s; `aws logs filter-log-events` on `aws/spans` stayed empty while the same spans were found with Logs Insights and as X-Ray trace summaries (1 % indexed), so the first check looked like a failure for 20 minutes. (3) The Gateway emits spans for the policy engine (`AgentCore.Policy.AuthorizeAction`, with the determining policy and the decision): useful, and not mentioned in the Gateway observability page. (4) The spans carry the account id and the gateway ARN, which matters for screen recordings.
+- **Severity:** low-med.
+- **Suggestion:** list the tracing switch for each resource type in the CloudFormation reference, and document the Policy spans.
+
+### 2026-10-02 · FastMCP 3.4.7 (argument errors)
+
+**Task:** answer a tool call with a wrong-typed or missing argument with a plain error.
+
+- **Actual:** FastMCP wraps pydantic's error in its own `fastmcp.exceptions.ValidationError` (a `FastMCPError`, **not** a `ToolError`), so a middleware that catches `ToolError` never sees it; the client then gets pydantic's text ("1 validation error for call[...] ... For further information visit https://errors.pydantic.dev/..."). Found by a test that scanned every error text for library wording.
+- **Workaround:** `ErrorMappingMiddleware` also catches `ArgumentError` and builds a `FairTableError` (`INVALID_INPUT`) from the field names (`server/middleware.py`). Source: installed `fastmcp/server/server.py` around the "Invalid arguments for tool" log line.
+
+### 2026-10-02 · Alexa+ documentation
+
+Amazon's pages disagree on the MCP version (the overview says 2025-11-25; the client-lifecycle sample says `initialize` with 2025-03-26). Account-linking and authentication pages say a tool called without a valid token must get HTTP 401 or 403, and that Alexa+ sends the token as `Authorization: Bearer`; they also say `WWW-Authenticate` is not supported. Nothing says how a server behind an AWS gateway should do this. Read raw (curl) because the fetch-tool summaries had already been wrong once.
+
+### 2026-10-02 · Nova 2 Sonic documentation vs Strands
+
+The Nova 2 user guide's Strands example imports `from strands.experimental.bidi.models.novasonic import BidiNovaSonicModel` and `BidiAudioIO` / `BidiTextIO` from `strands.experimental.bidi.io.audio` / `.text`. In the installed `strands-agents==1.57.1` the module is `strands.experimental.bidi.models.bedrock` and the class `BedrockNovaSonicModel`. The `bidi` extra and `pyaudio` are not installed by default. Nothing was run; the installed source was read instead.
+
+### 2026-10-02 · Bedrock pricing page
+
+The pricing page is rendered in the browser from placeholders (`{priceOf!bedrock/bedrock!<key>!*!1000}`), so a raw `curl` of the page shows no number. The numbers come from the price file `b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/bedrock/USD/current/bedrock.json` (gzip), looked up by the same keys. No page read says how many tokens a minute of speech is.
+
+### 2026-10-02 · AgentCore Runtime / CDK
+
+Redeploying the Runtime and Gateway took 356 s (the Runtime version alone about 4.4 minutes). `cdk diff FairTableRuntime FairTableGateway --exclusively` without the optional Observability stack in the app shows `Output ExportsOutputFnGetAttGatewayGatewayArn... removed`: deploying that would fail because FairTableObservability imports it, and with only one of the two observability switches the diff shows the runtime trace delivery being destroyed. Workaround: synthesise with every switch that the deployed stacks were made with (`OBSERVABILITY=true`, `OBSERVABILITY_RUNTIME=true`, `GATEWAY_POLICY=ENFORCE`, `MCP_ALLOWED_HOSTS`). The Runtime's environment is the place to read what a redeploy must keep (`get_agent_runtime`).
+
+### 2026-10-02 · AgentCore Gateway
+
+After the Runtime got a new package the Gateway target kept its old tool catalog (eight tools) until `SynchronizeGatewayTargets` was called; the call returned `SYNCHRONIZING` and the target was `READY` again within seconds. The CloudFormation update of the Runtime does not trigger it.
+
+### 2026-10-02 · Amazon Nova 2 Sonic (tool use)
+
+**Task:** let the speech model call our tools.
+
+- **Actual:** it hears and answers correctly and calls tools in the right order, but when it must pass a 295-character signed `slot_token` from one tool result to the next call, it changes a character (found at index 162 of 295); the server answered `bad_signature` nine times and the model kept retrying. No documentation page read mentions a limit on argument length or fidelity. **Evidence:** Runtime log lines `tool=reservation_hold code=INVALID_SLOT_TOKEN reason=bad_signature`, and a test that compared the argument with the result.
+- **Workaround:** none yet (short identifiers are being considered).
+
+### 2026-10-02 · Amazon Nova 2 Sonic (stream)
+
+The stream ends with `ValidationException: Timed out waiting for audio bytes or interactive content. Please ensure gaps between audio bytes and interactive content are less than the timeout` when the client stops sending audio for a few seconds (for example while the assistant waits for a tool). A client has to send silence continuously. The timeout value is not stated in the error.
+
+### 2026-10-02 · Amazon Nova 2 Sonic (system prompt)
+
+Adding one sentence to the system prompt ("When you confirm, copy the read_back_token from the hold result exactly, character for character.") made the whole stream fail at once with `ValidationException ... Error 1 : This request has been blocked by our content filters.` The error names no part of the request, and the same session without the sentence worked. Found by removing the sentence.
+
+### 2026-10-02 · Amazon Nova 2 Sonic (short ids)
+
+With an 8-character offer id, an 11-character read-back code and a 32-character hold id the model copied every value correctly in 7 of 7 booked conversations (3 against a stub, 4 through the Gateway); it also picks simple idempotency keys (`hold-luna-1`) and repeats them in later conversations, and it asked for a whole evening when the user named one time. Fixed on our side (D-059).
+
+### 2026-10-02 · Amazon Nova 2 Sonic (audio stream)
+
+**Task:** play the model's voice in the browser.
+
+- **Steps:** a recorded request played into the page's endpoint on the real stack, arrival time of every audio piece logged.
+- **Expected vs. actual:** a steady stream; actual 80 ms pieces at about the speed of speech with gaps of up to 0.4 s between pieces (measured from a PC in Vietnam to us-east-1), so a player that starts each piece at once is choppy.
+- **Severity:** low.
+- **Workaround:** the page plays with a 0.3 s head start and restarts it after a dry spell; replaying the measured arrivals through that model leaves no audible gap (a person still has to listen).
+- **Suggestion:** document the pace and burstiness of the audio stream and a recommended playback buffer.
+
+### 2026-10-02 · Amazon Nova 2 Sonic (tool calls)
+
+**Task:** make the assistant say something while it waits for a tool.
+
+- **Steps:** one sentence added to the system prompt ("Before you look something up, say one short sentence such as: One moment, let me check."), real call on the Gateway, arrival time of every audio piece and tool call.
+- **Expected vs. actual:** a spoken filler before the first tool call; actual silence through 3 to 4 tool calls (14 to 19 s after the end of the request), the same as without the sentence.
+- **Severity:** low.
+- **Workaround:** the page shows what the assistant is doing ("Holding the table...") while it waits.
+- **Suggestion:** document whether a model can speak between tool calls, and how to ask for it.
+
+### 2026-10-02 · AWS Lambda (new account)
+
+**Task:** run the background worker with one instance at a time.
+
+- **Steps:** `reservedConcurrentExecutions: 1` in the CDK function.
+- **Expected vs. actual:** one reserved instance; actual a likely failure, because the account's concurrent-execution limit is 10 and a reservation must leave 10 unreserved (`get-account-settings` showed 10 and 10).
+- **Severity:** low.
+- **Workaround:** no reservation; the routines are idempotent with conditional writes, so overlapping runs are safe.
+- **Suggestion:** say in the CDK construct documentation that a new account's limit of 10 makes any reservation fail, and how to raise it.
+
+### 2026-10-02 · AWS CDK (Python)
+
+**Task:** expose the Runtime stack's environment variables to the workers stack.
+
+- **Steps:** `self.environment = {...}` in a stack class.
+- **Expected vs. actual:** a plain attribute; actual `AttributeError: property 'environment' of 'RuntimeStack' object has no setter`, because `Stack.environment` is a read-only property of the base class.
+- **Severity:** low.
+- **Workaround:** another attribute name.
+- **Suggestion:** none; worth knowing that stack attributes share names with CDK properties.
+
+### 2026-10-02 · AWS CDK (aws_lambda)
+
+`logRetention` is deprecated in favour of an explicit `logGroup`; the first synthesis printed the warning. | An explicit `LogGroup` with the function name, one week, destroyed with the stack. | Low | The deprecation message names the replacement, which made this a two-minute change.
+
+### 2026-10-03 · Amazon Bedrock (Nova Lite, ConverseStream)
+
+**Task:** run the evaluation with `us.amazon.nova-lite-v1:0` through the Strands `BedrockModel`.
+
+- **Actual:** in a few trials the call failed with `modelStreamErrorException: Model produced invalid sequence as part of ToolUse`, which ends the conversation.
+- **Severity:** low.
+- **Workaround:** the harness counts a model-service error as a failed trial of the model, not a crash.
+- **Suggestion:** say in the tool-use guide how often a small model produces an invalid tool call and whether a retry is advised.
+
+### 2026-10-03 · Amazon Bedrock (Nova Lite) through Strands
+
+**Task:** the same evaluation, 120 trials.
+
+- **Actual:** in 3 trials the agent loop ended with `EventLoopException: maximum recursion depth exceeded` (the model kept calling tools) and in 1 with `ValidationException: A conversation must start with a user message` (the conversation was trimmed so that it began with another role).
+- **Severity:** low.
+- **Workaround:** both are counted as a failed trial of the model.
+- **Suggestion:** document the recursion limit of the event loop and say whether the conversation manager guarantees a user message first.
+
+### 2026-10-03 · Amazon Bedrock (quotas, new account)
+
+**Task:** four evaluation jobs at once against Bedrock.
+
+- **Actual:** Nova Lite trials took about two minutes each and one job stood still for 40 minutes, with no throttling error in the log; the same job alone took 14 s a trial. The cause is not confirmed.
+- **Severity:** low.
+- **Workaround:** one job at a time.
+- **Suggestion:** show the tokens-per-minute quota of a new account in the first-use guide.
+
+### 2026-10-03 · AWS CLI `aws login`
+
+A login session expired after a few hours in the middle of a 40-minute run, and every later call failed with `LoginRefreshRequired` (boto3, with `awscrt`) or `ExpiredTokenException` (an in-flight call). Nothing warns before it happens.
+
+- **Workaround:** log in again before long jobs.
+- **Suggestion:** print the expiry time of a session in `aws login` and in `aws sts get-caller-identity`.
+
+### 2026-10-03 · FastMCP 3.4.7 (`get_http_headers`) and the MCP authorization specification
+
+**Task:** accept `Authorization: Bearer` as the MCP specification asks.
+
+- **Actual:** `get_http_headers()` hides `authorization` by default (so a server that reads the bearer token with the obvious call finds nothing); the argument `include={"authorization"}` is only described in the function's docstring.
+- **Severity:** low.
+- **Workaround:** a `request_headers()` wrapper.
+- **Suggestion:** say it in the FastMCP authentication guide next to the token verifiers.
+
+### 2026-10-04 · AWS CDK (`aws_cognito.UserPoolClient.user_pool_client_secret`)
+
+**Task:** hand the client secret of a Cognito app client to a Lambda.
+
+- **Actual:** the L2 property is not a plain `GetAtt`: it adds an `AwsCustomResource` (a singleton Lambda and an IAM statement for `cognito-idp:DescribeUserPoolClient`) to the stack that owns the client, which changed our identity stack and broke a test that pins its policies.
+- **Severity:** low.
+- **Workaround:** the L1 attribute `client.node.default_child.attr_client_secret`, a plain `Fn::GetAtt`.
+- **Suggestion:** say in the construct's documentation that reading the secret creates a custom resource, and point to the L1 attribute.

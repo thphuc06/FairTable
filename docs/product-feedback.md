@@ -169,9 +169,23 @@ CDK · Budgets. Other tools: FastMCP and the MCP SDK · Strands Agents · Cedar 
 
 ---
 
-## Our top requests to the teams
-1. **Nova 2 Sonic: speak a short filler while a tool runs** (important). The model is silent for 14 to 19 seconds during tool calls and prompts do not change it.
-2. **AgentCore Policy: return the validation result of `CreatePolicy`, and let the generated schema be read** (important). Today a statement can only be tested by creating it, and CloudFormation does not wait for validation.
-3. **Strands and Bedrock: a default cap on model calls and tokens per agent run** (important). A tool-call loop cost us $4.2 before anything stopped it.
-4. **AgentCore Gateway: let the tool-name prefix be turned off** (nice-to-have).
-5. **AgentCore Runtime: document the Host header it forwards** (important), because an MCP server with Host validation otherwise answers 421 to every call.
+## Feature requests
+
+1. **Amazon Nova 2 Sonic: speak a short filler sentence while a tool is running.**
+   Why it matters: in our voice booking the model stayed silent for 14 to 19 seconds during tool calls, and asking for a filler in the prompt had no effect. A diner on a call would think the line had dropped.
+   Priority: Important.
+2. **AgentCore Policy: return the validation result of `CreatePolicy`, and let the generated Cedar schema be read.**
+   Why it matters: we could only test a policy statement by creating it. CloudFormation does not wait for validation, so a `forbid` created next to its `permit` can be refused as "overly restrictive" and the stack hangs; we need two deploys to avoid it.
+   Priority: Important.
+3. **Strands Agents and Bedrock: a default cap on model calls and tokens per agent run.**
+   Why it matters: tool-call loops of Amazon Nova Lite cost about $4.2 (94 million input tokens) before anything stopped them, and failed runs report no tokens, so the cost was invisible in our own report.
+   Priority: Important.
+4. **AgentCore Runtime: document the Host header it forwards (`<uuid>.lambda-microvm.<region>.on.aws`).**
+   Why it matters: an MCP server with Host validation answers 421 to every call and its log does not show the cause. We found it by trial.
+   Priority: Important.
+5. **AgentCore Gateway: tell the caller why a request was refused (401 or 403).**
+   Why it matters: there is no documented way to see the reason, which makes debugging a token or policy problem slow.
+   Priority: Important.
+6. **AgentCore Gateway: let the `<target>___` prefix on tool names be turned off.**
+   Why it matters: our tools appear as `ft___restaurant_search` on AWS and `restaurant_search` locally, so prompts and docs have to explain both names.
+   Priority: Nice-to-have.
