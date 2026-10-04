@@ -75,6 +75,10 @@ The 12-attack red team (a forged token, a machine client writing, a confirm with
 ## On AWS
 The same code runs on AWS (built and tested on a real account). Each service, its role and what was measured is in [`docs/aws-integration.md`](docs/aws-integration.md). **Judges do not need AWS**; nothing here depends on AWS resources still running.
 
+![AWS architecture of FairTable](docs/diagram_image/aws-architecture.png)
+
+The numbers follow the legend under the picture; italic grey marks a future improvement, not built.
+
 | Service | Role |
 |---|---|
 | Amazon Bedrock AgentCore **Runtime** | runs the MCP server |
@@ -124,6 +128,7 @@ The chat assistant and the evaluation use `MODEL_PROVIDER=mock` (a script: no ke
 - **Not built:** changing the day or time of a booking (cancel and book again), onboarding a restaurant from its website (Amazon Nova Act with AgentCore Browser), AgentCore Evaluations, MCP Apps cards for screens, editing the Cedar rules from the console.
 
 ## Documentation
+- Diagrams: [trust pipeline (two rule layers)](docs/diagram_image/1-trust-pipeline.png) · [Fair Drop](docs/diagram_image/2-fair-drop.png) · [evaluation](docs/diagram_image/3-evaluation-pipeline.png) · [spoken confirmation](docs/diagram_image/4-spoken-confirmation.png) · [AWS architecture](docs/diagram_image/aws-architecture.png)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · decisions: [`docs/DECISIONS.md`](docs/DECISIONS.md) · working log: [`docs/devlog/`](docs/devlog/)
 - AWS services and how each is used: [`docs/aws-integration.md`](docs/aws-integration.md) · product feedback: [`docs/product-feedback.md`](docs/product-feedback.md)
 - Friction log (problems met with AWS and MCP tooling): [`docs/friction-log.md`](docs/friction-log.md)

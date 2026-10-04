@@ -2,6 +2,8 @@
 
 Which AWS services FairTable uses, why, and how. This document feeds the AWS Builder product feedback and the README service list.
 
+![AWS architecture of FairTable: numbers follow the legend under the picture; italic grey is a future improvement](diagram_image/aws-architecture.png)
+
 **Status legend:** _planned_ = designed, not built · _built_ = implemented · _verified_ = exercised against a real account.
 Status as of 2026-10-02 (evening: the second account runs the seven-tool server, 35 real-AWS tests pass): the local profile calls no AWS service. On the AWS profile (second account, D-045) DynamoDB, Cognito, Lambda, Runtime, Gateway, Gateway Policy and Budgets are **verified** on the real service; Observability (AWS part) is in progress; a KMS seed provider exists against a fake client only (D-016); an `SnsNotifier` exists against a fake client only (P3-12, 2026-10-02), with the CDK stack `FairTableNotify`; nothing of it is deployed.
 

@@ -75,6 +75,8 @@ Every success carries a short `spoken_summary`; every error is `isError: true` w
 
 ## 4. The write path and the two rule layers
 
+![Trust pipeline for one tool call: PEP-1 at the Gateway, PEP-2 in the server, then the database](diagram_image/1-trust-pipeline.png)
+
 ```mermaid
 flowchart TD
   A["tools/call"] --> T{"token valid?"}
@@ -99,6 +101,9 @@ flowchart TD
 * **Lazy evaluation first, a clock as an extra.** Expired holds are released when read; waitlist matching runs inside the cancel and expiry paths; the Fair Drop draw runs on the first request after the drop time. Every feature works this way, with nothing else running (the local profile does exactly this). On AWS one Lambda (`workers/handler.py`, started by EventBridge Scheduler every minute) runs the same pure functions (`server/workers.py`): it releases expired holds, which offers the freed table to the waiting diners and sends their notice, and draws every Fair Drop whose time has come, which tells the winners and writes a copy of the audit to S3. The routines are idempotent and use conditional writes, so the clock and the requests can run at the same time (D-062).
 
 ## 5. Spoken confirmation (D-051, D-053, D-054, D-055)
+
+![Spoken confirmation: the diner's yes is relayed by the assistant and guarded by the server](diagram_image/4-spoken-confirmation.png)
+
 Alexa+ declares no elicitation capability, and a requirement says a device without a screen must read the details back and get an explicit "yes" before any commitment. So the confirmation is a conversation, guarded by the server:
 
 ```mermaid
@@ -141,6 +146,9 @@ Keys are built in `server/store/keys.py`; every id is validated (no `#` or contr
 | Rate bucket | `RL#<sub>#<id>` | `availability_check` is limited to 20 an hour per diner and restaurant |
 
 ## 7. Waitlists and the Fair Drop
+
+![Fair Drop: a verifiable lottery instead of first come, first served](diagram_image/2-fair-drop.png)
+
 * **Standing watch.** `waitlist_watch` registers once (one active watch per diner, restaurant and day). When a table is freed (a cancel or an expired hold) the matcher, running inside that request, holds it for the first watch in arrival order that fits, for 30 minutes, and sends a notice. `waitlist_status` is the primary way to find out; MCP Tasks are an optional view behind a flag, off by default, and every feature works without them. There is no Redis.
 * **Fair Drop (D-023).** A hot seat (Sakura Counter on Fridays) is released by lottery. Before entries open a secret seed is drawn and only `SHA-256(seed)` is published (the commitment), so nobody can choose a seed after seeing the entries. Each verified diner gets one ticket (ticket ids are hashes; the public audit shows no user id). After the drop time the first request reveals the seed; the winning order is `HMAC-SHA256(seed, ticket id)` ascending, and anyone can recompute it from the published audit. Winners get a two-hour hold. Booking a drop seat directly is refused by S4.
 
@@ -153,9 +161,15 @@ The `Notifier` seam has three implementations: the dev inbox (a DynamoDB item th
 * **Owner console.** An owner signs in, changes the agent-share cap, sets the cancellation fee and window, releases a seat through a Fair Drop and reads the audit. Each change is one transaction with its audit entry and takes effect on the next booking (rule S2, new terms, rule S4); a booking keeps the terms it was made with (D-067). On AWS it runs as a Lambda behind an API Gateway HTTP API and signs owners in through Cognito (D-068); locally it is the same FastAPI app on port 8080.
 
 ## 10. AWS profile
+
+![AWS architecture: numbers follow the legend under the picture; italic grey is a future improvement](diagram_image/aws-architecture.png)
+
 Seven CloudFormation stacks from a Python CDK app (`infra/cdk/`), deployed and removed by `python infra/aws_ctl.py up|seed|status|down`, which names the account it acts on and refuses a root user: Data (table), Identity (Cognito, pre-token and interceptor Lambdas), Runtime (package from `infra/runtime/build_zip.py`, secret), Gateway (target, interceptor, policy engine and six Cedar policies), Observability (CloudWatch Transaction Search and delivery of Gateway and Runtime spans), Notify (SNS topic), Budget (cost alerts). Everything is tagged `project=fairtable`; nothing account-specific is in the code. Service by service, with prices and what worked or not: [`aws-integration.md`](aws-integration.md) and [`friction-log.md`](friction-log.md). The deployment is torn down after the demo; judges are never asked to use it.
 
 ## 11. Evaluation
+
+![Evaluation pipeline: tasks, three configurations (A0, A1, A2), grading and the red team](diagram_image/3-evaluation-pipeline.png)
+
 * **Tasks.** 40 tasks from a deterministic generator (`eval/generate.py`): 12 happy, 8 refusals, 8 robustness (retries, forgetful assistants), 12 attacks (an unverified agent, a hold of a drop seat, an assistant that confirms in the same breath claiming a yes). The simulated diner answers yes, no or nothing after eight seconds of test time.
 * **Configurations.** A0 an open store (no policy layer; the database's atomic guards stay), A1 FairTable, A2 FairTable without the voice guards S5a to S5c.
 * **Grading.** On the final database state: the expected bookings and holds, invariants I1 to I6, S1 and S2 limits, and a ground-truth violation that only the harness can see (a reservation although the simulated diner never said yes). Metrics: pass@1, pass^k, C_out, violations, red-team blocked, false-block rate.
