@@ -34,7 +34,7 @@ The first build takes about a minute. Then everything is running and seeded (thr
 
 ### Try it (two minutes)
 1. **Book by saying yes.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 tomorrow at 7pm`. The assistant holds a table and reads the details back; nothing is booked yet. Type `Yes, please` and it is booked. `No, thanks` books nothing.
-2. **See what the server decided.** Under each answer, click **N steps** to see the tool calls and the server's decision (ok, refused with the rule id, or waiting for the yes). This shows that the checks happen in the server, not in the assistant.
+2. **See what the server decided.** The panel beside the chat lists every tool call with the server's decision: allowed, refused by a rule (with its id), or waiting for the diner's yes. Under each answer, **N steps** shows the arguments. This shows that the checks happen in the server, not in the assistant.
 3. **Change the rules.** Sign in as `owner-luna` / `luna-dev-pass` at http://localhost:8080/owner. Lower the agent share to 0 and the next booking at Luna is refused by rule S2. The owner also sets the cancellation terms, releases a seat through a Fair Drop, and reads the audit list.
 4. **Call the tools yourself** with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport Streamable HTTP, URL `http://localhost:8000/mcp`, header `Authorization: Bearer <token>`):
 
@@ -45,6 +45,8 @@ The first build takes about a minute. Then everything is running and seeded (thr
    ```
 
    `waitlist_watch` with `drop_id` enters a lottery (Sakura Counter on Fridays, `drop-sakura-<date>`). After the draw, the full record is at `fairtable://drops/<drop_id>/audit`; `fairtable://restaurants/<id>/policies` is each restaurant's rules in plain English.
+
+5. **Check a lottery yourself.** Open `http://localhost:8080/drops/<drop_id>` (no sign-in; the owner console lists the ids). Before the draw it shows the commitment. After the draw (the first request after the drop time starts it) it shows the whole record and a **Verify this draw** button that recomputes the result in your browser; **Change one result and verify again** shows what a forged record looks like. **Find my ticket** takes the ticket code the assistant gave you (or its 64-character fingerprint) and shows where it is in the draw order and what it won; the record holds no names.
 
 ### Test accounts
 Development-only credentials for the local issuer, public on purpose. Never use them anywhere else.

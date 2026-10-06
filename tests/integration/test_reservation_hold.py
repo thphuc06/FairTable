@@ -111,6 +111,19 @@ async def test_repeating_the_call_returns_the_same_hold_and_writes_nothing_new(w
     assert world.store.get_slot("luna-trattoria", date, "19:00", "T2").ver == 2
 
 
+async def test_a_duplicate_call_with_a_new_key_does_not_hold_the_slot_twice(world):
+    """A speech model sometimes issues every tool call twice with different ids and keys (seen on real voice calls):
+    the second hold on the same slot is refused and the diner's counter stays at one."""
+    date = day(world)
+    token = await token_for(world.as_("alice"), "luna-trattoria", date, "19:00", seats=2)
+    first = await hold(world, token, "key-hold-0001")
+    assert not first.isError
+    second = await hold(world, token, "key-hold-0002")
+    error_of(second, "SLOT_TAKEN")
+    assert counter(world, keys.active_holds_counter("dev-alice", "luna-trattoria")) == 1
+    assert world.store.get_slot("luna-trattoria", date, "19:00", "T2").hold_id == first.structuredContent["hold_id"]
+
+
 async def test_a_retry_with_a_second_token_for_the_same_slot_is_the_same_request(world):
     """The agent asked twice before holding (two different token strings for one slot), then retried
     the hold with the other token after a network error: same key, same slot, same party = replay."""
@@ -174,7 +187,7 @@ async def test_s2_the_agent_share_of_covers_is_capped(world):
     payload = error_of(await hold(world.as_("carol"), await token_for(world, "ember-grill", date, "18:30", party=4),
                                   "key-s2-0003"), "POLICY_DENIED")
     assert payload["rule_id"] == "S2_agent_share_of_covers"
-    assert payload["next_step"]["tool"] == "waitlist_watch"
+    assert "calls the restaurant" in payload["next_step"]["why"] and "not taking any more" in payload["message"]
     assert counter(world, keys.agent_covers_counter("ember-grill", date)) == 8
     # two more covers still fit exactly
     assert not (await hold(world, await token_for(world, "ember-grill", date, "19:30", party=2), "key-s2-0004")).isError

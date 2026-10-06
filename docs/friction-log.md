@@ -444,3 +444,36 @@ A login session expired after a few hours in the middle of a 40-minute run, and 
 - **Severity:** low.
 - **Workaround:** the L1 attribute `client.node.default_child.attr_client_secret`, a plain `Fn::GetAtt`.
 - **Suggestion:** say in the construct's documentation that reading the secret creates a custom resource, and point to the L1 attribute.
+
+### 2026-10-06 · AWS CloudFormation and CloudWatch Logs (log group of a destroyed Lambda stack)
+
+**Task:** destroy the Workers stack (Lambda plus an EventBridge schedule) to save cost, then deploy the same stack again two days later.
+
+- **Steps:** `cdk destroy FairTableWorkers`, then `cdk deploy` of the same stack with an explicit `AWS::Logs::LogGroup` named `/aws/lambda/FairTableWorkers` (removal policy DESTROY).
+- **Expected:** the group goes with the stack and the new deploy creates it again.
+- **Actual:** the group (465 bytes) was still in the account after the destroy, and the next deploy stopped at CloudFormation's early validation: `Resource of type 'AWS::Logs::LogGroup' with identifier '/aws/lambda/FairTableWorkers' already exists`. The cause is not confirmed; the schedule was still firing while the stack was being deleted, so the function may have written one more line and created the group again.
+- **Severity:** low-medium (a failed deploy of about 10 minutes, nothing lost).
+- **Workaround:** `aws logs delete-log-group --log-group-name /aws/lambda/FairTableWorkers`, then deploy again. `aws_ctl.py down` already lists and deletes such groups; the mistake was destroying single stacks by hand and not cleaning up the group afterwards.
+- **Suggestion:** CloudFormation could adopt an existing log group with the same name, or the early-validation message could suggest deleting it; the Lambda documentation could warn that a function invoked during deletion can recreate its log group.
+
+### 2026-10-06 · AgentCore Gateway Policy and Amazon Nova 2 Sonic (a refusal with no reason)
+
+**Task:** record the demo video: a diner asks by voice for a table for twelve, and the Gateway policy G3 (party above 10) refuses the call before it reaches the server.
+
+- **Steps:** `restaurant_search` with `party_size=12` through the Gateway, once with a plain client and in several Nova 2 Sonic calls.
+- **Expected:** the assistant tells the diner that large groups book by phone, as the server's own message would say.
+- **Actual:** the Gateway answers with a JSON-RPC error: `Tool Execution Denied: Tool call not allowed due to policy enforcement [Policy evaluation denied due to ft_g3_party_size_restaurant_search-o0xc16o73k]`. It names the policy but gives no reason and none of the server's `next_step` text. In the recorded takes the model filled the gap with a limit of its own: "maximum party size is eight" (five takes in a row before the prompt change; the real limit is 10), "groups larger than 10 people" (a correct guess, but still a guess), "maximum party size is smaller". The prompt sentence "never make up a limit" did not stop it.
+- **Severity:** medium. The refusal is right, but what the diner hears can be wrong.
+- **Workaround:** the voice prompt now says that when a refusal gives no reason the assistant must not name any limit and must only say that it cannot book that here and suggest calling the restaurant, with an example sentence (`web/voice_nova.py`, D-072). Takes with a made-up number were recorded again; the final take names no number.
+- **Suggestion:** let a Gateway policy carry a human-readable reason (an annotation or the policy description) in the error, so that a model can relay it.
+
+### 2026-10-06 · Amazon Nova 2 Sonic through Strands (duplicate tool calls, and a spoken chain of thought)
+
+**Task:** the same recording sessions as above.
+
+- **Steps:** about twenty calls to the voice page with the seven tools behind the Gateway.
+- **Expected:** one tool call per step of the booking.
+- **Actual:** in most calls the model issued each call twice in a row with different `toolUseId`s (search, availability, and the write). Reads were harmless; the writes were safe only because of the server: a second `waitlist_watch` came back `You already have a ticket in this drop`, and a call with a reused key came back `That request key was already used for a different request`. In one call the model spoke its reasoning ("Okay, the user wanted to enter the lottery for the Sakura Counter seat... the next step is to tell the user...") for several turns instead of answering.
+- **Severity:** medium (a spoken answer that is not an answer).
+- **Workaround:** none in the client; the server's idempotency and one-ticket rules make the duplicates harmless. The take with the spoken reasoning was discarded and recorded again. The voice page now shows every tool call in the box under the answer (it used to hide all but the first two, see D-072), so such duplicates are visible.
+- **Suggestion:** document that a bidirectional model can repeat a tool call, so servers need idempotency on every write tool; give the Strands bidi agent an option to drop a call whose arguments equal one that is still running.

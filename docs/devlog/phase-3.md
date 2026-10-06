@@ -45,6 +45,8 @@ Facts found at the start (2026-10-02, read from the code, nothing run yet):
 | P3-21 Owner console: terms and Fair Drop | F | done (local) | 2026-10-04 | D-067: fee and window, one seat per drop; 25 new tests |
 | P3-20 Diagrams: future improvements marked | F | done | 2026-10-04 | both .drawio files edited in place: italic grey labels for what is not built, stale facts fixed, one note line per page |
 | P3-19 Duplicate-booking guard (C) | F | done (local) | 2026-10-03 | D-066: Cedar S6 + `BOOKED#` marker + invariant I6; 8 new tests |
+| P3-23 New look, decisions panel, Fair Drop check | F | done (local) | 2026-10-04 | D-069: shared stylesheet, chat with a panel of the server's decisions, public `/drops/<id>` that verifies the draw in the browser |
+| P3-24 Found while recording: hidden tool calls, invented limit, ticket box | F | done (local) | 2026-10-06 | D-072; voice-box and prompt tests, `findTicket` tests; real calls on account 1763 |
 
 ## Closing checklist (agreed 2026-10-02; the video and the form come last)
 Order of work. Tick items in the Progress table or in an entry; do not start a later group before the earlier one is done.
@@ -60,6 +62,24 @@ Order of work. Tick items in the Progress table or in an entry; do not start a l
 10. **Commit, tag `submission`**, no functional change until 2026-11-20.
 
 ## Entries (newest first)
+
+### 2026-10-06 · P3-24 · [web] [voice] [fairdrop] [aws] · Found while recording the demo video: a hidden tool-call list, an invented limit, no way to find a ticket (D-072)
+- **Asked by the developer:** make the video from the real system (Polly diner, Nova 2 Sonic assistant on AWS, the tool trace on screen, one Fair Drop with a crowd, the proof page).
+- **Found and fixed:** (1) the tool-call box of `/voice` hid every call after the second (CSS `max-height`), so the key call was never on screen; (2) with a refusal that has no reason (Gateway policy G3) the model invented "maximum party size is eight"; the prompt now forbids naming a limit, which cut but did not remove it; (3) the public Fair Drop page had no way for a diner to find their ticket: a "Find my ticket" box was added; (4) the guidance of rule S2 now says that the share is used up and to call the restaurant (D-071).
+- **Files:** `web/pages.py`, `web/static/verify.js`, `web/voice_nova.py`, `server/kernel/guidance.py`, `tests/unit/web/test_ui.py` (voice-box and prompt tests, `findTicket` under Node), `tests/unit/kernel/test_guidance.py`, `tests/integration/test_reservation_hold.py`.
+- **Real AWS (account 1763, Nova 2 Sonic through the Gateway):** about twenty voice calls; real Fair Drops drawn by the Lambda every minute with a KMS seed (9 tickets, 1 place; the example diner lost each time). Found on the way: a draw uses up the day's share of covers for assistants and holds the seat for the winner, so a second drop on the same seat needs the seat and the counter reset (the demo script does it); the model repeats tool calls and sometimes speaks its reasoning (friction log); the Gateway's refusal carries no reason (friction log, product feedback).
+- **Not done:** the frozen evaluation was not re-run after the S2 and prompt changes (the S2 tasks only check which rule refused); the Runtime, Gateway and Workers on account 1763 are up for the video and run the S2 guidance (seen in a live refusal); they are to be destroyed once the video is final.
+- **Follow-ups:** a clean-up of the demo data on AWS before the freeze; the video itself is made outside the repository.
+
+### 2026-10-04 · P3-23 · [web] [fairdrop] · A new look, the server's decisions beside the chat, and a Fair Drop page that checks the draw in the browser (D-069)
+- **Asked by the developer:** the pages looked plain; make them livelier, and make the Fair Drop easy to verify.
+- **Done:** one shared stylesheet and header; the chat in two columns with a panel "What the server decided" (Allowed / Refused by a rule / Waiting for the diner's yes) and suggestion buttons; the owner console as cards with number tiles, decision tags and a "Check the draw" link per drop; a landing page; the public page `GET /drops/<id>` with a Web Crypto check (`web/static/verify.js`), a "change one result" button and a box for a pasted record. The page is read-only and never starts the draw.
+- **Files:** `web/pages.py`, `web/app.py` (routes `/drops/<id>`, `/static/<name>`, CSP for `/chat` and `/drops`), `web/static/chat.js`, `web/static/verify.js`, `tests/unit/web/test_ui.py`, `tests/integration/test_owner_terms_and_drops.py`, `tests/unit/infra/test_build_zip.py`.
+- **Tests:** 22 new (pages, routes, headers, escaping, and Node running the browser script against records from the Python code); the web, owner, chat and zip tests pass (88 in the files run with DynamoDB Local). The real page was also driven in Chrome over the DevTools protocol with the real headers: six checks pass, the tampered copy fails two, no console error.
+- **Decisions:** D-069.
+- **Later the same day:** owner slider (`web/static/owner.js`), a CSS-only look for the voice page (`voice.js` untouched), narrow-screen fixes (checked at 390 px with Chrome device emulation: no sideways scroll). The web, owner, chat, session and zip tests pass (171 with DynamoDB Local). The voice page was not run with a real call (AWS is down).
+- **Surprises / friction:** none with the tools. The old tests pin some markup (`<div class='you'>`, no `/voice` on the chat page without voice, the `<h2>Notifications</h2>` split), so the new markup keeps those.
+- **Follow-ups:** the hosted owner console shows the old pages until `FairTableOwnerWeb` is updated (needs "wire" and the cost statement); the voice page keeps its look; screenshots for the video are taken from the running stack.
 
 ### 2026-10-04 · P3-21 · [web] · Owner page polish: formatted rules, draw-time step, honest notes (Change to D-067)
 - **Asked by the developer** after opening the hosted page: show the rules text properly, filter the seats by draw time, say what the text is.

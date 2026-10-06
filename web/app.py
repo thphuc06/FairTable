@@ -2,6 +2,7 @@
 
 There is no consent page any more: a booking is confirmed by the diner's spoken yes (docs/DECISIONS.md D-051).
 Routes: ``GET/POST /login``, ``GET/POST /chat``, ``POST /chat/reset``, ``GET /owner``, ``POST /owner/agent-share``, ``POST /owner/terms``, ``POST /owner/drops``,
+``GET /drops/<id>`` (public: the record of a Fair Drop and a button that checks the draw in the browser), ``GET /static/<name>``,
 ``GET /healthz``. Every response is ``no-store`` and cannot be framed (clickjacking).
 """
 
@@ -19,7 +20,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from server.config import Settings
 from server.domain.audit import AuditEntry
 from server.domain.clock import Clock, iso_z
-from server.domain.fairdrop import LocalSeedProvider, SeedProvider
+from server.domain.fairdrop import DROP_ALLOCATED, LocalSeedProvider, SeedProvider, pending_audit
 from server.store import Store, TxOp, keys
 from web import owner as owner_actions
 from web import pages
@@ -48,8 +49,14 @@ VOICE_CSP = (
     "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; media-src 'self'; "
     "worker-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 )
+SCRIPT_CSP = (  # the chat, owner and Fair Drop pages load one script of ours and nothing else
+    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; form-action 'self'; "
+    "base-uri 'none'; frame-ancestors 'none'"
+)
 STATIC = Path(__file__).parent / "static"
 STATIC_FILES = {"voice.js": "text/javascript", "worklet.js": "text/javascript"}
+PAGE_SCRIPTS = {"chat.js": "text/javascript", "verify.js": "text/javascript", "owner.js": "text/javascript"}  # served at /static/<name>, no sign-in
+DROP_ID = re.compile(r"[A-Za-z0-9_.-]{1,80}")
 
 
 @dataclass
@@ -82,9 +89,12 @@ def create_app(deps: WebDeps) -> FastAPI:
         response = await call_next(request)
         for name, value in HEADERS.items():
             response.headers[name] = value
-        if request.url.path.startswith("/voice"):  # the voice page needs its own scripts, the microphone and a socket
+        path = request.url.path
+        if path.startswith("/voice"):  # the voice page needs its own scripts, the microphone and a socket
             response.headers["Content-Security-Policy"] = VOICE_CSP
             response.headers["Permissions-Policy"] = "microphone=(self)"
+        elif path.startswith(("/chat", "/drops", "/owner")):
+            response.headers["Content-Security-Policy"] = SCRIPT_CSP
         return response
 
     def session_of(request: Request) -> Session | None:
@@ -157,6 +167,23 @@ def create_app(deps: WebDeps) -> FastAPI:
     def voice(request: Request) -> Response:
         session, problem = voice_session(request)
         return problem if problem is not None else HTMLResponse(pages.voice_page(session.username))  # type: ignore[union-attr]
+
+    @app.get("/static/{name}")
+    def page_script(name: str) -> Response:
+        if name not in PAGE_SCRIPTS:
+            return page(404, "Not found", "There is nothing here.")
+        return Response((STATIC / name).read_bytes(), media_type=PAGE_SCRIPTS[name])
+
+    @app.get("/drops/{drop_id}")
+    def drop_view(drop_id: str) -> Response:
+        """Public and read-only. It never starts the draw (that is the job of the clock and of the first request after
+        the drop time), so opening this page cannot change anything."""
+        drop = deps.store.get_drop(drop_id) if DROP_ID.fullmatch(drop_id) else None
+        if drop is None:
+            return page(404, "Not found", "There is no Fair Drop with that id.")
+        audit = drop.audit if drop.status == DROP_ALLOCATED and drop.audit else pending_audit(drop)
+        venue = deps.store.get_venue(drop.venue_id)
+        return HTMLResponse(pages.drop_page(audit, venue.name if venue else None))
 
     @app.get("/voice/{name}")
     def voice_static(name: str) -> Response:

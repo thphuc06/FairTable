@@ -56,8 +56,10 @@ GUIDANCE: dict[str, Guidance] = {
     ),
     "S2_agent_share_of_covers": Guidance(
         ErrorCode.POLICY_DENIED,
-        "Agent bookings for that day are full. Suggest calling the restaurant or joining the waitlist.",
-        NextStep("Join the waitlist.", ToolName.WAITLIST_WATCH),
+        "The restaurant's share of seats for assistant bookings is used up for that day, although a table may still "
+        "be free. Do not retry and do not join the waitlist: say so and suggest that the user calls the restaurant.",
+        CALL_THE_RESTAURANT,
+        "The restaurant is not taking any more assistant bookings for that day.",
     ),
     # D-051: the spoken confirmation. Nothing is booked; the messages are phrased for the assistant to act on.
     "S5a_confirm_needs_read_back": Guidance(

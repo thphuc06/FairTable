@@ -209,3 +209,21 @@ async def test_a_seat_that_a_diner_holds_in_the_meantime_cannot_become_a_drop(wo
                                            "csrf": csrf_for(html, "/owner/drops")})
     assert r.status_code == 400
     assert not world.store.get_slot(LUNA, date, held_slot.time, held_slot.table_group).drop_controlled
+
+
+def test_anyone_can_open_the_page_of_a_fair_drop_and_it_shows_only_the_fingerprint(world):
+    """The public page of a drop that has not been drawn: the commitment, never the seed, and opening it changes nothing."""
+    browser = owner_browser(world)
+    html = browser.get("/owner").text
+    seat = seat_values(html)[0]
+    assert browser.post("/owner/drops", data={"seat": seat, "hours_before": "2",
+                                              "csrf": csrf_for(html, "/owner/drops")}).status_code == 303
+    date, time_, group = seat.split("|")
+    drop = world.store.get_drop(world.store.get_slot(LUNA, date, time_, group).drop_id)
+    assert f"/drops/{drop.drop_id}" in browser.get("/owner").text  # the console links to it
+    visitor = world.web()  # no sign-in
+    page = visitor.get(f"/drops/{drop.drop_id}")
+    assert page.status_code == 200 and drop.commitment in page.text and "Not drawn yet" in page.text
+    assert drop.seed_hex not in page.text and "Luna Trattoria" in page.text
+    assert world.store.get_drop(drop.drop_id) == drop  # reading the page did not start the draw
+    assert visitor.get("/drops/no-such-drop").status_code == 404

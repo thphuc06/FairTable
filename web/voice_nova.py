@@ -29,7 +29,11 @@ VOICE_PROMPT = (
     "If the user names a time, ask the availability tool for just that time (a window that starts and ends at that "
     "time), so that you hold the table they asked for. As soon as you know the restaurant, the day, the time and the "
     "party size, hold the table with the hold tool without asking first; then read the details back and ask whether "
-    "to book it."
+    "to book it. Keep every other answer to two short sentences. When a request is refused, say in plain words that it "
+    "is refused and why, in one sentence, and suggest calling the restaurant; never make up a phone number, a limit, "
+    "a number of people or any other fact that a tool did not tell you. If the refusal gives no reason, do not guess "
+    "one and do not name any limit: say only that you cannot book that here and suggest calling the restaurant, for "
+    "example: \"I can't book that group here. Please call the restaurant.\""
 )
 _END = object()
 

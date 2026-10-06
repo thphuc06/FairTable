@@ -21,10 +21,14 @@ def test_every_deny_rule_maps_to_a_hint_and_next_step(rule_id):
     assert payload["next_step"]["why"]
 
 
-def test_s2_points_to_the_waitlist_and_is_not_self_blocking():
+def test_s2_says_so_and_sends_the_user_to_the_restaurant_not_to_the_waitlist():
+    """A table can be free while the share of seats for assistants is used up: the waitlist then answers "nothing to wait
+    for", and a model that was sent there tried again and again (found on a real voice call, D-071)."""
     payload = deny_to_error(deny("S2_agent_share_of_covers")).to_payload()
     assert payload["error"] == ErrorCode.POLICY_DENIED
-    assert payload["next_step"]["tool"] == ToolName.WAITLIST_WATCH
+    assert "calls the restaurant" in payload["next_step"]["why"] and not payload["next_step"].get("tool")
+    assert "not taking any more assistant bookings" in payload["message"]
+    assert "waitlist" in payload["hint"] and "do not" in payload["hint"].lower()
 
 
 def test_s4_is_reported_as_drop_controlled():

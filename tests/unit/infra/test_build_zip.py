@@ -74,6 +74,7 @@ def test_the_application_is_added_without_bytecode(tmp_path):
     assert (staging / "policies" / "pep1.cedarschema").is_file() and (staging / "policies" / "pep2.cedarschema").is_file()
     assert not list(staging.rglob("__pycache__")) and not list(staging.rglob("*.pyc"))
     assert (staging / "web").is_dir() and (staging / "simulator").is_dir()  # the owner console on Lambda (D-068)
+    assert (staging / "web" / "static" / "verify.js").is_file()  # the public Fair Drop page checks the draw with it
     assert not (staging / "tests").exists() and not list(staging.rglob("strands"))  # but no tests and no agent framework
 
 
