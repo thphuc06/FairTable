@@ -67,14 +67,14 @@ Development-only credentials for the local issuer, public on purpose. Never use 
 ## Does it work?
 The evaluation runs the same 40 tasks against three configurations: **A0** an open storefront (no rules), **A1** FairTable, and **A2** FairTable without the voice-confirmation checks. A *violation* is damage to the restaurant or the diner, for example a booking the diner never agreed to or a Fair Drop seat taken directly.
 
-| Assistant | Trials | Violations with FairTable (A1) | Violations without the rules (A0) |
-|---|---|---|---|
-| Scripted (mock), 4 runs per task | 160 | **0** | 28 (it stops none of the 48 attack trials) |
-| DeepSeek flash, 2 runs | 80 | **0** | 6 |
-| Claude Haiku 4.5 on Bedrock, 1 run | 40 | **0** | not run |
-| Amazon Nova Lite on Bedrock, 1 run | 40 | **0** | 13 |
+| Assistant | Run on | Trials | Violations with FairTable (A1) | Violations without the rules (A0) |
+|---|---|---|---|---|
+| Scripted (mock), 4 runs per task | 2 Oct 2026 | 160 | **0** | 28 (it stops none of the 48 attack trials) |
+| DeepSeek flash, 2 runs | 3 Oct 2026 | 80 | **0** | 6 |
+| Claude Haiku 4.5 on Bedrock, 1 run | 3 Oct 2026 | 40 | **0** | not run |
+| Amazon Nova Lite on Bedrock, 1 run | 3 Oct 2026 | 40 | **0** | 13 |
 
-The 12-attack red team (a forged token, a machine client writing, a confirm without the read-back, a third hold, a Fair Drop seat taken directly, twenty simultaneous holds on one table, prompt injection, and others) is blocked 12 of 12 under A1. The scripted run validates the harness and the rules, not a real model; the real-model runs are small and each model sometimes declines to misbehave, so read them as evidence, not proof. Reports and charts: [`eval/reports/`](eval/reports/), method: [`eval/README.md`](eval/README.md).
+The 12-attack red team (a forged token, a machine client writing, a confirm without the read-back, a third hold, a Fair Drop seat taken directly, twenty simultaneous holds on one table, prompt injection, and others) is blocked 12 of 12 under A1. The scripted run validates the harness and the rules, not a real model; the real-model runs are small and each model sometimes declines to misbehave, so read them as evidence, not proof. Each report is from the day shown, with the code of that day. The test suite repeats the scripted run on every change (all 40 tasks under A1 end with no violation, and 12 of 12 attacks are blocked); the real-model runs are not repeated, because they cost money and a model's answers vary. Reports and charts: [`eval/reports/`](eval/reports/), method: [`eval/README.md`](eval/README.md).
 
 ## On AWS
 The same code runs on AWS (built and tested on a real account). Each service, its role and what was measured is in [`docs/aws-integration.md`](docs/aws-integration.md). **Judges do not need AWS**; nothing here depends on AWS resources still running.
