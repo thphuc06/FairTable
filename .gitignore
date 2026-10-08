@@ -1,3 +1,6 @@
+# --- Private working notes for the coding assistant: not published ---
+CLAUDE.md
+
 # --- Secrets: never commit ---
 .env
 .env.*
@@ -40,6 +43,11 @@ Thumbs.db
 
 # --- Node (web assets, if any) ---
 node_modules/
+
+# --- Demo video and its raw footage: kept outside the repository ---
+*.mp4
+*.webm
+*.mov
 
 # --- Local profile artefacts ---
 devauth/keys/

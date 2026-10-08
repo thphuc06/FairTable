@@ -1,4 +1,4 @@
-"""P0-1: the environment matches the pinned versions from CLAUDE.md."""
+"""P0-1: the environment matches the versions pinned in pyproject.toml and constraints.txt."""
 from importlib.metadata import version
 
 import pytest

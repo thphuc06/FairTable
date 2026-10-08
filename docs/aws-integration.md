@@ -108,9 +108,28 @@ python infra/aws_ctl.py status                 # what exists, and what can cost 
 python infra/aws_ctl.py up [--runtime]         # deploy the stacks, create the demo users
 python infra/aws_ctl.py seed                   # write the demo data (keyed by Cognito's subs)
 python infra/aws_ctl.py down                   # dry run: the plan
-python infra/aws_ctl.py down --yes             # destroy the stacks and what they leave behind
-python infra/aws_ctl.py down --yes --include-budget --include-bootstrap    # at the very end
+python infra/aws_ctl.py down --yes --account <last four digits of the account id>      # destroy the stacks and what they leave behind
+python infra/aws_ctl.py down --yes --account <last four digits> --include-budget --include-bootstrap    # at the very end
 ```
+
+**The full deployment used for the demo and the tests** (about 15 minutes; the Runtime and the Gateway cost money while they exist, so run `down` afterwards):
+
+```bash
+export AWS_PROFILE=<profile> AWS_REGION=us-east-1
+export MCP_ALLOWED_HOSTS='*.lambda-microvm.*.on.aws'
+export GATEWAY_POLICY=ENFORCE
+export OBSERVABILITY=true OBSERVABILITY_RUNTIME=true
+export NOTIFY_EMAIL=<address> BUDGET_EMAIL=<address> BUDGET_LIMIT_USD=20 BUDGET_ALERTS=5,10,15
+python infra/aws_ctl.py up --runtime
+SEED_PROVIDER=kms python infra/aws_ctl.py seed
+pytest -m aws tests/aws
+```
+
+- `MCP_ALLOWED_HOSTS` is required on the Runtime: its proxy forwards the host name `<id>.lambda-microvm.<region>.on.aws`, and the server refuses every other host name with HTTP 421 (the server logs which one it refused).
+- `GATEWAY_POLICY` puts the Cedar rules G1 to G4 at the Gateway as well: `LOG_ONLY` to watch first, `ENFORCE` to refuse (the first deploy is done in two steps, which `up` takes care of, D-049).
+- `OBSERVABILITY=true` turns on CloudWatch Transaction Search for the whole account (a setting `down` gives back); `OBSERVABILITY_RUNTIME=true` adds the Runtime's own spans. Leave both out if you do not want traces.
+- `NOTIFY_EMAIL` creates the SNS topic and subscribes that address (the address is read from the environment and never stored; the subscriber must click the confirmation link). `BUDGET_EMAIL` creates a cost budget `fairtable-cap-<limit>usd` with the alerts given.
+- `OWNER_WEB=true` adds the owner console on Lambda behind an HTTP API (D-068); `WORKERS=false` leaves out the schedule that releases expired holds and draws Fair Drops.
 
 - `down` touches only resources whose names belong to the project (`FairTable*` stacks, the table, the `fairtable-users` pool, `FairTable*` functions, `fairtable_mcp*` runtimes and log groups, test tables `ft-test-*`). The developer's own budget `fairtable-5usd` and everything else on the account is never listed, let alone deleted.
 - It destroys the stacks dependents first (Runtime, Identity, Data), then removes what no stack owns (test tables and the log group the Runtime service creates for itself), and ends with a listing: it exits 1 if anything that costs money is still there. The budget stack and the CDK bootstrap stack stay unless `--include-budget` / `--include-bootstrap` are given.
@@ -118,6 +137,6 @@ python infra/aws_ctl.py down --yes --include-budget --include-bootstrap    # at 
 - Tag check: every stack tags its resources `project=fairtable`.
 
 ## Teardown checklist for the end of the project
-1. `python infra/aws_ctl.py down --yes --include-budget --include-bootstrap` (after the demo footage is recorded, P4-1, and after the submission, P4-5).
+1. `python infra/aws_ctl.py down --yes --account <last four digits> --include-budget --include-bootstrap` (after the demo footage is recorded, P4-1, and after the submission, P4-5).
 2. `python infra/aws_ctl.py status` prints "Nothing that costs money is left."
 3. Record the listing in `docs/friction-log.md` (P2-8 acceptance).

@@ -34,7 +34,7 @@ Python 3.12, FastMCP 3.4.7 on MCP SDK 1.30.0, `cedarpy` for the rules, Strands A
 
 - **Measured, not claimed.** The same 40 tasks run against an open storefront (A0) and FairTable (A1). Under A1 there were **0 violations in 320 trials** (scripted 160, DeepSeek 80, Claude Haiku 4.5 40, Nova Lite 40); the open storefront had 28 in the scripted run, 6 with DeepSeek and 13 with Nova Lite. A 12-attack red team (forged token, machine client writing, confirm without read-back, twenty simultaneous holds on one table, prompt injection, and more) was blocked 12 of 12. The runs are small and models sometimes decline to misbehave, so this is evidence, not proof.
 - **The same rules everywhere.** One set of Cedar files runs in the server and at the AWS Gateway, tested by one behavioural suite.
-- **A fully local, reproducible demo,** 1281 passing tests, and the owner console running on Lambda behind an API Gateway.
+- **A fully local, reproducible demo,** 1307 passing tests, and the owner console running on Lambda behind an API Gateway.
 
 ## What we learned
 

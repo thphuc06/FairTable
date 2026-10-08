@@ -15,7 +15,7 @@ FairTable is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) wit
 - **Measured.** A 40-task evaluation compares an open storefront with FairTable, and a 12-attack red team tries to break it (results below).
 
 ## Run it (Docker only)
-The local profile is what judges run. It needs **Docker only**: no AWS account and no model account.
+The local profile is what judges run. It needs **Docker only** (Docker Compose v2, and ports 8000, 8001, 8080 and 9000 free): no AWS account and no model account.
 
 ```bash
 git clone https://github.com/thphuc06/FairTable.git
@@ -23,7 +23,7 @@ cd FairTable
 docker compose up --build
 ```
 
-The first build takes about a minute. Then everything is running and seeded (three restaurants, two weeks of slots, two Fair Drops), listening on `127.0.0.1` only. Stop with `docker compose down`; data is in memory, so every start has the same seed.
+The first build downloads the base image and the Python packages and takes a few minutes. Then everything is running and seeded (three restaurants, two weeks of slots, two Fair Drops), listening on `127.0.0.1` only. Leave that terminal open (or add `-d` to run in the background). Stop with `docker compose down`; data is in memory, so every start has the same seed.
 
 | URL | What it is |
 |---|---|
@@ -33,7 +33,7 @@ The first build takes about a minute. Then everything is running and seeded (thr
 | http://localhost:8001 | DynamoDB Local (used by the evaluation and the database tests) |
 
 ### Try it (two minutes)
-1. **Book by saying yes.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 tomorrow at 7pm`. The assistant holds a table and reads the details back; nothing is booked yet. Type `Yes, please` and it is booked. `No, thanks` books nothing.
+1. **Book by saying yes.** Open http://localhost:8080, sign in as `diner-alice` / `alice-dev-pass`, and type: `Book a table at Luna Trattoria for 2 tomorrow at 7pm`. The assistant holds a table and reads the details back; nothing is booked yet. Type `Yes, please` and it is booked (the server wants a pause of three seconds after the read-back; if you answer faster, say yes again). `No, thanks` books nothing.
 2. **See what the server decided.** The panel beside the chat lists every tool call with the server's decision: allowed, refused by a rule (with its id), or waiting for the diner's yes. Under each answer, **N steps** shows the arguments. This shows that the checks happen in the server, not in the assistant.
 3. **Change the rules.** Sign in as `owner-luna` / `luna-dev-pass` at http://localhost:8080/owner. Lower the agent share to 0 and the next booking at Luna is refused by rule S2. The owner also sets the cancellation terms, releases a seat through a Fair Drop, and reads the audit list.
 4. **Call the tools yourself** with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) (transport Streamable HTTP, URL `http://localhost:8000/mcp`, header `Authorization: Bearer <token>`):
@@ -43,6 +43,8 @@ The first build takes about a minute. Then everything is running and seeded (thr
         -d username=diner-alice -d password=alice-dev-pass
    npx @modelcontextprotocol/inspector
    ```
+
+   Copy the `access_token` from the answer into the header.
 
    `waitlist_watch` with `drop_id` enters a lottery (Sakura Counter on Fridays, `drop-sakura-<date>`). After the draw, the full record is at `fairtable://drops/<drop_id>/audit`; `fairtable://restaurants/<id>/policies` is each restaurant's rules in plain English.
 
@@ -67,7 +69,7 @@ The evaluation runs the same 40 tasks against three configurations: **A0** an op
 
 | Assistant | Trials | Violations with FairTable (A1) | Violations without the rules (A0) |
 |---|---|---|---|
-| Scripted (mock), 4 runs per task | 160 | **0** | 28 (none of the 48 attack trials is stopped) |
+| Scripted (mock), 4 runs per task | 160 | **0** | 28 (it stops none of the 48 attack trials) |
 | DeepSeek flash, 2 runs | 80 | **0** | 6 |
 | Claude Haiku 4.5 on Bedrock, 1 run | 40 | **0** | not run |
 | Amazon Nova Lite on Bedrock, 1 run | 40 | **0** | 13 |
@@ -95,7 +97,8 @@ The numbers follow the legend under the picture; italic grey marks a future impr
 | AWS Budgets, Secrets Manager, CDK | cost alerts, secrets, deployment |
 
 ```bash
-python infra/aws_ctl.py up --runtime      # build the package and deploy the stacks
+export MCP_ALLOWED_HOSTS='*.lambda-microvm.*.on.aws'   # the Runtime's proxy host name; without it every call is refused with HTTP 421
+python infra/aws_ctl.py up --runtime      # build the package and deploy the stacks (all options: docs/aws-integration.md)
 python infra/aws_ctl.py seed              # load the demo data
 python infra/aws_ctl.py status            # what exists and what can cost money
 python infra/aws_ctl.py down --yes --account <last four digits of the account id>
@@ -115,7 +118,7 @@ python -m devauth                                     # token issuer, 127.0.0.1:
 python -m server                                      # MCP server,   127.0.0.1:8000   (terminal 3)
 python -m web                                         # web pages,    127.0.0.1:8080   (terminal 4)
 
-pytest -q                                             # database tests run when DynamoDB Local is up (about 20 minutes in all)
+pytest -q                                             # database tests run when DynamoDB Local is up (about 25 minutes in all)
 pytest -q -m docker                                   # builds and starts the compose stack and drives it over HTTP
 python -m eval --k 2 --config A0,A1,A2                # the 40 tasks
 python -m eval.redteam                                # the 12 attacks

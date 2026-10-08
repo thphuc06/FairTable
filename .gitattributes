@@ -1,0 +1,6 @@
+# One line ending in the repository and in every checkout: a clone on Windows must not turn scripts into CRLF.
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.wav binary
+*.mp3 binary

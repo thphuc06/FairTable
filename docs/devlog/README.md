@@ -1,5 +1,7 @@
 # Dev log
 
+Older entries mention `CLAUDE.md`: the developer's private working notes for the coding assistant. It is not published.
+
 One file per **phase** (`phase-0.md`, `phase-1.md`, …). Each phase file has three parts, in this order:
 
 1. **Plan** – goal of the phase, the batches, and the tasks in each batch (a working copy of the relevant part of `docs/PLAN.md`, with any change made during the work).

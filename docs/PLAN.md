@@ -2,7 +2,7 @@
 
 Status: **draft v0.2 – 2026-09-29. Documentation and codebase organisation first; no implementation yet.**
 Decisions behind this version are in `docs/DECISIONS.md` (D-001 … D-013). Where this plan and `DECISIONS.md` differ, `DECISIONS.md` wins.
-Sources: `CLAUDE.md`, `docs/fairtable-solution-design.md` (v2, Vietnamese, until `ARCHITECTURE.md` replaces it – D-009), `docs/hackathon-rules.md`.
+Sources: `CLAUDE.md` (the developer's private working notes, not published), `docs/fairtable-solution-design.md` (v2, Vietnamese, until `ARCHITECTURE.md` replaces it – D-009), `docs/hackathon-rules.md`.
 
 Local environment found on the developer PC: Windows 11, Docker 29.4.0, Java 25, Node 22, Python **3.13.9** (default) and 3.11 – no 3.12, no `uv`.
 
